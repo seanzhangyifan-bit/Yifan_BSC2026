@@ -293,3 +293,78 @@ def generate_y_junction(
         )
 
     return img
+
+
+def generate_oriented_segment_field(
+    size: int = 400,
+    n_segments: int = 60,
+    thickness: int = 4,
+    length_range_px: tuple[float, float] = (25.0, 45.0),
+    bearings_deg: list[float] | None = None,
+    bearing_weights: list[float] | None = None,
+    bearing_jitter_deg: float = 5.0,
+    margin_px: float = 20.0,
+    fg_value: float = 230.0,
+    bg_value: float = 10.0,
+    rng_seed: int = 0,
+) -> np.ndarray:
+    """Grayscale image with `n_segments` independent straight line segments
+    at random positions/lengths, each assigned a bearing (mod 180 deg,
+    since orientation here is axial) drawn from a controllable mixture --
+    the ground-truth fixture for validating a network-orientation/
+    anisotropy metric, since no existing generator produces a many-segment
+    field with a known bearing *distribution*.
+
+    `bearings_deg=None` (default) draws each segment's bearing from
+    Uniform(0, 180) -- a "mudcrack-like" isotropic field with known
+    anisotropy index ~0. Passing e.g. `bearings_deg=[0.0]` draws every
+    segment at 0 deg plus `bearing_jitter_deg` noise -- a fully aligned
+    "rectilinear" field with known anisotropy index ~1. Passing
+    `bearings_deg=[0.0, 90.0]` with `bearing_weights` mixes two
+    orthogonal populations at a controllable ratio (an orthogonal-grid
+    field) -- the equal-weight case is the documented blind spot of a
+    2nd-order orientation tensor (see anisotropy.py), and the unequal
+    -weight case is the "grid, strong preferred orientation" validated
+    case; `bearing_weights=None` splits the entries of `bearings_deg`
+    equally.
+
+    Segments are centered at random positions within
+    [margin_px, size-margin_px] and may cross or overlap -- this is a
+    fixture for orientation-tensor statistics only, not a claim about a
+    realistic crack network topology (no junction-census meaning should be
+    read from it), the same caveat _draw_rotated_arm's own docstring makes
+    for its jitter model.
+    """
+    img = np.full((size, size), bg_value, dtype=np.float64)
+    rng = np.random.default_rng(rng_seed)
+
+    if bearings_deg is not None:
+        weights = bearing_weights if bearing_weights is not None else [1.0] * len(bearings_deg)
+        weights = np.asarray(weights, dtype=np.float64)
+        weights = weights / weights.sum()
+
+    for i in range(n_segments):
+        if bearings_deg is None:
+            bearing = float(rng.uniform(0.0, 180.0))
+        else:
+            choice = int(rng.choice(len(bearings_deg), p=weights))
+            bearing = bearings_deg[choice] + float(rng.normal(0.0, bearing_jitter_deg))
+
+        length = float(rng.uniform(*length_range_px))
+        center = rng.uniform(margin_px, size - margin_px, size=2)
+
+        theta = np.radians(bearing)
+        direction = np.array([-np.sin(theta), np.cos(theta)])
+        start = center - direction * (length / 2.0)
+
+        _draw_rotated_arm(
+            img,
+            start_rc=(float(start[0]), float(start[1])),
+            bearing_deg=bearing,
+            length=length,
+            thickness=thickness,
+            fg_value=fg_value,
+            rng_seed=rng_seed + i + 1,
+        )
+
+    return img

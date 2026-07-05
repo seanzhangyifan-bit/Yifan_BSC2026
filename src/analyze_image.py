@@ -15,6 +15,7 @@ import numpy as np
 import skan
 import skimage
 
+from .crackgraph.anisotropy import ORIENT_WINDOW_PX_PLACEHOLDER, compute_anisotropy
 from .crackgraph.binarize import binarize
 from .crackgraph.corners import (
     CORNER_MIN_TURN_DEG,
@@ -23,6 +24,7 @@ from .crackgraph.corners import (
     cross_check_junctions,
     find_background_contours,
 )
+from .crackgraph.curvature import CURVATURE_WINDOW_PX_PLACEHOLDER, compute_edge_curvature
 from .crackgraph.graph import extract_graph
 from .crackgraph.io_utils import load_image
 from .crackgraph.junctions import (
@@ -55,6 +57,8 @@ def parse_args():
     p.add_argument("--edge-margin-frac", type=float, default=0.02)
     p.add_argument("--annulus-inner-px", type=float, default=ANNULUS_INNER_PX_PLACEHOLDER)
     p.add_argument("--annulus-outer-px", type=float, default=ANNULUS_OUTER_PX_PLACEHOLDER)
+    p.add_argument("--curvature-window-px", type=float, default=CURVATURE_WINDOW_PX_PLACEHOLDER)
+    p.add_argument("--orientation-window-px", type=float, default=ORIENT_WINDOW_PX_PLACEHOLDER)
     p.add_argument("--y-angle-tol-deg", type=float, default=Y_ANGLE_TOL_DEG_PLACEHOLDER)
     p.add_argument("--t-straight-tol-deg", type=float, default=T_STRAIGHT_TOL_DEG_PLACEHOLDER)
     p.add_argument("--t-right-tol-deg", type=float, default=T_RIGHT_TOL_DEG_PLACEHOLDER)
@@ -116,6 +120,16 @@ def main():
         spur_px=args.spur_px,
     )
     graph_result = extract_graph(skeleton_result.skeleton)
+    curvature_result = compute_edge_curvature(
+        skeleton_result.skeleton,
+        graph_result,
+        window_px=args.curvature_window_px,
+    )
+    anisotropy_result = compute_anisotropy(
+        skeleton_result.skeleton,
+        graph_result,
+        window_px=args.orientation_window_px,
+    )
     junction_result = classify_junctions(
         skeleton_result.skeleton,
         graph_result,
@@ -226,6 +240,68 @@ def main():
         f"deg>=4 junctions={graph_result.n_junctions_deg_ge4})"
     )
     print(f"Total edges: {graph_result.n_edges}")
+    print()
+    print("-- Edge curvature & tortuosity (per-edge, independent of junction geometry) --")
+    print(
+        f"Scan window: {curvature_result.window_px:.1f} px    "
+        "[PLACEHOLDER -- not calibrated to real h/um-per-px; see scripts/curvature_window_sweep.py]"
+    )
+    tortuosities = [e.tortuosity for e in curvature_result.edges if e.tortuosity is not None]
+    mean_kappas = [e.mean_abs_curvature_px_inv for e in curvature_result.edges if e.mean_abs_curvature_px_inv is not None]
+    n_no_profile = sum(1 for e in curvature_result.edges if e.curvature_profile_px_inv is None)
+    if tortuosities:
+        print(
+            f"Tortuosity (arc/chord): mean={float(np.mean(tortuosities)):.3f}, "
+            f"median={float(np.median(tortuosities)):.3f}    [measured]"
+        )
+    else:
+        print("Tortuosity (arc/chord): no edges with a usable chord length    [measured]")
+    if mean_kappas:
+        print(
+            f"Curvature |kappa|: mean={float(np.mean(mean_kappas)):.4f} /px, "
+            f"max={float(np.max(mean_kappas)):.4f} /px    [measured]"
+        )
+    else:
+        print("Curvature |kappa|: no edges long enough for a windowed profile    [measured]")
+    print(
+        f"Edges without a curvature profile (shorter than 2x scan window): "
+        f"{n_no_profile} of {curvature_result.n_edges_scanned}    [measured]"
+    )
+    print()
+    print("-- Network anisotropy (length-weighted axial orientation tensor) --")
+    print(
+        f"Orientation scan window: {anisotropy_result.window_px:.1f} px    "
+        "[PLACEHOLDER -- not calibrated to real h/um-per-px]"
+    )
+    print(
+        f"Anisotropy index A: {anisotropy_result.anisotropy_index:.3f} (0=isotropic, 1=perfectly aligned), "
+        f"dominant bearing: {anisotropy_result.dominant_bearing_deg:.1f} deg    [measured]"
+    )
+    if anisotropy_result.anisotropy_index < 0.2:
+        print(
+            "  (dominant bearing is not meaningful at this low an anisotropy index -- "
+            "no clear preferred direction)"
+        )
+    print(f"Sample count: {anisotropy_result.n_samples}, total weighted length: {anisotropy_result.total_weighted_length_px:.1f} px    [measured]")
+    print("Orientation histogram (deg, weighted by arc length)    [measured]:")
+    edges_deg = anisotropy_result.histogram_bin_edges_deg
+    counts = anisotropy_result.histogram_weighted_counts
+    for lo, hi, count in zip(edges_deg[:-1], edges_deg[1:], counts):
+        bar = "#" * int(round(count / max(counts.max(), 1e-9) * 40))
+        print(f"  [{lo:5.1f}, {hi:5.1f}) {count:8.1f}  {bar}")
+    # [PLACEHOLDER -- not calibrated against a real-image junction-type census]
+    if anisotropy_result.anisotropy_index >= 0.5:
+        classification = "grid-like / rectilinear"
+    elif anisotropy_result.anisotropy_index < 0.15:
+        classification = "mudcrack-like / isotropic"
+    else:
+        classification = "intermediate"
+    print(f"Qualitative read: {classification}    [interpreted]")
+    print(
+        "  (a low A does not rule out an orthogonal bimodal/grid pattern -- this is a "
+        "known blind spot of a 2nd-order orientation tensor; check the histogram above "
+        "for two separated peaks before concluding isotropic)"
+    )
     print()
     print("-- Stage 4: Junction classification (annulus tangent-fit method) --")
     print(
