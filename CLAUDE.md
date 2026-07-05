@@ -50,6 +50,11 @@ Junction **angle**, approach **curvature** (younger crack curls toward its T; me
 - `networkx` for the poset work (transitive closure, matching-based max-antichain, feedback arc set).
 - Package management in this environment: `pip install <x> --break-system-packages`.
 
+## Data layout
+
+- Raw micrographs live in `data/raw/` (gitignored from this repo; it is its own separate git repository), organized in subfolders by experiment/condition -- currently `T5/` and `humidity_loading/`, each holding one `.jpg` per micrograph (e.g. `data/raw/T5/T5-M_H190_v1_ro000001.jpg`). `data/processed/` exists alongside it but is currently empty.
+- Analysis is currently run on a fixed top-left corner crop only, not the full image (see `src/crackgraph/region.py`'s `default_corner_crop` and `src/analyze_image.py`'s `--full-image` flag, which is deferred -- see README): crop size is 1/8 of image width (`corner_frac=0.125`), inset from the true top-left corner by a margin of 2% of image width (`edge_margin_frac=0.02`) on both axes. These are the pipeline's working CLI defaults; pass `--corner-frac`/`--edge-margin-frac` to override for a one-off run rather than changing the default.
+
 ## Conventions & guardrails
 
 - Every claim-bearing output should be traceable to what the method can actually support. This project uses an evidence-level discipline elsewhere in the thesis (`[measured]` / `[interpreted]` / `[speculated]` / `[cited]`); mirror that spirit in comments and docstrings — label what a number is, not just what it is called. E.g. "T-fraction is `[measured]`; the inference that small `w` implies quasi-static cracking is `[interpreted]`."
