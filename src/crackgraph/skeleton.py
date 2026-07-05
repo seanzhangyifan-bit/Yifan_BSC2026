@@ -10,6 +10,7 @@ from dataclasses import dataclass
 
 import numpy as np
 import skan
+from scipy.ndimage import distance_transform_edt
 from skimage.morphology import remove_small_objects, skeletonize
 
 # [PLACEHOLDER] Not derived from real film-thickness h or a calibrated
@@ -25,6 +26,8 @@ SPUR_PX_PLACEHOLDER = 15
 class SkeletonResult:
     skeleton: skan.Skeleton
     skel_image: np.ndarray
+    mask_clean: np.ndarray  # [measured] despeckled foreground mask (post remove_small_objects), pre-skeletonize
+    medial_radius: np.ndarray  # [measured] EDT of the cleaned mask: local crack half-width (px) at every pixel
     n_pixels_pre_prune: int  # [measured]
     n_pixels_post_prune: int  # [measured]
     n_spurs_pruned: int  # [measured]
@@ -46,6 +49,13 @@ def skeletonize_and_prune(
     mask_clean = remove_small_objects(mask, min_size=min_object_px)
     skel_image = skeletonize(mask_clean)
     n_pixels_pre = int(skel_image.sum())
+
+    # Local crack half-width at every mask pixel -- used downstream (stage
+    # 4, junctions.py) to keep the annulus fit band outside the junction
+    # blob (which can be wider than a fixed inner-radius placeholder), and
+    # groundwork for CLAUDE.md's width chronometer (post-crack drying
+    # shrinkage: earlier cracks tend wider).
+    medial_radius = distance_transform_edt(mask_clean)
 
     skel = skan.Skeleton(skel_image, source_image=source_image)
 
@@ -74,6 +84,8 @@ def skeletonize_and_prune(
     return SkeletonResult(
         skeleton=skel,
         skel_image=skel.skeleton_image,
+        mask_clean=mask_clean,
+        medial_radius=medial_radius,
         n_pixels_pre_prune=n_pixels_pre,
         n_pixels_post_prune=n_pixels_post,
         n_spurs_pruned=len(pruned_spur_lengths),
