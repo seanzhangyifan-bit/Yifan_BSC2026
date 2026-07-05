@@ -18,6 +18,26 @@ tortuosity but very different mean curvature (see test_curvature.py's
 kinked-line case) -- per CLAUDE.md's "chronometers can disagree
 informatively" ethos, both are kept rather than collapsed into one.
 
+[cited] Neither number here is a novel invention. Tortuosity (arc length
+/ chord length) is a standard, widely-used path-straightness metric with
+no single canonical origin paper -- it appears under the same definition
+in fracture-surface/crack-path roughness studies (e.g. Bouchaud, "Scaling
+properties of cracks", J. Phys.: Condens. Matter 9, 4319, 1997, directly
+on-topic for crack geometry), vascular tortuosity, fiber straightness, and
+river sinuosity; it is reported here as a generic geometric ratio, not
+attributed to one source. The chord-pair turning-angle curvature estimator
+is a named technique in digital curve analysis (the "chord-angle"/"k
+-cosine" family of corner/curvature detectors on digitized curves, going
+back to Rosenfeld & Johnston, "Angle Detection on Digital Curves", IEEE
+Transactions on Computers C-22(9), 1973) -- an alternative standard method
+exists (fitting a circle through three points -- the back/current/forward
+triple -- and taking its radius, i.e. Menger curvature); the two agree
+exactly on a true circle (which is all the synthetic ground truth below
+can distinguish) but would generally disagree on a non-circular bend. The
+turning-angle method was chosen here specifically to reuse the scan
+already implemented in kinks.py, not for a documented accuracy advantage
+over the circle-fit alternative.
+
 Known limitation: for a path of *constant* curvature (a true circular
 arc), the chord-pair estimator below is essentially exact at any window
 size -- the chord from s-w to s is exactly parallel to the tangent at the

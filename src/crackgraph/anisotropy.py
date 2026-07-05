@@ -28,13 +28,34 @@ exactly the mean resultant length of the doubled bearings -- reported
 directly rather than through an eigendecomposition, since it is already
 closed-form.
 
+[cited] This is not a novel method: length-weighted axial circular
+statistics and the doubled-angle construction are standard directional
+-statistics technique (Mardia & Jupp, "Directional Statistics", Wiley,
+2000; also Fisher, "Statistical Analysis of Circular Data", Cambridge
+University Press, 1993, which is the reference more commonly used in
+earth-science fracture/joint-orientation work). The specific "2nd-order
+orientation tensor with eigenvalues (1+/-A)/2" framing is the same
+formalism as Advani & Tucker, "The Use of Tensors to Describe and Predict
+Fiber Orientation in Short Fiber Composites", Journal of Rheology, 1987 --
+the standard reference wherever an "orientation tensor" is used for fiber
+or line-like feature orientation. What is *not* drawn from a specific
+paper is the scan that turns this project's skeletonized pixel polylines
+into bearing samples in the first place (window size, one sample per
+interior pixel, arc-length weighting, near-junction exclusion) -- that is
+this project's own adaptation of the general method to this data
+structure, not itself a cited technique.
+
 Known blind spot, not a bug: this is a *2nd-order* fabric tensor, and an
 equal-weight orthogonal bimodal distribution (e.g. 50% of length at 0 deg,
 50% at 90 deg -- an idealized rectilinear grid) gives C=S=0 exactly, i.e.
 A=0, indistinguishable from true isotropy. A 2nd-order tensor simply
 cannot see 180-deg-periodic structure in the doubled-angle distribution
 (here, 90 deg apart in raw bearing space folds to exactly opposite points
-after doubling, which cancel). The raw orientation histogram
+after doubling, which cancel). [cited] This is a known limitation of the
+2nd-order tensor, not particular to this implementation -- it is the same
+reason Advani & Tucker (1987) also define a 4th-order orientation tensor
+where a 2nd-order description is insufficient; the histogram is used here
+as the cheaper fix instead of a 4th-order tensor. The raw orientation histogram
 (histogram_weighted_counts) is therefore a *required* companion output,
 not decoration -- it is the only thing here that can tell "two peaks 90
 deg apart" apart from "flat" (see test_anisotropy.py's documented grid
