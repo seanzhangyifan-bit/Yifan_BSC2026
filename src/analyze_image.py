@@ -43,12 +43,28 @@ from .crackgraph.kinks import (
 from .crackgraph.overlay import render_overlay
 from .crackgraph.region import default_corner_crop
 from .crackgraph.skeleton import SPUR_PX_PLACEHOLDER, skeletonize_and_prune
+from .crackgraph.xlsx_report import (
+    anisotropy_classification,
+    append_chunk_to_workbook,
+    corner_agreement_counts,
+    curvature_stats,
+    tortuosity_stats,
+)
 
 
 def parse_args():
     p = argparse.ArgumentParser(description="Stage 1-3 crack-graph pipeline (single image).")
     p.add_argument("image_path", type=str)
     p.add_argument("--out-dir", type=str, default="outputs")
+    p.add_argument(
+        "--xlsx-out",
+        type=str,
+        default=None,
+        help=(
+            "Append this run's results as a row to the given .xlsx workbook "
+            "(one sheet per image, one row per chunk). Off by default."
+        ),
+    )
     p.add_argument("--spur-px", type=float, default=SPUR_PX_PLACEHOLDER)
     p.add_argument("--min-object-px", type=int, default=4)
     p.add_argument("--max-overlay-dim", type=int, default=2500)
@@ -246,21 +262,15 @@ def main():
         f"Scan window: {curvature_result.window_px:.1f} px    "
         "[PLACEHOLDER -- not calibrated to real h/um-per-px; see scripts/curvature_window_sweep.py]"
     )
-    tortuosities = [e.tortuosity for e in curvature_result.edges if e.tortuosity is not None]
-    mean_kappas = [e.mean_abs_curvature_px_inv for e in curvature_result.edges if e.mean_abs_curvature_px_inv is not None]
+    tortuosity_mean, tortuosity_median = tortuosity_stats(curvature_result)
+    curvature_mean, curvature_max = curvature_stats(curvature_result)
     n_no_profile = sum(1 for e in curvature_result.edges if e.curvature_profile_px_inv is None)
-    if tortuosities:
-        print(
-            f"Tortuosity (arc/chord): mean={float(np.mean(tortuosities)):.3f}, "
-            f"median={float(np.median(tortuosities)):.3f}    [measured]"
-        )
+    if tortuosity_mean is not None:
+        print(f"Tortuosity (arc/chord): mean={tortuosity_mean:.3f}, median={tortuosity_median:.3f}    [measured]")
     else:
         print("Tortuosity (arc/chord): no edges with a usable chord length    [measured]")
-    if mean_kappas:
-        print(
-            f"Curvature |kappa|: mean={float(np.mean(mean_kappas)):.4f} /px, "
-            f"max={float(np.max(mean_kappas)):.4f} /px    [measured]"
-        )
+    if curvature_mean is not None:
+        print(f"Curvature |kappa|: mean={curvature_mean:.4f} /px, max={curvature_max:.4f} /px    [measured]")
     else:
         print("Curvature |kappa|: no edges long enough for a windowed profile    [measured]")
     print(
@@ -290,12 +300,7 @@ def main():
         bar = "#" * int(round(count / max(counts.max(), 1e-9) * 40))
         print(f"  [{lo:5.1f}, {hi:5.1f}) {count:8.1f}  {bar}")
     # [PLACEHOLDER -- not calibrated against a real-image junction-type census]
-    if anisotropy_result.anisotropy_index >= 0.5:
-        classification = "grid-like / rectilinear"
-    elif anisotropy_result.anisotropy_index < 0.15:
-        classification = "mudcrack-like / isotropic"
-    else:
-        classification = "intermediate"
+    classification = anisotropy_classification(anisotropy_result)
     print(f"Qualitative read: {classification}    [interpreted]")
     print(
         "  (a low A does not rule out an orthogonal bimodal/grid pattern -- this is a "
@@ -375,9 +380,7 @@ def main():
         f"Search radius: {args.corner_search_radius_px:.1f} px, window: {args.corner_window_px:.1f} px, "
         f"min turn: {args.corner_min_turn_deg:.1f} deg    [PLACEHOLDER -- see corners.py]"
     )
-    n_agree = sum(cc.agrees_with_tangent_fit is True for cc in corner_cross_check)
-    n_disagree = sum(cc.agrees_with_tangent_fit is False for cc in corner_cross_check)
-    n_unresolved = sum(cc.label is None for cc in corner_cross_check)
+    n_agree, n_disagree, n_unresolved = corner_agreement_counts(corner_cross_check)
     print(
         f"Agree: {n_agree}, disagree: {n_disagree}, unresolved: {n_unresolved} "
         f"(of {len(corner_cross_check)})    [interpreted -- a validation signal per CLAUDE.md's "
@@ -399,6 +402,26 @@ def main():
     print(f"Overlay saved to: {out_path}{dim_note}")
     if detail_out_path is not None:
         print(f"Detail overlay saved to: {detail_out_path}")
+
+    if args.xlsx_out is not None:
+        append_chunk_to_workbook(
+            args.xlsx_out,
+            image_path=image_path,
+            region_desc=region_desc,
+            region=region if not args.full_image else None,
+            full_image_shape=(full_h, full_w),
+            binarize_result=binarize_result,
+            skeleton_result=skeleton_result,
+            graph_result=graph_result,
+            curvature_result=curvature_result,
+            anisotropy_result=anisotropy_result,
+            junction_result=junction_result,
+            kink_result=kink_result,
+            corner_cross_check=corner_cross_check,
+            overlay_png_path=out_path,
+            out_dir=out_dir,
+        )
+        print(f"Appended chunk to workbook: {args.xlsx_out} (sheet={image_path.stem!r})")
 
 
 if __name__ == "__main__":
