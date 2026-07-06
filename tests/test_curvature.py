@@ -11,7 +11,11 @@ import numpy as np
 import pandas as pd
 
 from src.crackgraph.binarize import binarize
-from src.crackgraph.curvature import compute_edge_curvature
+from src.crackgraph.curvature import (
+    TORTUOSITY_MIN_CHORD_PX_PLACEHOLDER,
+    compute_edge_curvature,
+    reliable_tortuosities,
+)
 from src.crackgraph.graph import extract_graph
 from src.crackgraph.skeleton import skeletonize_and_prune
 from src.crackgraph.synthetic import (
@@ -123,12 +127,16 @@ class _FakeSkeleton:
     """Minimal stand-in for skan.Skeleton exposing only what
     compute_edge_curvature reads, so degenerate polyline shapes that are
     awkward to produce via real image synthesis (a near-closed loop, a
-    single-point path) can be constructed directly."""
+    single-point path) can be constructed directly. `coords` is either a
+    single array (returned for any path_index, the original single-edge
+    use) or a dict of path_index -> array (for multi-edge tests)."""
 
-    def __init__(self, coords: np.ndarray):
+    def __init__(self, coords):
         self._coords = coords
 
-    def path_coordinates(self, _path_index: int) -> np.ndarray:
+    def path_coordinates(self, path_index: int) -> np.ndarray:
+        if isinstance(self._coords, dict):
+            return self._coords[path_index]
         return self._coords
 
 
@@ -159,3 +167,23 @@ def test_single_point_edge_is_flagged_not_a_crash():
     assert not edge.ok
     assert edge.failure_reason == "degenerate_edge_fewer_than_2_points"
     assert edge.tortuosity is None
+
+
+def test_reliable_tortuosities_excludes_short_chord_edges():
+    # Edge 0: chord ~5px (well under TORTUOSITY_MIN_CHORD_PX_PLACEHOLDER) --
+    # compute_edge_curvature still reports its raw tortuosity (per-edge
+    # data stays honest/unfiltered), but reliable_tortuosities() must drop
+    # it: at that scale, ordinary skeleton jitter can dominate the ratio.
+    # Edge 1: chord=100px, straight, tortuosity exactly 1.0 -- clearly
+    # reliable, must be kept.
+    short_chord_coords = np.array([[0.0, 0.0], [1.0, 2.0], [0.0, 4.0], [1.0, 5.0]])
+    long_chord_coords = np.array([[0.0, 0.0], [0.0, 50.0], [0.0, 100.0]])
+    coords_by_path = {0: short_chord_coords, 1: long_chord_coords}
+    result = compute_edge_curvature(_FakeSkeleton(coords_by_path), _FakeGraphResult(2))
+
+    assert result.edges[0].chord_length_px < TORTUOSITY_MIN_CHORD_PX_PLACEHOLDER
+    assert result.edges[0].tortuosity is not None
+    assert result.edges[1].chord_length_px >= TORTUOSITY_MIN_CHORD_PX_PLACEHOLDER
+
+    reliable = reliable_tortuosities(result)
+    assert reliable == [result.edges[1].tortuosity]

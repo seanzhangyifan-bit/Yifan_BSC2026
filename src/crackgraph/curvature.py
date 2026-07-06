@@ -81,6 +81,20 @@ CHORD_LENGTH_EPS_PX = 1.0
 # dominated by discretization noise rather than measuring anything -- report
 # tortuosity=None instead of a huge or infinite number.
 
+TORTUOSITY_MIN_CHORD_PX_PLACEHOLDER = 10.0
+# [PLACEHOLDER] Does NOT change compute_edge_curvature's per-edge tortuosity
+# below -- every edge with chord_length_px >= CHORD_LENGTH_EPS_PX still gets
+# its raw, measured value. This threshold instead gates reliable_tortuosities()
+# (used by aggregate stats and histograms), because a short edge's tortuosity
+# can be numerically real but physically meaningless: below roughly twice
+# junctions.py's ANNULUS_INNER_PX_PLACEHOLDER (5.0px, "jitter near vertices
+# is severe"), ordinary skeleton pixel staircasing near both of an edge's
+# endpoints can dominate the arc/chord ratio. [measured] evidence motivating
+# this: a real humidity-series image had edges with chord_length_px=1.0-7.6
+# reporting tortuosity=2.4-5.7, while the bulk of edges (median chord ~75px)
+# clustered tightly at tortuosity~1.0-1.1 -- the short-chord values were
+# distorting the reported distribution, not revealing genuine curvy cracks.
+
 
 @dataclass
 class EdgeCurvature:
@@ -101,6 +115,18 @@ class CurvatureScanResult:
     edges: list[EdgeCurvature]
     n_edges_scanned: int  # [measured]
     window_px: float  # [PLACEHOLDER]
+
+
+def reliable_tortuosities(curvature_result: CurvatureScanResult) -> list[float]:
+    """Tortuosity values with a long enough chord to trust for aggregates/
+    plots -- see TORTUOSITY_MIN_CHORD_PX_PLACEHOLDER. The single place this
+    filter is applied, so xlsx_report.py's tortuosity_stats() and
+    summary_plots.py's tortuosity histogram can't silently disagree."""
+    return [
+        e.tortuosity
+        for e in curvature_result.edges
+        if e.tortuosity is not None and e.chord_length_px >= TORTUOSITY_MIN_CHORD_PX_PLACEHOLDER
+    ]
 
 
 def compute_edge_curvature(

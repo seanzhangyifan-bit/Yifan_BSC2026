@@ -28,7 +28,7 @@ from PIL import Image as PILImage
 from .anisotropy import AnisotropyResult
 from .binarize import BinarizeResult
 from .corners import CornerCrossCheck
-from .curvature import CurvatureScanResult
+from .curvature import CurvatureScanResult, reliable_tortuosities
 from .graph import GraphResult
 from .junctions import JunctionAnalysisResult
 from .kinks import KinkScanResult
@@ -125,8 +125,9 @@ IMAGE_COLUMN_HEADERS: list[str] = [
 
 
 def tortuosity_stats(curvature_result: CurvatureScanResult) -> tuple[float | None, float | None]:
-    """(mean, median) tortuosity across edges with a non-None value."""
-    values = [e.tortuosity for e in curvature_result.edges if e.tortuosity is not None]
+    """(mean, median) tortuosity across edges with a long enough chord to
+    be reliable -- see curvature.py's reliable_tortuosities()."""
+    values = reliable_tortuosities(curvature_result)
     if not values:
         return None, None
     return float(np.mean(values)), float(np.median(values))

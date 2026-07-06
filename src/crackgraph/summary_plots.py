@@ -21,7 +21,7 @@ import numpy as np
 from PIL import Image
 
 from .anisotropy import AnisotropyResult
-from .curvature import CurvatureScanResult
+from .curvature import CurvatureScanResult, reliable_tortuosities
 
 ROSE_FIGSIZE = (2.4, 2.4)
 CURVATURE_HIST_FIGSIZE = (4.0, 2.0)
@@ -123,7 +123,7 @@ def _plot_tortuosity_hist_on_ax(
     cluster in the figure, so tortuosity is visually comparable panel to
     panel instead of each panel silently rescaling to its own range.
     """
-    tortuosities = [e.tortuosity for e in curvature_result.edges if e.tortuosity is not None]
+    tortuosities = reliable_tortuosities(curvature_result)
     tort_title = "tortuosity" if compact else "tortuosity (arc/chord)  [measured]"
 
     if tortuosities:
