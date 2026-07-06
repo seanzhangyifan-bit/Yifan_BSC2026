@@ -66,6 +66,15 @@ A second, independent entry point for a first look at spatial variation across a
 - **`src/crackgraph/html_report.py`**: one master HTML report (`outputs/report.html`) covering *every* coating and image analyzed so far -- explicitly not one HTML per coating and not one per image. A small JSON registry (`outputs/report_data.json`) is the source of truth; the HTML is always regenerated in full from it (`update_master_report`), grouped by coating, one image block per image. Re-running on the same `(coating, image_stem)` replaces its existing block instead of duplicating it.
 - **What's built vs. deferred**: today, each image's block in the master HTML holds only its overview figure. Embedding overlays, per-image xlsx-style numeric tables, or other per-image outputs into the same HTML is future work, not started.
 
+## Synthetic-pattern validation gallery
+
+A third independent entry point: a visual, human-reviewable companion to the numeric-tolerance pytest suite (`tests/test_junction_angle.py`, `test_corners.py`, `test_curvature.py`, `test_kinks.py`, `test_anisotropy.py`), not a replacement for it.
+
+- **`scripts/validation_gallery.py [--out-dir outputs/validation]`**: runs a fixed battery of 14 synthetic cases (`src/crackgraph/validation_cases.py`, covering all 5 measurement methods) through the real pipeline, and compiles each case's overlay/rose image plus an expected-vs-measured table into one page (`src/crackgraph/validation_report.py`'s `render_validation_report`, in `outputs/validation/report.html`).
+- Every tolerance used for a case's PASS/FAIL verdict is duplicated (with a cross-reference comment), not imported, from the corresponding `tests/test_*.py` constant — tests aren't a dependency of `src/`. Keep them in sync by hand if a test's tolerance changes.
+- Two cases exist specifically to show a known method limitation honestly rather than hide it: `curved_t_junction_r30_corner_limitation` (corner cross-check doesn't resolve cleanly on a severely curved host at the default window, even though the tangent fit still does) and `anisotropy_orthogonal_blind_spot` (the 2nd-order orientation tensor reads an orthogonal grid as isotropic; only the rose histogram reveals the two peaks). Neither has a fabricated pass condition — see their row logic if extending this pattern.
+- Ground truth is not bundled into `synthetic.py`'s return value (still image-only, matching every existing test file's convention) — each case function re-derives its own expected values from the same arguments it passes to the generator.
+
 ## Conventions & guardrails
 
 - Every claim-bearing output should be traceable to what the method can actually support. This project uses an evidence-level discipline elsewhere in the thesis (`[measured]` / `[interpreted]` / `[speculated]` / `[cited]`); mirror that spirit in comments and docstrings — label what a number is, not just what it is called. E.g. "T-fraction is `[measured]`; the inference that small `w` implies quasi-static cracking is `[interpreted]`."
