@@ -74,55 +74,17 @@ import skan
 
 from .graph import GraphResult
 
-ANNULUS_INNER_PX_PLACEHOLDER = 5.0
-# [PLACEHOLDER] "a few px" per CLAUDE.md's own wording for stage 4, chosen to
-# sit outside the pixel cluster where skeletonization jitter right at a
-# vertex is worst. Not derived from calibrated um-per-px (none exists yet --
-# same project-phase caveat as SPUR_PX_PLACEHOLDER in skeleton.py). Revisit
-# once calibration lands.
+ANNULUS_INNER_PX_PLACEHOLDER = 5.0  # 🔴 assumed — see CALIBRATION.md
 
-ANNULUS_OUTER_PX_PLACEHOLDER = 60.0
-# [PLACEHOLDER] Not derived from real film thickness h (CLAUDE.md's general
-# spec is "~h/2"; no h/um-per-px exists yet) -- in documented tension with
-# CLAUDE.md's "local approach direction, not far-field" intent, and cannot
-# be checked against h until calibration lands.
-#
-# Chosen from a measured bias/variance/RMSE sweep (scripts/window_sweep.py,
-# deterministic/seeded), not asserted. Worst-case (minimax) RMSE of
-# recovered arm bearing vs ground truth, across straight T's at 60/90/120
-# deg and curved-host T's at radius 30/60 px, at jitter levels 0/0.5/1.0 px
-# (smooth, spatially-correlated synthetic wobble -- see
-# _smooth_jitter_1d in synthetic.py):
-#
-#   outer_radius_px=20: worst-case RMSE = 20.4 deg
-#   outer_radius_px=30: worst-case RMSE = 17.1 deg
-#   outer_radius_px=40: worst-case RMSE = 10.5 deg
-#   outer_radius_px=60: worst-case RMSE =  9.7 deg  <- minimax choice
-#   outer_radius_px=80: worst-case RMSE =  9.7 deg  (no further gain --
-#                        the tested arm lengths are already fully used)
-#
-# Short arms are automatically fitted over whatever length they have (see
-# fit_degree) rather than failing outright. Re-run the sweep and update
-# this comment if the geometry/jitter grid changes.
+ANNULUS_OUTER_PX_PLACEHOLDER = 60.0  # 🟡 empirical, uncalibrated — see CALIBRATION.md
 
-QUAD_MIN_SPAN_PX = 15.0
-# Minimum arc-length span of band points for the quadratic (curvature) term
-# to have enough lever arm; below this the fit degrades to a line (a short
-# arm cannot reveal its curvature reliably anyway).
+QUAD_MIN_SPAN_PX = 15.0  # 🔴 assumed — see CALIBRATION.md
 
-Y_ANGLE_TOL_DEG_PLACEHOLDER = 15.0
-# [PLACEHOLDER] Generous enough to absorb skeleton-pixel jitter plus the
-# natural angle spread of real desiccation Y-junctions around the ideal
-# 120 deg, tight enough to stay diagnostic. Not fitted to a noise model;
-# revisit once measured-angle histograms exist for real images.
+Y_ANGLE_TOL_DEG_PLACEHOLDER = 15.0  # 🔴 assumed — see CALIBRATION.md
 
-T_STRAIGHT_TOL_DEG_PLACEHOLDER = 20.0
-# [PLACEHOLDER] tolerance on how collinear the two candidate host arms must
-# be (pairwise angle near 180 deg) before they're accepted as "the host".
+T_STRAIGHT_TOL_DEG_PLACEHOLDER = 20.0  # 🔴 assumed — see CALIBRATION.md
 
-T_RIGHT_TOL_DEG_PLACEHOLDER = 20.0
-# [PLACEHOLDER] tolerance on how close to 90 deg the abutter's approach to
-# each host arm must be.
+T_RIGHT_TOL_DEG_PLACEHOLDER = 20.0  # 🔴 assumed — see CALIBRATION.md
 
 
 @dataclass

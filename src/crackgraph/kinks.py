@@ -24,16 +24,9 @@ import skan
 
 from .graph import GraphResult
 
-KINK_WINDOW_PX_PLACEHOLDER = 10.0
-# [PLACEHOLDER] chord window (arc length) on each side of a candidate
-# point. Same jitter-averaging scale reasoning as the annulus radii in
-# junctions.py; not derived from calibrated h/um-per-px (none exists yet).
+KINK_WINDOW_PX_PLACEHOLDER = 10.0  # 🔴 assumed — see CALIBRATION.md
 
-KINK_TURN_DEG_PLACEHOLDER = 45.0
-# [PLACEHOLDER] minimum direction change to flag. Must exceed what smooth
-# crack curvature plausibly produces over ~2*window px, so that a flag
-# means "probably two distinct cracks", not "curved crack". Not calibrated;
-# revisit once measured turn-angle histograms exist for real images.
+KINK_TURN_DEG_PLACEHOLDER = 45.0  # 🔴 assumed — see CALIBRATION.md
 
 
 @dataclass
