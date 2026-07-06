@@ -15,19 +15,20 @@ is just setup/usage plus the current implementation status.
 | 2 | Skeletonize + prune spurs | **Implemented** |
 | 3 | Extract attributed planar graph (skan) | **Implemented** |
 | 4 | Annulus angle measurement, T-vs-Y classification | **Implemented** |
-| 5 | Precedence graph → transitive closure → DAG/cycle check | Not built |
+| 5 | Precedence graph → transitive closure → DAG/cycle check | **First pass** (graph + cycle report; not yet resolved into a forced poset) |
 | 6 | Width `w` (Dilworth/König), junction census, generation counts | Not built |
 
 **What you get right now:** a skeleton, a planar graph, and every
 degree-3 junction classified as T, Y, or ambiguous via the annulus angle
 method (see below). For each T-junction, the abutter arc and the two host
 arcs are identified. Degree-4+ junctions are counted but never classified
-(the annulus method is only defined for a clean 3-way star). **There is
-still no partial order/poset yet** — that needs stage 5 to assemble these
-per-junction T/Y facts into an actual precedence graph with transitive
-closure and cycle checking, which hasn't been built. Don't mistake the
-current overlay/report for the thesis's actual finding; it's a
-junction-geometry checkpoint, one step short of the ordering result.
+(the annulus method is only defined for a clean 3-way star). Stage 5 now
+assembles these per-junction T facts into a precedence graph and reports
+any contradictory cycles (see below) — but deliberately does **not** yet
+force cycles into an acyclic poset, and does not compute width `w` (stage
+6): both are deferred until this first pass has been checked against real
+data. Don't mistake the current overlay/report for the thesis's headline
+finding yet; `w` is still one step away.
 
 ### How junction angles are measured (stage 4)
 
@@ -159,6 +160,50 @@ direction changes by more than a threshold over a small window. Flags are
 splitting flagged edges into two arcs is deferred to a later task (it
 changes what stage 5 will treat as the atoms of the partial order).
 
+### Stage 5: precedence graph (first pass — visualize, don't resolve yet)
+
+Every T-junction gives a **host ≺ abutter** constraint (host earlier,
+abutter later): per CLAUDE.md, "the crack that abuts arrived after the
+crack it hit" — the host was already there as an existing discontinuity
+the abutter's tip couldn't cross. Stage 5 assembles these into a directed
+graph over the atomic skeleton edges (`path_index`, unchanged from stage 3
+— no arc-splitting, no collapsing of collinear segments across an
+uncollapsed junction). Constraints are **unioned from both stage-4
+classifiers** (tangent-fit and the corner cross-check), not just one,
+tagged with provenance:
+
+- Both methods resolve the same node to T with the same abutter → the arc
+  is tagged "both agree".
+- Only one resolves it → tagged with that one method only.
+- Both resolve it to T but **disagree on which arm is the abutter** → no
+  arc is emitted at all; counted separately as a conflict. Two contradictory
+  readings and no ground truth to break the tie is an honest gap, not a
+  coin flip.
+
+Cycles (a contradictory loop, e.g. `A ≺ B`, `B ≺ C`, `C ≺ A`) mean either a misread
+junction or genuinely near-simultaneous cracking — CLAUDE.md is explicit
+these must be reported, not silently deleted. This pass characterizes them
+via `networkx.condensation` (each strongly-connected component collapsed to
+one supernode, which is always acyclic) rather than computing a minimum
+feedback-arc-set: every atomic edge gets a topological **generation**
+(earlier ⇒ smaller number) except edges caught inside a nontrivial
+strongly-connected component, which get `generation=None` — undetermined,
+not guessed at. Deliberately **not attempted yet**: forcing cycles into a
+resolved acyclic poset, and computing width `w` (stage 6) — both need a
+clean poset, and it's premature to build one before seeing how much real
+image data actually cycles.
+
+`outputs/{source_subfolder}/{image_stem}_corner_precedence.png` is a **separate** overlay
+(never layered onto the junction-classification overlay) with two encodings
+together: each atomic edge colored by its own generation (grey = no
+determined generation — either untouched by any resolved T, or inside a
+cycle), and a short arrow at each contributing junction from the host arm
+into the abutter arm — earlier into later, matching the generation
+gradient direction (lime = both methods agree, dark orange = only one
+method, magenta-dashed = this arc is part of an unresolved cycle) --
+deliberately not blue/red, since those already mean earlier/later on the
+generation colormap and reusing them would make "blue" ambiguous.
+
 **Region of interest:** for now, every run analyzes only a fixed top-left
 corner crop of the input image (12.5% of image width per side, inset 2% of
 width from the true corner), not the full image. This is a deliberate,
@@ -183,14 +228,17 @@ python3 -m src.analyze_image data/raw/T5/T5-M_H95_v1_mm000001.jpg
 ```
 
 This binarizes, skeletonizes+prunes, and extracts the graph for the default
-corner crop, prints a labeled report to the console, and saves an overlay
-PNG to `outputs/`.
+corner crop, prints a labeled report to the console, and saves overlay PNGs
+to `outputs/{source_subfolder}/` — nested under the image's own source
+folder name (e.g. `data/raw/T5/...` → `outputs/T5/...`,
+`data/raw/humidity_loading/...` → `outputs/humidity_loading/...`) so
+different coatings/sample batches don't pile up flat in one directory.
 
 ### CLI flags
 
 | Flag | Default | Meaning |
 |---|---|---|
-| `--out-dir` | `outputs` | where the overlay PNG is written |
+| `--out-dir` | `outputs` | base output directory; overlays are written under `{out-dir}/{source_subfolder}/` (source_subfolder = the image's own parent folder name) |
 | `--spur-px` | `15` | **[placeholder]** spur-length threshold in pixels, not derived from a calibrated film thickness `h` or µm/px (neither exists yet — calibration will be supplied manually later) |
 | `--min-object-px` | `4` | pre-skeletonize despeckle size (kills JPEG block-noise specks; too small to erode real crack width) |
 | `--max-overlay-dim` | `2500` | cap on the saved overlay's longest side (analysis itself always runs at full resolution of the region processed; only the saved image is downsampled) |
@@ -220,15 +268,18 @@ PNG to `outputs/`.
   down by degree (stage 3), per-junction T/Y/ambiguous/insufficient-data
   counts and a full per-junction listing with sector gaps (labeled with
   their sum, which is always 360) and host curvature (stage 4), the
-  kink scan's flag list, and the corner cross-check's agree/disagree/
-  unresolved breakdown with a per-junction listing flagging disagreements.
-  Every number is labeled `[measured]`, `[interpreted]`, or `[placeholder]`
-  per the evidence-level discipline in CLAUDE.md.
+  kink scan's flag list, the corner cross-check's agree/disagree/
+  unresolved breakdown with a per-junction listing flagging disagreements,
+  and the stage-5 precedence-graph report (arc counts by provenance,
+  conflicting-abutter nodes, and any nontrivial cycles found — see "Stage
+  5: precedence graph" above). Every number is labeled `[measured]`,
+  `[interpreted]`, or `[placeholder]` per the evidence-level discipline in
+  CLAUDE.md.
 - **Two overlay views**, since "does this look right" and "audit the angle
   estimator" want different amounts of information on screen (an earlier
   single-view design put everything on one image, including a legend drawn
   *inside* the axes that regularly covered real junctions):
-  - `outputs/{image_stem}_corner_overlay.png` (always written; `_full_overlay.png`
+  - `outputs/{source_subfolder}/{image_stem}_corner_overlay.png` (always written; `_full_overlay.png`
     with `--full-image`): the clean quick-look view — skeleton in green,
     endpoints (degree 1) in orange, degree-3 junctions colored by
     classification (T = blue triangle, Y = green plus, ambiguous = orange x,
@@ -238,7 +289,10 @@ PNG to `outputs/`.
     with a red ring around the junction vertex wherever the two methods
     disagree — and a short label (the `node_id`, cross-referencing the
     console report) at each classified junction.
-  - `outputs/{image_stem}_corner_overlay_detail.png` (only with
+  - `outputs/{source_subfolder}/{image_stem}_corner_precedence.png` (always written): a
+    **separate** stage-5 overlay — see "Stage 5: precedence graph" above —
+    never layered onto the junction-classification overlay above.
+  - `outputs/{source_subfolder}/{image_stem}_corner_overlay_detail.png` (only with
     `--show-fit-detail`): everything above, plus the fitted-curve
     diagnostics — a cyan curve (the fitted tangent model, drawn only over
     the band it was fitted to), a short cyan tick (the derived direction),

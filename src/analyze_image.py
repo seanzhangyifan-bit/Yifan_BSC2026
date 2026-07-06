@@ -38,7 +38,8 @@ from .crackgraph.kinks import (
     KINK_WINDOW_PX_PLACEHOLDER,
     find_kinks,
 )
-from .crackgraph.overlay import render_overlay
+from .crackgraph.overlay import render_overlay, render_precedence_overlay
+from .crackgraph.precedence import build_precedence_graph
 from .crackgraph.region import default_corner_crop
 from .crackgraph.skeleton import SPUR_PX_PLACEHOLDER, skeletonize_and_prune
 
@@ -143,9 +144,29 @@ def main():
         t_straight_tol_deg=args.t_straight_tol_deg,
         t_right_tol_deg=args.t_right_tol_deg,
     )
+    precedence_result = build_precedence_graph(
+        junction_result,
+        corner_cross_check,
+        y_angle_tol_deg=args.y_angle_tol_deg,
+        t_straight_tol_deg=args.t_straight_tol_deg,
+        t_right_tol_deg=args.t_right_tol_deg,
+    )
 
-    out_dir = Path(args.out_dir)
+    # Nest under the image's own source folder (e.g. data/raw/T5,
+    # data/raw/humidity_loading) so outputs from different coatings/sample
+    # batches don't pile up flat in one directory.
+    out_dir = Path(args.out_dir) / image_path.parent.name
     out_dir.mkdir(parents=True, exist_ok=True)
+    precedence_out_path = out_dir / f"{image_path.stem}_{stem_suffix}_precedence.png"
+    render_precedence_overlay(
+        rgb,
+        skeleton_result.skeleton,
+        graph_result,
+        precedence_result,
+        skeleton_result.medial_radius,
+        precedence_out_path,
+        max_overlay_dim=args.max_overlay_dim,
+    )
     out_path = out_dir / f"{image_path.stem}_{stem_suffix}_overlay.png"
     scale = render_overlay(
         rgb,
@@ -311,18 +332,68 @@ def main():
         if cc.label is None:
             print(f"  node {cc.node_id}: unresolved ({cc.unresolved_reason}, {len(cc.corners)} corners found)")
         else:
-            flag = "" if cc.agrees_with_tangent_fit else "  [DISAGREE]"
+            # agrees_with_tangent_fit is None when the tangent-fit had no
+            # comparable gaps to check against (e.g. insufficient_data) --
+            # that's "not comparable", not a disagreement, so keep it a
+            # distinct flag rather than folding it into [DISAGREE].
+            if cc.agrees_with_tangent_fit is False:
+                flag = "  [DISAGREE]"
+            elif cc.agrees_with_tangent_fit is None:
+                flag = "  [N/A: tangent-fit not comparable]"
+            else:
+                flag = ""
             gaps = ", ".join(f"{g:.1f}" for g in cc.sector_gaps_deg)
+            max_diff = (
+                f"{cc.max_gap_disagreement_deg:.1f}" if cc.max_gap_disagreement_deg is not None else "n/a"
+            )
             print(
                 f"  node {cc.node_id}: {cc.label} gaps=[{gaps}] "
-                f"(max diff vs tangent-fit: {cc.max_gap_disagreement_deg:.1f} deg){flag}"
+                f"(max diff vs tangent-fit: {max_diff} deg){flag}"
             )
+    print()
+    print("-- Stage 5: Precedence graph (first pass -- graph + cycle report, not yet resolved) --")
+    n_by_both = sum(a.methods_agree for a in precedence_result.arcs)
+    n_by_tangent = sum(a.supporting_methods == ("tangent_fit",) for a in precedence_result.arcs)
+    n_by_corner = sum(a.supporting_methods == ("corner_cross_check",) for a in precedence_result.arcs)
+    print(
+        f"Arcs: {len(precedence_result.arcs)} total "
+        f"(both methods agree: {n_by_both}, tangent-fit only: {n_by_tangent}, "
+        f"corner-cross-check only: {n_by_corner})    [interpreted -- union of both stage-4 classifiers]"
+    )
+    print(
+        f"Conflicting abutter (both methods resolved T, disagreed on which arm): "
+        f"{precedence_result.n_conflicting_abutter}    [interpreted -- no arc emitted, not guessed]"
+    )
+    if precedence_result.conflicting_node_ids:
+        print(f"  nodes: {precedence_result.conflicting_node_ids}")
+    print(
+        f"Corner-resolved T not mapped to path indices: {precedence_result.n_corner_unmapped}    "
+        "[interpreted -- see precedence.py module docstring]"
+    )
+    n_touched = precedence_result.graph.number_of_nodes()
+    n_determined = sum(g is not None for g in precedence_result.generation.values())
+    print(
+        f"Atomic edges touched by >=1 precedence arc: {n_touched} of {graph_result.n_edges} total    "
+        "[measured]"
+    )
+    print(
+        f"  of those, with a determined generation: {n_determined}    "
+        f"[interpreted -- {n_touched - n_determined} undetermined because caught in an unresolved cycle]"
+    )
+    print(
+        f"Nontrivial cycles (strongly-connected clusters, size > 1): "
+        f"{len(precedence_result.nontrivial_sccs)}    "
+        "[measured -- reported per CLAUDE.md, NOT deleted or force-resolved this pass]"
+    )
+    for scc in precedence_result.nontrivial_sccs:
+        print(f"  cluster of {len(scc)} atomic edges: paths {sorted(scc)}")
     print()
     print("-- Output --")
     dim_note = "" if scale >= 1.0 else f" (downsampled by {scale:.3f}x)"
     print(f"Overlay saved to: {out_path}{dim_note}")
     if detail_out_path is not None:
         print(f"Detail overlay saved to: {detail_out_path}")
+    print(f"Precedence graph overlay saved to: {precedence_out_path}")
 
 
 if __name__ == "__main__":

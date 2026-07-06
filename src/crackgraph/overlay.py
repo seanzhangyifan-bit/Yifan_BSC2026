@@ -11,9 +11,11 @@ Two views, not one (`detail` flag), because "does this look right" and
 different amounts of information on screen:
 - Default (`detail=False`): skeleton, endpoints, classification markers,
   kink flags, corner cross-check markers (including disagreement rings --
-  that's a headline signal, not a diagnostic detail), and a short label
-  (just the node_id, for cross-referencing the console report) per
-  classified junction. This is the quick-look view.
+  that's a headline signal, not a diagnostic detail). No per-junction text
+  labels -- at real junction densities (thousands per full image) a label
+  per node is just visual noise, and the node_id is already in the console
+  report (indexed by node_id and coordinate) for cross-referencing. This is
+  the quick-look view.
 - Detail (`detail=True`): everything above, plus the fitted-curve/tick/
   terminal-segment diagnostic layer and full angle-gap text labels. An
   earlier version drew a fixed-length ray from the extrapolated tangent,
@@ -50,10 +52,13 @@ import skan
 from matplotlib.collections import LineCollection
 from PIL import Image
 
+from matplotlib import cm
+
 from .corners import CornerCrossCheck
 from .graph import GraphResult
 from .junctions import JunctionAnalysisResult
 from .kinks import KinkScanResult
+from .precedence import PrecedenceGraphResult
 
 _LABEL_STYLE = {
     "T": ("tab:blue", "^", "T junction"),
@@ -82,7 +87,6 @@ LABEL_NUDGE_DISTANCE_PX = 20.0
 # vertex, use the next offset variant instead of the default -- a lightweight
 # heuristic (not full collision avoidance) that resolves the common
 # two-junctions-close-together case.
-
 
 def _terminal_segment(
     skel: skan.Skeleton, path_index: int, vertex: np.ndarray, effective_inner_radius_px: float
@@ -186,11 +190,12 @@ def render_overlay(
                 )
                 any_junction_marker = True
 
-    # Per-junction text labels: short node_id by default (cross-references
-    # the console report), full angle-gap text in detail mode. Drawn for
-    # every classified junction regardless of `detail` -- only the CONTENT
-    # and the extra fitted-curve geometry differ in detail mode.
-    if junction_result is not None:
+    # Per-junction text labels: full angle-gap text, detail mode only -- a
+    # short node_id label used to be drawn in the default view too, but at
+    # real junction densities (thousands per full image) that's just
+    # overlapping text noise, and the node_id is already in the console
+    # report for cross-referencing. See module docstring.
+    if junction_result is not None and detail:
         placed_label_vertices: list[np.ndarray] = []
         for c in junction_result.classifications:
             if c.sector_gaps_deg is None:
@@ -205,16 +210,12 @@ def render_overlay(
             dx, dy = LABEL_OFFSET_VARIANTS_PX[n_nearby % len(LABEL_OFFSET_VARIANTS_PX)]
             placed_label_vertices.append(vertex)
 
-            label_text = (
-                "/".join(f"{g:.0f}°" for g in sorted(c.sector_gaps_deg))
-                if detail
-                else str(c.node_id)
-            )
+            label_text = "/".join(f"{g:.0f}°" for g in sorted(c.sector_gaps_deg))
             ax.annotate(
                 label_text,
                 xy=(vertex[1], vertex[0]),
                 xytext=(vertex[1] + dx, vertex[0] + dy),
-                fontsize=6 if not detail else 5,
+                fontsize=5,
                 color=color,
                 zorder=7 + n_nearby,  # later-overlapping labels draw on top, outline keeps them distinguishable
                 bbox=dict(boxstyle="round,pad=0.15", fc="black", ec="white", lw=0.4, alpha=0.75),
@@ -335,6 +336,118 @@ def render_overlay(
             loc="upper center", bbox_to_anchor=(0.5, -0.02), ncol=3,
             fontsize=6, markerscale=1.3, framealpha=0.9,
         )
+
+    fig.savefig(out_path, dpi=dpi, bbox_inches="tight")
+    plt.close(fig)
+    return scale
+
+
+PRECEDENCE_MIN_LINEWIDTH_PT = 1.0
+# Floor for the per-edge line width below, so a degenerate/very thin
+# segment (e.g. right at a pruned spur stub) still renders as a visible
+# line rather than vanishing -- a display floor, not a claim about crack
+# width.
+
+
+def render_precedence_overlay(
+    rgb: np.ndarray,
+    skel: skan.Skeleton,
+    graph_result: GraphResult,
+    precedence_result: PrecedenceGraphResult,
+    medial_radius: np.ndarray,
+    out_path: str | Path,
+    *,
+    max_overlay_dim: int = 2500,
+) -> float:
+    """Save a dedicated precedence-graph overlay (a separate file from the
+    junction-classification overlay, per the user's explicit request not to
+    layer this onto it).
+
+    Per-EDGE (not per merged-crack) generation coloring only: each atomic
+    skeleton segment (path_index) is colored on its own by
+    precedence_result.generation, since CLAUDE.md's "atoms: arcs, not whole
+    cracks" means two collinear segments straddling an uncollapsed junction
+    may legitimately end up different colors -- that is meant to be
+    visible, not smoothed into one crack's color. Segments with no
+    determined generation (never touched by a resolved T-junction, OR
+    caught in an unresolved cycle -- both are honest gaps, not
+    distinguished further in this first pass) are flat grey.
+
+    An earlier version of this view also drew a directed arrow at every
+    contributing junction (host -> abutter, colored by which method(s)
+    supported it). At real junction densities that turned every junction
+    into a cluttered mark rather than a readable arrow, and duplicated
+    what the generation coloring already shows structurally -- removed on
+    the user's request. The per-arc provenance (agree / single-method /
+    conflicting) is still in the stage-5 console report, just not drawn.
+
+    Generation is colored with a DISCRETE colormap (one flat color per
+    integer generation, via BoundaryNorm), not a continuous gradient --
+    generation is a small integer count, and a continuous blend made
+    adjacent generations hard to tell apart by eye. `viridis` is used for
+    its perceptually-ordered dark-to-light progression, so the earlier ->
+    later order is still visually obvious across the discrete steps.
+
+    Line width is per-edge, not a fixed constant: sampled from
+    `medial_radius` (SkeletonResult.medial_radius, the mask's own
+    distance-transform half-width at every pixel -- already used to widen
+    the junction blob in junctions.py) along that edge's own polyline, so
+    the colored line actually covers the crack's measured width instead of
+    a thin centerline with the (white) crack still visible around it.
+    """
+    h, w = rgb.shape[:2]
+    scale = min(1.0, max_overlay_dim / max(h, w))
+
+    if scale < 1.0:
+        new_size = (round(w * scale), round(h * scale))
+        display_rgb = np.asarray(Image.fromarray(rgb).resize(new_size, Image.LANCZOS))
+    else:
+        display_rgb = rgb
+
+    disp_h, disp_w = display_rgb.shape[:2]
+    dpi = 150
+    fig, ax = plt.subplots(figsize=(disp_w / dpi, disp_h / dpi), dpi=dpi)
+    ax.imshow(display_rgb)
+
+    determined = [g for g in precedence_result.generation.values() if g is not None]
+    if determined:
+        n_gen = max(determined) + 1
+        cmap = cm.get_cmap("viridis", n_gen)
+        norm = matplotlib.colors.BoundaryNorm(np.arange(-0.5, n_gen + 0.5, 1.0), n_gen)
+    else:
+        cmap = None
+        norm = None
+
+    mr_h, mr_w = medial_radius.shape
+    n_edges = len(graph_result.summary)
+    segments = []
+    colors = []
+    linewidths = []
+    for i in range(n_edges):
+        coords_full = skel.path_coordinates(i)
+        coords = coords_full * scale
+        segments.append(coords[:, ::-1])
+        gen = precedence_result.generation.get(i)
+        colors.append(cmap(norm(gen)) if gen is not None and norm is not None else (0.6, 0.6, 0.6, 1.0))
+
+        rows = np.clip(coords_full[:, 0].round().astype(int), 0, mr_h - 1)
+        cols = np.clip(coords_full[:, 1].round().astype(int), 0, mr_w - 1)
+        half_width_px = np.median(medial_radius[rows, cols])
+        width_pt = 2.0 * half_width_px * scale * (72.0 / dpi)
+        linewidths.append(max(width_pt, PRECEDENCE_MIN_LINEWIDTH_PT))
+    if segments:
+        ax.add_collection(LineCollection(segments, colors=colors, linewidths=linewidths, zorder=2))
+
+    if norm is not None:
+        fig.colorbar(
+            cm.ScalarMappable(norm=norm, cmap=cmap), ax=ax, orientation="horizontal",
+            fraction=0.035, pad=0.06, label="generation (earlier -> later; grey = undetermined)",
+            ticks=range(n_gen),
+        )
+
+    ax.set_xlim(0, disp_w)
+    ax.set_ylim(disp_h, 0)
+    ax.axis("off")
 
     fig.savefig(out_path, dpi=dpi, bbox_inches="tight")
     plt.close(fig)
