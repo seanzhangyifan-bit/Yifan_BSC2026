@@ -105,19 +105,33 @@ def render_orientation_rose(anisotropy_result: AnisotropyResult, out_path: str |
 
 
 def _plot_tortuosity_hist_on_ax(
-    ax_tort, curvature_result: CurvatureScanResult, *, fontsize: float = 6, compact: bool = False
+    ax_tort,
+    curvature_result: CurvatureScanResult,
+    *,
+    fontsize: float = 6,
+    compact: bool = False,
+    bins: np.ndarray | int = 15,
 ) -> None:
     """Draw just the tortuosity histogram onto a pre-built Axes. Split out
     from _plot_curvature_hist_on_axes so render_overview_figure's clusters
     can show tortuosity alone (curvature omitted there for now -- see
-    CLAUDE.md)."""
+    CLAUDE.md).
+
+    `bins` defaults to 15 (matplotlib auto-ranges to that Axes' own data,
+    render_curvature_histogram's behavior, unchanged). render_overview_figure
+    instead passes shared bin edges (an array) computed once across every
+    cluster in the figure, so tortuosity is visually comparable panel to
+    panel instead of each panel silently rescaling to its own range.
+    """
     tortuosities = [e.tortuosity for e in curvature_result.edges if e.tortuosity is not None]
     tort_title = "tortuosity" if compact else "tortuosity (arc/chord)  [measured]"
 
     if tortuosities:
-        ax_tort.hist(tortuosities, bins=15, color="tab:blue")
+        ax_tort.hist(tortuosities, bins=bins, color="tab:blue")
     else:
         ax_tort.text(0.5, 0.5, "no data", ha="center", va="center", transform=ax_tort.transAxes, fontsize=fontsize)
+    if isinstance(bins, np.ndarray):
+        ax_tort.set_xlim(bins[0], bins[-1])
     ax_tort.set_title(tort_title, fontsize=fontsize)
     ax_tort.tick_params(labelsize=fontsize - 1)
 
@@ -159,7 +173,15 @@ def render_curvature_histogram(curvature_result: CurvatureScanResult, out_path: 
     plt.close(fig)
 
 
-def _add_cluster(fig, gs_slice, label: str, anisotropy_result: AnisotropyResult, curvature_result: CurvatureScanResult) -> None:
+def _add_cluster(
+    fig,
+    gs_slice,
+    label: str,
+    anisotropy_result: AnisotropyResult,
+    curvature_result: CurvatureScanResult,
+    *,
+    tortuosity_bins: np.ndarray | int = 15,
+) -> None:
     """One rose + tortuosity-hist cluster (1 row x 2 sub-columns of the
     given GridSpec slice), labeled via a prefix on the tortuosity axis's
     title -- avoids changing the shared helpers' own title-setting logic.
@@ -169,7 +191,7 @@ def _add_cluster(fig, gs_slice, label: str, anisotropy_result: AnisotropyResult,
     ax_rose = fig.add_subplot(sub_gs[0, 0], projection="polar")
     ax_tort = fig.add_subplot(sub_gs[0, 1])
     _plot_orientation_rose_on_ax(ax_rose, anisotropy_result, fontsize=6, compact=True)
-    _plot_tortuosity_hist_on_ax(ax_tort, curvature_result, fontsize=6, compact=True)
+    _plot_tortuosity_hist_on_ax(ax_tort, curvature_result, fontsize=6, compact=True, bins=tortuosity_bins)
     ax_tort.set_title(f"{label}\n{ax_tort.get_title()}", fontsize=6)
 
 
@@ -193,20 +215,32 @@ def render_overview_figure(
     assert len(sections) == 4, "render_overview_figure expects exactly 4 (2x2) sections"
     r0c0, r0c1, r1c0, r1c1 = sections
 
+    # Shared tortuosity bin edges across every cluster (4 quadrants + whole
+    # image), computed once up front, so panels are visually comparable
+    # instead of each silently rescaling its x-axis to its own data range.
+    all_curvature_results = [s[2] for s in sections] + [whole_image_result[2]]
+    all_tortuosities = [
+        e.tortuosity for cr in all_curvature_results for e in cr.edges if e.tortuosity is not None
+    ]
+    if all_tortuosities and max(all_tortuosities) > min(all_tortuosities):
+        tortuosity_bins = np.linspace(min(all_tortuosities), max(all_tortuosities), 16)
+    else:
+        tortuosity_bins = 15
+
     fig = plt.figure(figsize=OVERVIEW_FIGSIZE, dpi=PLOT_DPI, constrained_layout=True)
     gs = fig.add_gridspec(3, 9, height_ratios=[1.0, 1.0, 1.0], hspace=0.5)
 
-    _add_cluster(fig, gs[0, 0:3], *r0c0)
-    _add_cluster(fig, gs[0, 6:9], *r0c1)
-    _add_cluster(fig, gs[1, 0:3], *r1c0)
-    _add_cluster(fig, gs[1, 6:9], *r1c1)
+    _add_cluster(fig, gs[0, 0:3], *r0c0, tortuosity_bins=tortuosity_bins)
+    _add_cluster(fig, gs[0, 6:9], *r0c1, tortuosity_bins=tortuosity_bins)
+    _add_cluster(fig, gs[1, 0:3], *r1c0, tortuosity_bins=tortuosity_bins)
+    _add_cluster(fig, gs[1, 6:9], *r1c1, tortuosity_bins=tortuosity_bins)
 
     ax_img = fig.add_subplot(gs[0:2, 3:6])
     ax_img.imshow(_resize_for_display(whole_image_rgb, WHOLE_IMAGE_DISPLAY_MAX_DIM_PX))
     ax_img.axis("off")
     ax_img.set_title("whole image (raw)  [measured]", fontsize=8)
 
-    _add_cluster(fig, gs[2, 0:9], *whole_image_result)
+    _add_cluster(fig, gs[2, 0:9], *whole_image_result, tortuosity_bins=tortuosity_bins)
 
     fig.savefig(out_path, dpi=PLOT_DPI)
     plt.close(fig)
