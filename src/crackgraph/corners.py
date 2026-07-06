@@ -55,40 +55,15 @@ from skimage.measure import find_contours
 
 from .junctions import JunctionAnalysisResult, classify_from_gaps, sector_gaps_deg_from_bearings
 
-CORNER_SEARCH_RADIUS_PX = 25.0
-# [PLACEHOLDER] how far from a junction vertex to look for background-tile
-# corners. Must comfortably exceed typical crack half-width (the T notch's
-# corner separation) so both notch corners are found; not yet tied to a
-# calibrated h.
+CORNER_SEARCH_RADIUS_PX = 25.0  # 🔴 assumed — see CALIBRATION.md
 
-CORNER_WINDOW_PX = 10.0
-# [PLACEHOLDER] chord half-window (arc length) used to measure each wall's
-# direction on either side of a candidate corner point. Chosen from
-# scripts/corner_window_sweep.py's measured sweep (straight T's at
-# 60/90/120 deg, curved-host T's at radius 30/60 px, jitter 0/0.5/1.0 px),
-# scoring each window by worst-case RMSE *and* worst-case unresolved
-# fraction together (a small window that "resolves" cleanly on the easy
-# cases but fails to find corners at all under jitter is not actually
-# better). Summary at window=10: worst-case RMSE 15.6 deg, worst-case
-# unresolved 38% (both driven by the jitter=1.0 px cells; jitter=0 cells
-# resolve 100% with RMSE well under 5 deg at this window). Re-run the
-# script and update this comment if the geometry/jitter grid changes.
+CORNER_WINDOW_PX = 10.0  # 🟡 empirical, uncalibrated — see CALIBRATION.md
 
-CORNER_MIN_TURN_DEG = 45.0
-# [PLACEHOLDER] minimum turning angle (see kinks.py's identically-shaped
-# scan) to accept a contour point as a real wall corner rather than
-# boundary noise. Not calibrated.
+CORNER_MIN_TURN_DEG = 45.0  # 🔴 assumed — see CALIBRATION.md
 
-ABUTTER_AGREEMENT_TOL_DEG = 30.0
-# [PLACEHOLDER] in the T-like (2-corner) case, the two corners' independent
-# estimates of the abutter's bearing must agree within this tolerance or
-# the pairing is treated as inconsistent (unresolvable) rather than
-# silently averaged.
+ABUTTER_AGREEMENT_TOL_DEG = 30.0  # 🔴 assumed — see CALIBRATION.md
 
-BEARING_MATCH_TOL_DEG = 30.0
-# [PLACEHOLDER] in the Y-like (3-corner) case, the greedy bearing-matching
-# used to pair up the 6 raw wall bearings into 3 arm bearings requires the
-# matched pair to agree within this tolerance; otherwise unresolvable.
+BEARING_MATCH_TOL_DEG = 30.0  # 🔴 assumed — see CALIBRATION.md
 
 
 @dataclass

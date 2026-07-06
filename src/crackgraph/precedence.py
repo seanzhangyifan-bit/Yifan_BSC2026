@@ -55,14 +55,7 @@ import networkx as nx
 from .corners import CornerCrossCheck
 from .junctions import JunctionAnalysisResult, classify_from_gaps, sector_gaps_deg_from_bearings
 
-CORNER_TO_TANGENT_BEARING_TOL_DEG = 45.0
-# [PLACEHOLDER] how far apart the corner method's and the tangent-fit's
-# independent bearing estimates for the same arm may be and still be treated
-# as "the same arm" when recovering path_index identity for a corner-only
-# claim. Deliberately generous (these are two geometrically distinct
-# measurements, not two readings of the same fit) but not yet measured via a
-# sweep the way ANNULUS_OUTER_PX_PLACEHOLDER/CORNER_WINDOW_PX were -- revisit
-# once real disagreement-rate data exists (see corner cross-check report).
+CORNER_TO_TANGENT_BEARING_TOL_DEG = 45.0  # 🔴 assumed — see CALIBRATION.md
 
 
 @dataclass

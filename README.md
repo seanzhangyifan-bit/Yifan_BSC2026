@@ -7,6 +7,12 @@ full chronology, the pipeline's six stages, library choices, evidence-level
 discipline — lives in [`CLAUDE.md`](./CLAUDE.md). Read that first; this file
 is just setup/usage plus the current implementation status.
 
+**New here?** [`GLOSSARY.md`](./GLOSSARY.md) has one-line definitions for the recurring
+terms (poset, antichain, width `w`, T/Y-junction, abutter/host, annulus, generation,
+growth-arc), and [`CALIBRATION.md`](./CALIBRATION.md) has a quick-scan table of which
+tunable constants are sweep-justified vs. still just asserted — read either before
+diving into the denser methodology sections below.
+
 ## Pipeline status
 
 | Stage | What it does | Status |
