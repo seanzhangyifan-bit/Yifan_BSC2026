@@ -41,8 +41,8 @@ from src.crackgraph.tiling import grid_tiles
 def parse_args():
     p = argparse.ArgumentParser(description="Multi-section anisotropy/curvature overview figure.")
     p.add_argument("image_path", type=str)
-    p.add_argument("--n-rows", type=int, default=4)
-    p.add_argument("--n-cols", type=int, default=4)
+    p.add_argument("--n-rows", type=int, default=2)
+    p.add_argument("--n-cols", type=int, default=2)
     p.add_argument("--out-dir", type=str, default="outputs")
     return p.parse_args()
 
@@ -59,7 +59,7 @@ def _run_pipeline_slice(gray):
 def main():
     args = parse_args()
     image_path = Path(args.image_path)
-    gray_full, _ = load_image(image_path)
+    gray_full, rgb_full = load_image(image_path)
     h, w = gray_full.shape
 
     print(f"=== Overview figure: {image_path.name} ({w} x {h} px) ===")
@@ -88,7 +88,7 @@ def main():
     out_dir = Path(args.out_dir) / coating
     out_dir.mkdir(parents=True, exist_ok=True)
     overview_png_path = out_dir / f"{image_path.stem}_overview.png"
-    render_overview_figure(sections, ("whole image", whole_aniso, whole_curv), overview_png_path)
+    render_overview_figure(sections, rgb_full, ("whole image", whole_aniso, whole_curv), overview_png_path)
     print(f"Overview figure saved to: {overview_png_path}")
 
     master_dir = Path(args.out_dir)
