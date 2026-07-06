@@ -34,6 +34,11 @@ class ImageEntry:
     n_sections: int
     tiling_desc: str
     timestamp_iso: str
+    # Attached later by attach_full_analysis_images(), once analyze_image.py
+    # --full-image has been run separately (stage 4/5, not part of
+    # scripts/overview_figure.py's lighter curvature/anisotropy-only slice).
+    full_overlay_png_relpath: str | None = None
+    full_precedence_png_relpath: str | None = None
 
 
 def _load_registry(json_path: Path) -> list[dict]:
@@ -75,6 +80,19 @@ def _render_html(entries: list[dict]) -> str:
     for coating in sorted(coatings):
         image_blocks = []
         for e in coatings[coating]:
+            extra_images = []
+            if e.get("full_overlay_png_relpath"):
+                extra_images.append(
+                    f"""
+      <h4>full overlay</h4>
+      <img src="{e["full_overlay_png_relpath"]}" alt="full-image overlay for {e["image_stem"]}">"""
+                )
+            if e.get("full_precedence_png_relpath"):
+                extra_images.append(
+                    f"""
+      <h4>full precedence graph</h4>
+      <img src="{e["full_precedence_png_relpath"]}" alt="full-image precedence graph for {e["image_stem"]}">"""
+                )
             image_blocks.append(f"""
     <div class="image-block">
       <h3>{e["image_stem"]}</h3>
@@ -83,7 +101,8 @@ def _render_html(entries: list[dict]) -> str:
         whole-image pipeline runtime: {e["whole_image_runtime_s"]:.2f}s &middot;
         generated: {e["timestamp_iso"]}
       </p>
-      <img src="{e["overview_png_relpath"]}" alt="overview figure for {e["image_stem"]}">
+      <h4>overview figure</h4>
+      <img src="{e["overview_png_relpath"]}" alt="overview figure for {e["image_stem"]}">{"".join(extra_images)}
     </div>""")
         sections_html.append(f"""
   <section class="coating">
@@ -105,6 +124,7 @@ def _render_html(entries: list[dict]) -> str:
   section.coating h2 {{ background: #eee; padding: 0.3em 0.6em; }}
   .image-block {{ margin: 1.5em 0; padding-left: 0.6em; border-left: 3px solid #ccc; }}
   .image-block h3 {{ margin-bottom: 0.2em; }}
+  .image-block h4 {{ margin: 1em 0 0.2em; font-size: 0.95em; color: #333; }}
   .meta {{ color: #555; font-size: 0.9em; }}
   img {{ max-width: 100%; border: 1px solid #ddd; }}
 </style>
@@ -112,11 +132,13 @@ def _render_html(entries: list[dict]) -> str:
 <body>
 <h1>Crack analysis overview -- all coatings</h1>
 <p>One section per coating (source subfolder under data/raw/), one image
-block per analyzed image. Each image block currently holds its multi
--section overview figure (per-section + whole-image rose diagrams and
-curvature/tortuosity histograms) -- see scripts/overview_figure.py.
-Overlays and other per-image outputs are not embedded here yet
-(deferred, see CLAUDE.md).</p>
+block per analyzed image. Each image block holds its multi-section
+overview figure (per-section + whole-image rose diagrams and
+curvature/tortuosity histograms, see scripts/overview_figure.py) and,
+where attached, the full-image skeleton overlay and precedence graph
+from `analyze_image.py --full-image` (stage 4/5 -- exploratory on a
+full image, see CLAUDE.md's scope-discipline notes; validated so far
+only on the small corner crop).</p>
 {body}
 </body>
 </html>
@@ -154,5 +176,43 @@ def update_master_report(
     upsert_entry(json_path, entry)
 
     entries = _load_registry(json_path)
+    html_path.write_text(_render_html(entries))
+    return html_path
+
+
+def attach_full_analysis_images(
+    master_dir: str | Path,
+    *,
+    coating: str,
+    image_stem: str,
+    full_overlay_png_relpath: str,
+    full_precedence_png_relpath: str,
+) -> Path:
+    """Attach the full-image overlay/precedence-graph paths (from a
+    separate `analyze_image.py --full-image` run -- stage 4/5, not part of
+    scripts/overview_figure.py's lighter slice) to an *existing* image
+    entry, and rewrite the HTML. Only updates those two fields on the
+    matching entry, leaving everything else (including a previously
+    attached pair, if re-run) untouched. Raises if no matching entry
+    exists yet -- this attaches to a block created by
+    update_master_report(), it doesn't create new ones.
+    """
+    master_dir = Path(master_dir)
+    json_path = master_dir / REGISTRY_FILENAME
+    html_path = master_dir / HTML_FILENAME
+
+    entries = _load_registry(json_path)
+    for entry in entries:
+        if entry["coating"] == coating and entry["image_stem"] == image_stem:
+            entry["full_overlay_png_relpath"] = full_overlay_png_relpath
+            entry["full_precedence_png_relpath"] = full_precedence_png_relpath
+            break
+    else:
+        raise ValueError(
+            f"No existing entry for coating={coating!r} image_stem={image_stem!r} -- "
+            "run update_master_report() (e.g. via scripts/overview_figure.py) first."
+        )
+
+    _save_registry(json_path, entries)
     html_path.write_text(_render_html(entries))
     return html_path

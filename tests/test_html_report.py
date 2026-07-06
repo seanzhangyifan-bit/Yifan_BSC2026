@@ -3,7 +3,14 @@ second image (same or different coating) adds a section rather than
 overwriting, and re-running the same (coating, image_stem) updates its
 existing section in place instead of duplicating it."""
 
-from src.crackgraph.html_report import HTML_FILENAME, REGISTRY_FILENAME, update_master_report
+import pytest
+
+from src.crackgraph.html_report import (
+    HTML_FILENAME,
+    REGISTRY_FILENAME,
+    attach_full_analysis_images,
+    update_master_report,
+)
 
 
 def _call(tmp_path, coating, image_stem, runtime_s=1.23, n_sections=16, relpath=None):
@@ -66,3 +73,50 @@ def test_rerunning_same_image_updates_section_instead_of_duplicating(tmp_path):
     assert html.count('<div class="image-block">') == 1
     assert "9.99" in html
     assert "1.00" not in html
+
+
+def test_attach_full_analysis_images_adds_them_to_existing_entry(tmp_path):
+    _call(tmp_path, "T5", "image_a")
+
+    html_path = attach_full_analysis_images(
+        tmp_path,
+        coating="T5",
+        image_stem="image_a",
+        full_overlay_png_relpath="T5/image_a_full_overlay.png",
+        full_precedence_png_relpath="T5/image_a_full_precedence.png",
+    )
+
+    html = html_path.read_text()
+    assert "T5/image_a_full_overlay.png" in html
+    assert "T5/image_a_full_precedence.png" in html
+    assert "T5/image_a_overview.png" in html  # original entry untouched
+
+
+def test_attach_full_analysis_images_does_not_touch_other_entries(tmp_path):
+    _call(tmp_path, "T5", "image_a")
+    _call(tmp_path, "T5", "image_b")
+
+    html_path = attach_full_analysis_images(
+        tmp_path,
+        coating="T5",
+        image_stem="image_a",
+        full_overlay_png_relpath="T5/image_a_full_overlay.png",
+        full_precedence_png_relpath="T5/image_a_full_precedence.png",
+    )
+
+    html = html_path.read_text()
+    assert "image_a_full_overlay.png" in html
+    assert "image_b_full_overlay.png" not in html
+
+
+def test_attach_full_analysis_images_raises_for_missing_entry(tmp_path):
+    _call(tmp_path, "T5", "image_a")
+
+    with pytest.raises(ValueError):
+        attach_full_analysis_images(
+            tmp_path,
+            coating="T5",
+            image_stem="does_not_exist",
+            full_overlay_png_relpath="T5/x_full_overlay.png",
+            full_precedence_png_relpath="T5/x_full_precedence.png",
+        )
