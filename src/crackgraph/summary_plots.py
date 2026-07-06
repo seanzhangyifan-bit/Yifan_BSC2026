@@ -219,9 +219,7 @@ def render_overview_figure(
     # image), computed once up front, so panels are visually comparable
     # instead of each silently rescaling its x-axis to its own data range.
     all_curvature_results = [s[2] for s in sections] + [whole_image_result[2]]
-    all_tortuosities = [
-        e.tortuosity for cr in all_curvature_results for e in cr.edges if e.tortuosity is not None
-    ]
+    all_tortuosities = [t for cr in all_curvature_results for t in reliable_tortuosities(cr)]
     if all_tortuosities and max(all_tortuosities) > min(all_tortuosities):
         tortuosity_bins = np.linspace(min(all_tortuosities), max(all_tortuosities), 16)
     else:
