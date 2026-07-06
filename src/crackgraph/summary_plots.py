@@ -104,6 +104,24 @@ def render_orientation_rose(anisotropy_result: AnisotropyResult, out_path: str |
     plt.close(fig)
 
 
+def _plot_tortuosity_hist_on_ax(
+    ax_tort, curvature_result: CurvatureScanResult, *, fontsize: float = 6, compact: bool = False
+) -> None:
+    """Draw just the tortuosity histogram onto a pre-built Axes. Split out
+    from _plot_curvature_hist_on_axes so render_overview_figure's clusters
+    can show tortuosity alone (curvature omitted there for now -- see
+    CLAUDE.md)."""
+    tortuosities = [e.tortuosity for e in curvature_result.edges if e.tortuosity is not None]
+    tort_title = "tortuosity" if compact else "tortuosity (arc/chord)  [measured]"
+
+    if tortuosities:
+        ax_tort.hist(tortuosities, bins=15, color="tab:blue")
+    else:
+        ax_tort.text(0.5, 0.5, "no data", ha="center", va="center", transform=ax_tort.transAxes, fontsize=fontsize)
+    ax_tort.set_title(tort_title, fontsize=fontsize)
+    ax_tort.tick_params(labelsize=fontsize - 1)
+
+
 def _plot_curvature_hist_on_axes(
     ax_tort, ax_curv, curvature_result: CurvatureScanResult, *, fontsize: float = 6, compact: bool = False
 ) -> None:
@@ -112,19 +130,12 @@ def _plot_curvature_hist_on_axes(
     see _plot_orientation_rose_on_ax for why this is factored out and what
     `compact` does.
     """
-    tortuosities = [e.tortuosity for e in curvature_result.edges if e.tortuosity is not None]
+    _plot_tortuosity_hist_on_ax(ax_tort, curvature_result, fontsize=fontsize, compact=compact)
+
     mean_kappas = [
         e.mean_abs_curvature_px_inv for e in curvature_result.edges if e.mean_abs_curvature_px_inv is not None
     ]
-    tort_title = "tortuosity" if compact else "tortuosity (arc/chord)  [measured]"
     curv_title = "|curvature|" if compact else "mean |curvature| (1/px)  [measured]"
-
-    if tortuosities:
-        ax_tort.hist(tortuosities, bins=15, color="tab:blue")
-    else:
-        ax_tort.text(0.5, 0.5, "no data", ha="center", va="center", transform=ax_tort.transAxes, fontsize=fontsize)
-    ax_tort.set_title(tort_title, fontsize=fontsize)
-    ax_tort.tick_params(labelsize=fontsize - 1)
 
     if mean_kappas:
         ax_curv.hist(mean_kappas, bins=15, color="tab:orange")
@@ -149,16 +160,16 @@ def render_curvature_histogram(curvature_result: CurvatureScanResult, out_path: 
 
 
 def _add_cluster(fig, gs_slice, label: str, anisotropy_result: AnisotropyResult, curvature_result: CurvatureScanResult) -> None:
-    """One rose + tortuosity-hist + curvature-hist cluster (1 row x 3
-    sub-columns of the given GridSpec slice), labeled via a prefix on the
-    tortuosity axis's title -- avoids changing the shared helpers' own
-    title-setting logic."""
-    sub_gs = gs_slice.subgridspec(1, 3, wspace=0.6)
+    """One rose + tortuosity-hist cluster (1 row x 2 sub-columns of the
+    given GridSpec slice), labeled via a prefix on the tortuosity axis's
+    title -- avoids changing the shared helpers' own title-setting logic.
+    Curvature is omitted here for now (see CLAUDE.md) -- render_curvature_
+    histogram/_plot_curvature_hist_on_axes still produce it elsewhere."""
+    sub_gs = gs_slice.subgridspec(1, 2, wspace=0.6)
     ax_rose = fig.add_subplot(sub_gs[0, 0], projection="polar")
     ax_tort = fig.add_subplot(sub_gs[0, 1])
-    ax_curv = fig.add_subplot(sub_gs[0, 2])
     _plot_orientation_rose_on_ax(ax_rose, anisotropy_result, fontsize=6, compact=True)
-    _plot_curvature_hist_on_axes(ax_tort, ax_curv, curvature_result, fontsize=6, compact=True)
+    _plot_tortuosity_hist_on_ax(ax_tort, curvature_result, fontsize=6, compact=True)
     ax_tort.set_title(f"{label}\n{ax_tort.get_title()}", fontsize=6)
 
 
