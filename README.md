@@ -15,8 +15,8 @@ diving into the denser methodology sections below.
 
 ## Analyze an image
 
-Developed and tested against **Keyence VK-X Vorbeladung captures at 5mm×5mm
-FOV**; other sources may work but are unverified.
+Developed and tested against **Keyence microscope Vorbeladung captures at
+5mm×5mm FOV**; other sources may work but are unverified.
 
 ```
 python3 -m src.analyze_image path/to/your/image.jpg
@@ -36,10 +36,31 @@ python3 -m src.analyze_image ~/Desktop/my_photos/sample.jpg
 # → outputs/my_photos/sample_corner_overlay.png (+ the other overlays/report)
 ```
 
+A few more common invocations:
+
+```
+python3 -m src.analyze_image data/raw/T5/T5-M_H95_v1_mm000001.jpg --full-image
+# analyzes the whole image instead of just the default corner crop (see "Region of interest" below)
+
+python3 -m src.analyze_image data/raw/T5/T5-M_H95_v1_mm000001.jpg --show-fit-detail
+# also writes a second overlay with the fitted-curve/tangent diagnostics, for auditing the angle estimator
+
+python3 -m src.analyze_image data/raw/T5/T5-M_H95_v1_mm000001.jpg --hide-kinks --hide-corner-check
+# cleaner overlay: drops kink/corner markers (the underlying scans still run and still appear in the console report)
+
+python3 -m src.analyze_image data/raw/T5/T5-M_H95_v1_mm000001.jpg --out-dir my_results
+# writes to my_results/T5/... instead of the outputs/ default
+```
+
 If the image's pixel dimensions look nothing like a typical 5mm Keyence
 capture, the console report prints a `[WARNING]` naming the mismatch rather
 than silently proceeding or crashing — see `EXPECTED_WIDTH_PX_RANGE`/
 `EXPECTED_HEIGHT_PX_RANGE` in `src/analyze_image.py`.
+
+**In VS Code:** open the Run and Debug panel and pick "Analyze image" — it'll
+prompt for the image path instead of you typing the command. See
+`.vscode/launch.json`; add more flags to a configuration's `args` list there
+if you want a different default.
 
 ## Pipeline status
 
@@ -367,6 +388,7 @@ src/
     junctions.py   # stage 4 (annulus tangent-fit bearings/sector-gap classification)
     kinks.py       # flag-only interior-corner (fused-crack) detection
     corners.py     # independent cross-check: background-tile wall-corner angles
+    precedence.py  # stage 5 (union of stage-4 classifiers into a precedence graph; cycle/generation report)
     overlay.py     # overlay PNG rendering
     synthetic.py   # synthetic junction/kink test-image generators (known ground truth, seeded jitter)
   analyze_image.py # CLI entry point
@@ -378,7 +400,45 @@ tests/
   test_junction_angle.py
   test_kinks.py
   test_corners.py
+  test_precedence.py
 ```
+
+## Libraries and code architecture
+
+**Libraries** (verified against actual imports in `src/`, not just what CLAUDE.md
+mentions as a candidate — e.g. `sknw` is discussed there but isn't actually imported
+anywhere in this codebase, so it's left out below):
+
+| Library | Used for |
+|---|---|
+| `numpy` | array operations underlying every stage |
+| `pandas` | skan's per-edge/per-node summary table |
+| `scikit-image` | `threshold_otsu` (stage 1), `remove_small_objects` + `skeletonize` (stage 2), `find_contours` (corner cross-check) |
+| `scipy.ndimage` | `distance_transform_edt` — local crack half-width (medial radius) at every pixel |
+| `skan` | skeleton → branch/node graph extraction (stage 3), spur pruning |
+| `networkx` | precedence graph construction, condensation (cycle detection), topological generation (stage 5) |
+| `matplotlib` | overlay PNG rendering (`pyplot`, `LineCollection`, colormaps) |
+| `Pillow` | image loading |
+| `pytest` | test runner (dev-only) |
+
+**Code architecture:** the pipeline is a chain of typed dataclass results, one per
+stage, each feeding the next — this is literally how `analyze_image.py`'s `main()`
+calls things, in order:
+
+```
+io_utils.load_image
+  → binarize.binarize            → BinarizeResult
+  → skeleton.skeletonize_and_prune → SkeletonResult
+  → graph.extract_graph           → GraphResult
+  → junctions.classify_junctions  → JunctionAnalysisResult  ─┐
+  → kinks.find_kinks              → KinkScanResult           ├─→ precedence.build_precedence_graph → PrecedenceGraphResult
+  → corners.cross_check_junctions → list[CornerCrossCheck]  ─┘
+  → overlay.render_overlay / render_precedence_overlay (PNGs)
+```
+
+Each arrow is a plain function call with a typed result object as output — no
+shared mutable state between stages. See "Repo layout" above for which file each
+stage lives in.
 
 ## Developing / verifying the pipeline (optional, for maintainers)
 
