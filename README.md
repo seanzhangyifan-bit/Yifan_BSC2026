@@ -13,6 +13,34 @@ growth-arc), and [`CALIBRATION.md`](./CALIBRATION.md) has a quick-scan table of 
 tunable constants are sweep-justified vs. still just asserted — read either before
 diving into the denser methodology sections below.
 
+## Analyze an image
+
+Developed and tested against **Keyence VK-X Vorbeladung captures at 5mm×5mm
+FOV**; other sources may work but are unverified.
+
+```
+python3 -m src.analyze_image path/to/your/image.jpg
+```
+
+This single command does everything — binarize, skeletonize, classify
+junctions, kink scan, corner cross-check, precedence graph — and writes the
+console report plus overlay PNGs. It works with any file path; the output
+subfolder is always named after whichever folder the image itself lives in
+(`image_path.parent.name`), not a fixed project convention. For example:
+
+```
+python3 -m src.analyze_image data/raw/T5/T5-M_H95_v1_mm000001.jpg
+# → outputs/T5/T5-M_H95_v1_mm000001_corner_overlay.png (+ the other overlays/report)
+
+python3 -m src.analyze_image ~/Desktop/my_photos/sample.jpg
+# → outputs/my_photos/sample_corner_overlay.png (+ the other overlays/report)
+```
+
+If the image's pixel dimensions look nothing like a typical 5mm Keyence
+capture, the console report prints a `[WARNING]` naming the mismatch rather
+than silently proceeding or crashing — see `EXPECTED_WIDTH_PX_RANGE`/
+`EXPECTED_HEIGHT_PX_RANGE` in `src/analyze_image.py`.
+
 ## Pipeline status
 
 | Stage | What it does | Status |
@@ -263,6 +291,8 @@ different coatings/sample batches don't pile up flat in one directory.
 | `--corner-window-px` | `10.0` | **[placeholder]** chord window for each wall's direction at a candidate corner; chosen from `scripts/corner_window_sweep.py`'s measured sweep |
 | `--corner-min-turn-deg` | `45.0` | **[placeholder]** minimum turning angle to accept a contour point as a real wall corner |
 | `--show-fit-detail` | off | also write a second, detailed overlay (see below); the default overlay is always written regardless |
+| `--hide-kinks` | off | omit flagged-kink markers from the overlay(s); the kink scan itself still runs and still appears in the console report |
+| `--hide-corner-check` | off | omit corner cross-check markers/diamonds from the overlay(s); the cross-check itself still runs and still appears in the console report |
 
 ### Output
 
@@ -324,7 +354,35 @@ reproducible too. Combined with the Parameters block above, any console
 report fully specifies how to regenerate it: same image, same flags, same
 library versions, same output.
 
-## Verifying it works
+## Repo layout
+
+```
+src/
+  crackgraph/
+    io_utils.py    # image loading
+    region.py      # default top-left corner crop selection
+    binarize.py    # stage 1
+    skeleton.py    # stage 2 (skeletonize + iterative spur pruning via skan; also EDT medial_radius)
+    graph.py       # stage 3 (skan graph extraction, degree-based classification)
+    junctions.py   # stage 4 (annulus tangent-fit bearings/sector-gap classification)
+    kinks.py       # flag-only interior-corner (fused-crack) detection
+    corners.py     # independent cross-check: background-tile wall-corner angles
+    overlay.py     # overlay PNG rendering
+    synthetic.py   # synthetic junction/kink test-image generators (known ground truth, seeded jitter)
+  analyze_image.py # CLI entry point
+scripts/
+  window_sweep.py        # deterministic bias/std/RMSE sweep justifying the annulus outer radius
+  corner_window_sweep.py # same, for the corner cross-check's window
+tests/
+  test_synthetic.py
+  test_junction_angle.py
+  test_kinks.py
+  test_corners.py
+```
+
+## Developing / verifying the pipeline (optional, for maintainers)
+
+These are one-time or occasional checks — not something you run per image.
 
 Two checks, in order — no full-image run yet (see above):
 
@@ -378,29 +436,3 @@ Two checks, in order — no full-image run yet (see above):
    in one or the other); then open `..._corner_overlay_detail.png` and
    confirm the cyan fitted curves hug the green skeleton (not diverge
    from it).
-
-## Repo layout
-
-```
-src/
-  crackgraph/
-    io_utils.py    # image loading
-    region.py      # default top-left corner crop selection
-    binarize.py    # stage 1
-    skeleton.py    # stage 2 (skeletonize + iterative spur pruning via skan; also EDT medial_radius)
-    graph.py       # stage 3 (skan graph extraction, degree-based classification)
-    junctions.py   # stage 4 (annulus tangent-fit bearings/sector-gap classification)
-    kinks.py       # flag-only interior-corner (fused-crack) detection
-    corners.py     # independent cross-check: background-tile wall-corner angles
-    overlay.py     # overlay PNG rendering
-    synthetic.py   # synthetic junction/kink test-image generators (known ground truth, seeded jitter)
-  analyze_image.py # CLI entry point
-scripts/
-  window_sweep.py        # deterministic bias/std/RMSE sweep justifying the annulus outer radius
-  corner_window_sweep.py # same, for the corner cross-check's window
-tests/
-  test_synthetic.py
-  test_junction_angle.py
-  test_kinks.py
-  test_corners.py
-```

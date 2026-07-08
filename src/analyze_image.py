@@ -43,6 +43,14 @@ from .crackgraph.precedence import build_precedence_graph
 from .crackgraph.region import default_corner_crop
 from .crackgraph.skeleton import SPUR_PX_PLACEHOLDER, skeletonize_and_prune
 
+# Derived from the 31 real Keyence Vorbeladung captures in data/raw/ as of this
+# writing (width 7254-7434 px, height 7526-7679 px), rounded generously. One
+# outlier (humidity_loading_ptfe/23RH_PTFE_v1_mm000001.jpg, 4429x3322 px) was
+# excluded -- a visibly different aspect ratio/size, i.e. exactly the kind of
+# "wrong image type" case this check exists to catch.
+EXPECTED_WIDTH_PX_RANGE = (7000, 7700)
+EXPECTED_HEIGHT_PX_RANGE = (7300, 7900)
+
 
 def parse_args():
     p = argparse.ArgumentParser(description="Stage 1-3 crack-graph pipeline (single image).")
@@ -80,6 +88,25 @@ def parse_args():
             "The default (clean) overlay is always written regardless."
         ),
     )
+    p.add_argument(
+        "--hide-kinks",
+        action="store_true",
+        default=False,
+        help=(
+            "Omit flagged-kink markers from the overlay(s). The kink scan itself still "
+            "runs and still appears in the console report -- this only hides the markers."
+        ),
+    )
+    p.add_argument(
+        "--hide-corner-check",
+        action="store_true",
+        default=False,
+        help=(
+            "Omit corner cross-check markers/diamonds from the overlay(s). The cross-check "
+            "itself still runs and still appears in the console report -- this only hides "
+            "the markers."
+        ),
+    )
     return p.parse_args()
 
 
@@ -88,6 +115,17 @@ def main():
     image_path = Path(args.image_path)
     gray_full, rgb_full = load_image(image_path)
     full_h, full_w = gray_full.shape
+
+    if not (
+        EXPECTED_WIDTH_PX_RANGE[0] <= full_w <= EXPECTED_WIDTH_PX_RANGE[1]
+        and EXPECTED_HEIGHT_PX_RANGE[0] <= full_h <= EXPECTED_HEIGHT_PX_RANGE[1]
+    ):
+        print(
+            f"[WARNING] image is {full_w} x {full_h} px; expected roughly "
+            f"{EXPECTED_WIDTH_PX_RANGE[0]}-{EXPECTED_WIDTH_PX_RANGE[1]} x "
+            f"{EXPECTED_HEIGHT_PX_RANGE[0]}-{EXPECTED_HEIGHT_PX_RANGE[1]} px for a "
+            "5mm Keyence Vorbeladung capture -- check you're using the right image type."
+        )
 
     if args.full_image:
         gray, rgb = gray_full, rgb_full
@@ -167,6 +205,9 @@ def main():
         precedence_out_path,
         max_overlay_dim=args.max_overlay_dim,
     )
+    overlay_kink_result = None if args.hide_kinks else kink_result
+    overlay_corner_cross_check = None if args.hide_corner_check else corner_cross_check
+
     out_path = out_dir / f"{image_path.stem}_{stem_suffix}_overlay.png"
     scale = render_overlay(
         rgb,
@@ -175,8 +216,8 @@ def main():
         out_path,
         max_overlay_dim=args.max_overlay_dim,
         junction_result=junction_result,
-        kink_result=kink_result,
-        corner_cross_check=corner_cross_check,
+        kink_result=overlay_kink_result,
+        corner_cross_check=overlay_corner_cross_check,
         detail=False,
     )
     detail_out_path = None
@@ -189,8 +230,8 @@ def main():
             detail_out_path,
             max_overlay_dim=args.max_overlay_dim,
             junction_result=junction_result,
-            kink_result=kink_result,
-            corner_cross_check=corner_cross_check,
+            kink_result=overlay_kink_result,
+            corner_cross_check=overlay_corner_cross_check,
             detail=True,
         )
 
