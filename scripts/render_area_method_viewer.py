@@ -149,6 +149,9 @@ def build_overlays(gray: np.ndarray) -> dict:
     ribbon_alpha = np.clip(0.28 * overlap_count, 0, 0.88)
     ribbon_png = _composite(base_rgb, ribbon_overlay, ribbon_alpha)
 
+    lengths = [m.length_px for m in metrics.per_edge.values()]
+    widths_ok = [m.width.mean_px for m in metrics.per_edge.values() if m.width.ok]
+
     return {
         "images": {
             "core": _to_data_uri(core_png),
@@ -166,6 +169,13 @@ def build_overlays(gray: np.ndarray) -> dict:
             "n_zero_core_edges": metrics.n_zero_core_edges,
             "n_ribbon_high": metrics.n_ribbon_high,
             "n_ribbon_low_or_equal": metrics.n_ribbon_low_or_equal,
+            # Per-edge summary stats -- aggregated here from EdgeMetricsResult.
+            # per_edge, no new pipeline computation. [interpreted]
+            "mean_length_px": float(np.mean(lengths)) if lengths else None,
+            "median_length_px": float(np.median(lengths)) if lengths else None,
+            "n_width_ok": len(widths_ok),
+            "mean_width_px": float(np.mean(widths_ok)) if widths_ok else None,
+            "median_width_px": float(np.median(widths_ok)) if widths_ok else None,
         },
     }
 
