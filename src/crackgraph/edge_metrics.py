@@ -299,26 +299,21 @@ def estimate_edge_area_ribbon(skel: skan.Skeleton, path_index: int, medial_radiu
     return float(np.sum((widths[:-1] + widths[1:]) / 2.0 * steps))
 
 
-def compute_junction_blob_ambiguity(
+def _iter_junction_disks(
     graph_result: GraphResult,
     mask_clean: np.ndarray,
     medial_radius: np.ndarray,
-    labels: np.ndarray,
-    *,
-    radius_px: float = AREA_JUNCTION_BLOB_RADIUS_PLACEHOLDER,
-) -> list[JunctionBlobAmbiguity]:
-    """For every degree>=3 node (topological -- both classified degree-3
-    T/Y and unclassified degree>=4, since this has nothing to do with
-    stage 4's classification), crop a local disk of radius
-    max(radius_px, medial_radius-at-node) and tally, within that disk, how
-    many mask_clean pixels each watershed label claimed.
-
-    This directly answers "how much of edge X's counted area is actually
-    inside a zone geometrically shared by multiple arms" -- surfaced as
-    [interpreted], not silently folded into an [measured]-looking area
-    total, per CLAUDE.md's evidence-level discipline.
+    radius_px: float,
+):
+    """Shared geometry for every degree>=3 node (topological -- both
+    classified degree-3 T/Y and unclassified degree>=4): crop a local disk
+    of radius max(radius_px, medial_radius-at-node). Yields
+    (node_id, coord, eff_radius, r_lo, c_lo, disk_bool_mask) where
+    disk_bool_mask is sized to the (r_lo:r_hi, c_lo:c_hi) crop, already
+    restricted to mask_clean. Used by both compute_junction_blob_ambiguity
+    (numeric tally) and compute_ambiguous_pixel_mask (pixel mask) so the two
+    can never disagree about which pixels count as "junction-disputed".
     """
-    results: list[JunctionBlobAmbiguity] = []
     h, w = mask_clean.shape
     for node_id, degree, coord in zip(
         graph_result.node_ids, graph_result.node_degree, graph_result.node_coords
@@ -336,9 +331,35 @@ def compute_junction_blob_ambiguity(
         c_hi = min(w, int(np.ceil(col + eff_radius)) + 1)
 
         sub_mask = mask_clean[r_lo:r_hi, c_lo:c_hi]
-        sub_labels = labels[r_lo:r_hi, c_lo:c_hi]
         rr, cc = np.mgrid[r_lo:r_hi, c_lo:c_hi]
         disk = (np.hypot(rr - row, cc - col) <= eff_radius) & sub_mask
+
+        yield int(node_id), (row, col), eff_radius, r_lo, c_lo, disk
+
+
+def compute_junction_blob_ambiguity(
+    graph_result: GraphResult,
+    mask_clean: np.ndarray,
+    medial_radius: np.ndarray,
+    labels: np.ndarray,
+    *,
+    radius_px: float = AREA_JUNCTION_BLOB_RADIUS_PLACEHOLDER,
+) -> list[JunctionBlobAmbiguity]:
+    """For every degree>=3 node, tally within its junction disk (see
+    _iter_junction_disks) how many mask_clean pixels each watershed label
+    claimed.
+
+    This directly answers "how much of edge X's counted area is actually
+    inside a zone geometrically shared by multiple arms" -- surfaced as
+    [interpreted], not silently folded into an [measured]-looking area
+    total, per CLAUDE.md's evidence-level discipline.
+    """
+    results: list[JunctionBlobAmbiguity] = []
+    for node_id, coord, eff_radius, r_lo, c_lo, disk in _iter_junction_disks(
+        graph_result, mask_clean, medial_radius, radius_px
+    ):
+        r_hi, c_hi = r_lo + disk.shape[0], c_lo + disk.shape[1]
+        sub_labels = labels[r_lo:r_hi, c_lo:c_hi]
 
         total_blob = int(disk.sum())
         claim_labels, claim_counts = np.unique(sub_labels[disk], return_counts=True)
@@ -347,14 +368,36 @@ def compute_junction_blob_ambiguity(
         }
         results.append(
             JunctionBlobAmbiguity(
-                node_id=int(node_id),
-                coord=(row, col),
+                node_id=node_id,
+                coord=coord,
                 radius_px=eff_radius,
                 total_blob_px2=total_blob,
                 claims=claims,
             )
         )
     return results
+
+
+def compute_ambiguous_pixel_mask(
+    graph_result: GraphResult,
+    mask_clean: np.ndarray,
+    medial_radius: np.ndarray,
+    *,
+    radius_px: float = AREA_JUNCTION_BLOB_RADIUS_PLACEHOLDER,
+) -> np.ndarray:
+    """Boolean mask, same shape as mask_clean: True where a pixel falls
+    inside ANY degree>=3 node's junction disk (union across nodes, not kept
+    per-edge). [interpreted] -- exactly the pixels area_core_px2 excludes.
+    Reuses _iter_junction_disks so this visualization/reporting mask can
+    never drift out of sync with the numeric core-area computation.
+    """
+    ambiguous = np.zeros(mask_clean.shape, dtype=bool)
+    for _node_id, _coord, _eff_radius, r_lo, c_lo, disk in _iter_junction_disks(
+        graph_result, mask_clean, medial_radius, radius_px
+    ):
+        r_hi, c_hi = r_lo + disk.shape[0], c_lo + disk.shape[1]
+        ambiguous[r_lo:r_hi, c_lo:c_hi] |= disk
+    return ambiguous
 
 
 def compute_core_area(area_px2: int, area_ambiguous_px2: int) -> tuple[int, bool]:
