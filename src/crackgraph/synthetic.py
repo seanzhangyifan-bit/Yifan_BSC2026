@@ -258,6 +258,82 @@ def generate_kinked_line(
     return img
 
 
+def generate_straight_line(
+    size: int = 120,
+    thickness: int = 7,
+    length: float | None = None,
+    bearing_deg: float = 0.0,
+    fg_value: float = 230.0,
+    bg_value: float = 10.0,
+) -> np.ndarray:
+    """Grayscale image of a single straight arm with no junction at all.
+
+    Used as the "nothing to compete with" ground-truth fixture for
+    edge_metrics.py: with only one skeleton path in the whole image, the
+    watershed area partition has exactly one seed, so area_px2 must equal
+    mask_clean.sum() exactly, and the ribbon-integral estimate has no
+    neighboring junction blob to double-count -- the case where the area
+    methods should have nothing to disagree about.
+    """
+    img = np.full((size, size), bg_value, dtype=np.float64)
+    if length is None:
+        length = size * 0.6
+    center = np.array([size / 2.0, size / 2.0])
+    theta = np.radians(bearing_deg)
+    direction = np.array([-np.sin(theta), np.cos(theta)])  # (drow, dcol), same convention as _draw_rotated_arm
+    start = center - direction * (length / 2.0)
+    _draw_rotated_arm(
+        img,
+        start_rc=start,
+        bearing_deg=bearing_deg,
+        length=length,
+        thickness=thickness,
+        fg_value=fg_value,
+    )
+    return img
+
+
+def generate_double_t_junction(
+    size: int = 120,
+    thickness: int = 5,
+    margin: int = 10,
+    gap_px: float = 6.0,
+    arm_length: float = 30.0,
+    fg_value: float = 230.0,
+    bg_value: float = 10.0,
+) -> np.ndarray:
+    """Grayscale image with TWO T-junctions close together on the same host
+    line, separated by `gap_px`.
+
+    Used by edge_metrics.py's tests as the canonical "no defensible core
+    area" fixture: the host segment between the two junctions is short
+    enough that both junctions' blob-disks (edge_metrics.py's
+    AREA_JUNCTION_BLOB_RADIUS_PLACEHOLDER, widened by local medial_radius)
+    spatially overlap over it, double-claiming the same middle-segment
+    pixels -- exactly the case area_core_px2 must clamp to 0 for, rather
+    than go negative. The middle segment is a junction-to-junction branch
+    (skan branch_type 2), never touched by spur/fragment pruning regardless
+    of length, so it survives in the graph at any spur_px.
+    """
+    img = np.full((size, size), bg_value, dtype=np.float64)
+    mid = size // 2
+    half_t = thickness // 2
+    img[mid - half_t : mid + half_t + 1, margin : size - margin] = fg_value
+
+    col_a = size // 2 - int(round(gap_px / 2))
+    col_b = size // 2 + int(round(gap_px / 2))
+    for col in (col_a, col_b):
+        _draw_rotated_arm(
+            img,
+            start_rc=(float(mid), float(col)),
+            bearing_deg=-90.0,
+            length=arm_length,
+            thickness=thickness,
+            fg_value=fg_value,
+        )
+    return img
+
+
 def generate_y_junction(
     size: int = 120,
     thickness: int = 5,

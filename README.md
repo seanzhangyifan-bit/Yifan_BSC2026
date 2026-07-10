@@ -85,6 +85,74 @@ force cycles into an acyclic poset, and does not compute width `w` (stage
 data. Don't mistake the current overlay/report for the thesis's headline
 finding yet; `w` is still one step away.
 
+### Edge geometry: length, width, area (per atomic edge)
+
+Alongside the ordering/poset work (stages 4-6), every atomic edge
+(`path_index`, the same atom `precedence.py` keys its arcs on — no
+whole-crack collapsing) gets a length, a width, and four cross-checked area
+estimates. This is groundwork for CLAUDE.md's third chronometer ("crack
+width... earlier cracks tend wider due to post-crack drying shrinkage") and
+standalone descriptive stats (crack length density, mean width) for the
+thesis's SSC vs LSC / four-Rakelspalt comparison — not part of the
+precedence graph itself.
+
+**Length** comes straight from skan's own `branch_distance` per edge — no
+new computation needed. **Width** is sampled from `2 * medial_radius` (the
+same EDT half-width `junctions.py` already uses for the annulus) along the
+edge's skeleton pixels, trimmed by `max(--width-trim-inner-px, local
+half-width)` off **both** ends so the sample skips the junction blob at one
+end and a tapering tip at the other — an edge too short to survive both
+trims gets no width, not a contaminated one.
+
+**Area gets four separate, cross-checked estimates** rather than one
+"best" number, matching CLAUDE.md's existing chronometer-agreement
+philosophy — reported together so their agreement/disagreement is itself
+visible, not collapsed away:
+
+- **exact (watershed partition):** a deterministic, seedless
+  `skimage.segmentation.watershed` floods outward from each edge's own
+  skeleton pixels (excluding the shared endpoint pixels) across the EDT
+  ridge, partitioning the mask into one region per edge. Pixels right at a
+  junction blob are genuinely shared between arms, so whichever edge's
+  flood front gets there first is an artifact of flood order, not a
+  measurement — that ambiguity is surfaced explicitly (see below), not
+  hidden inside a clean-looking total.
+- **mask total:** the whole region's foreground pixel count. A **proven**
+  upper bound on the exact method's sum — watershed never assigns outside
+  the mask, so `sum(exact) + unassigned == mask_total` exactly, and
+  `unassigned >= 0` always (the expected source is pruned-away fragments,
+  see stage 2).
+- **ribbon-integral:** width integrated along arc length, computed
+  independently of the watershed. An **expected-but-not-proven** upper
+  bound — it tends to run high near junctions, since each incident edge
+  separately credits itself the full, locally-inflated junction-blob width
+  (double/triple-counting the shared region across edges), plus a small
+  rasterization bias even in isolation. The actual sign is measured and
+  reported per run, never assumed.
+- **core (junction-disk-excluded):** the exact area minus whatever a
+  `--area-ambiguity-radius-px` disk at each endpoint junction claimed —
+  i.e. "avoid the area around the junctions" literally. A **proven** lower
+  bound (subtracting a non-negative quantity, clamped at 0) — no empirical
+  justification needed. Very short inter-junction edges, where both
+  endpoint disks overlap and double-claim the same pixels, correctly clamp
+  to 0 (`core_was_clamped=True`) rather than go negative — "no defensible
+  core area for this edge" is reported honestly, not silently patched.
+
+The bracket, always true: `core <= exact <= mask_total`, with `ribbon`
+typically (not provably) landing at or above `exact`. Confirmed on real
+image data, not just synthetics — see `tests/test_edge_metrics.py`.
+
+`crack_length_density_per_px` (total length / region area) is explicitly
+**pixel-space only**: no µm/px calibration exists anywhere in this repo yet
+(see `CALIBRATION.md`), so it's only comparable across images of matching
+magnification/pixel scale.
+
+A CSV with one row per atomic edge (`{image_stem}_{suffix}_edge_metrics.csv`,
+always written) is the bridge to a *future* multi-image, multi-condition
+comparison across SSC vs LSC / the four Rakelspalt settings — that batch
+runner itself is not built yet; this is only the per-image primitive it
+would consume.
+
 ### How junction angles are measured (stage 4)
 
 Real crack edges are curved, so "the angle at a junction" is only
@@ -311,6 +379,8 @@ different coatings/sample batches don't pile up flat in one directory.
 | `--corner-search-radius-px` | `25.0` | **[placeholder]** how far from a junction vertex to search background contours for wall corners |
 | `--corner-window-px` | `10.0` | **[placeholder]** chord window for each wall's direction at a candidate corner; chosen from `scripts/corner_window_sweep.py`'s measured sweep |
 | `--corner-min-turn-deg` | `45.0` | **[placeholder]** minimum turning angle to accept a contour point as a real wall corner |
+| `--width-trim-inner-px` | `5.0` | **[placeholder]** width-sample trim (px) off both ends of an edge, widened per-endpoint to the local crack half-width where that's larger — same "skip the junction blob" pattern as `--annulus-inner-px`, kept separate since it trims for a different purpose |
+| `--area-ambiguity-radius-px` | `5.0` | **[placeholder]** per-junction disk radius (px, widened by local half-width) used to report how much of each edge's area sits in a zone genuinely shared with another arm, and to compute the core-area lower bound |
 | `--show-fit-detail` | off | also write a second, detailed overlay (see below); the default overlay is always written regardless |
 | `--hide-kinks` | off | omit flagged-kink markers from the overlay(s); the kink scan itself still runs and still appears in the console report |
 | `--hide-corner-check` | off | omit corner cross-check markers/diamonds from the overlay(s); the cross-check itself still runs and still appears in the console report |
@@ -329,9 +399,13 @@ different coatings/sample batches don't pile up flat in one directory.
   unresolved breakdown with a per-junction listing flagging disagreements,
   and the stage-5 precedence-graph report (arc counts by provenance,
   conflicting-abutter nodes, and any nontrivial cycles found — see "Stage
-  5: precedence graph" above). Every number is labeled `[measured]`,
-  `[interpreted]`, or `[placeholder]` per the evidence-level discipline in
-  CLAUDE.md.
+  5: precedence graph" above), plus a per-edge length/width/four-method-
+  area report (see "Edge geometry: length, width, area" above). Every
+  number is labeled `[measured]`, `[interpreted]`, or `[placeholder]` per
+  the evidence-level discipline in CLAUDE.md.
+- **A CSV**, `outputs/{source_subfolder}/{image_stem}_{suffix}_edge_metrics.csv`
+  (always written): one row per atomic edge with length, width stats, and
+  all four area figures — see "Edge geometry: length, width, area" above.
 - **Two overlay views**, since "does this look right" and "audit the angle
   estimator" want different amounts of information on screen (an earlier
   single-view design put everything on one image, including a legend drawn
@@ -385,6 +459,7 @@ src/
     binarize.py    # stage 1
     skeleton.py    # stage 2 (skeletonize + iterative spur pruning via skan; also EDT medial_radius)
     graph.py       # stage 3 (skan graph extraction, degree-based classification)
+    edge_metrics.py # per-atomic-edge length/width/area (4 cross-checked area methods); NOT the poset width `w`
     junctions.py   # stage 4 (annulus tangent-fit bearings/sector-gap classification)
     kinks.py       # flag-only interior-corner (fused-crack) detection
     corners.py     # independent cross-check: background-tile wall-corner angles
@@ -398,6 +473,7 @@ scripts/
 tests/
   test_synthetic.py
   test_junction_angle.py
+  test_edge_metrics.py
   test_kinks.py
   test_corners.py
   test_precedence.py
@@ -413,7 +489,7 @@ anywhere in this codebase, so it's left out below):
 |---|---|
 | `numpy` | array operations underlying every stage |
 | `pandas` | skan's per-edge/per-node summary table |
-| `scikit-image` | `threshold_otsu` (stage 1), `remove_small_objects` + `skeletonize` (stage 2), `find_contours` (corner cross-check) |
+| `scikit-image` | `threshold_otsu` (stage 1), `remove_small_objects` + `skeletonize` (stage 2), `find_contours` (corner cross-check), `segmentation.watershed` (per-edge area partition) |
 | `scipy.ndimage` | `distance_transform_edt` — local crack half-width (medial radius) at every pixel |
 | `skan` | skeleton → branch/node graph extraction (stage 3), spur pruning |
 | `networkx` | precedence graph construction, condensation (cycle detection), topological generation (stage 5) |
@@ -430,6 +506,7 @@ io_utils.load_image
   → binarize.binarize            → BinarizeResult
   → skeleton.skeletonize_and_prune → SkeletonResult
   → graph.extract_graph           → GraphResult
+  → edge_metrics.compute_edge_metrics → EdgeMetricsResult  (independent of stage 4/5)
   → junctions.classify_junctions  → JunctionAnalysisResult  ─┐
   → kinks.find_kinks              → KinkScanResult           ├─→ precedence.build_precedence_graph → PrecedenceGraphResult
   → corners.cross_check_junctions → list[CornerCrossCheck]  ─┘
@@ -473,7 +550,20 @@ Two checks, in order — no full-image run yet (see above):
    agrees with the tangent fit), a Y-junction (exactly 3 corners), the
    same ambiguous case (must not be forced either), a gently-curved host
    (should resolve cleanly), and a short/thin arm (must fail gracefully
-   with `label=None`, not a crash or a guess).
+   with `label=None`, not a crash or a guess). `test_edge_metrics.py`
+   checks the per-edge length/width/area module against known ground
+   truth: an isolated straight edge (watershed area must equal the mask
+   exactly, ribbon-integral must closely agree, no double-counting to
+   disagree about), a T-junction (area conservation, ambiguity-disk claims
+   summing exactly to the disk's pixel count), a known-thickness arm
+   (width recovery within a documented rasterization tolerance), a
+   too-short edge (width trim must fail gracefully, not contaminate), a
+   deliberately pruned-away isolated fragment (unassigned-pixel accounting
+   must reconcile exactly, cross-referenced against the prune count), and
+   two close-together junctions (the core-area lower bound must clamp to
+   0, not go negative) — plus hard, always-true assertions that
+   `core <= exact <= mask_total` and watershed is bit-for-bit
+   deterministic.
 
 2. **Window-choice justification** (deterministic, seeded):
    ```

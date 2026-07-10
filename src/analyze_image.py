@@ -23,6 +23,12 @@ from .crackgraph.corners import (
     cross_check_junctions,
     find_background_contours,
 )
+from .crackgraph.edge_metrics import (
+    AREA_JUNCTION_BLOB_RADIUS_PLACEHOLDER,
+    WIDTH_TRIM_INNER_PX_PLACEHOLDER,
+    compute_edge_metrics,
+    write_edge_metrics_csv,
+)
 from .crackgraph.graph import extract_graph
 from .crackgraph.io_utils import load_image
 from .crackgraph.junctions import (
@@ -72,6 +78,8 @@ def parse_args():
     p.add_argument("--corner-search-radius-px", type=float, default=CORNER_SEARCH_RADIUS_PX)
     p.add_argument("--corner-window-px", type=float, default=CORNER_WINDOW_PX)
     p.add_argument("--corner-min-turn-deg", type=float, default=CORNER_MIN_TURN_DEG)
+    p.add_argument("--width-trim-inner-px", type=float, default=WIDTH_TRIM_INNER_PX_PLACEHOLDER)
+    p.add_argument("--area-ambiguity-radius-px", type=float, default=AREA_JUNCTION_BLOB_RADIUS_PLACEHOLDER)
     p.add_argument(
         "--full-image",
         action="store_true",
@@ -155,6 +163,14 @@ def main():
         spur_px=args.spur_px,
     )
     graph_result = extract_graph(skeleton_result.skeleton)
+    edge_metrics_result = compute_edge_metrics(
+        skeleton_result.skeleton,
+        graph_result,
+        skeleton_result.mask_clean,
+        skeleton_result.medial_radius,
+        width_trim_inner_px=args.width_trim_inner_px,
+        area_ambiguity_radius_px=args.area_ambiguity_radius_px,
+    )
     junction_result = classify_junctions(
         skeleton_result.skeleton,
         graph_result,
@@ -195,6 +211,8 @@ def main():
     # batches don't pile up flat in one directory.
     out_dir = Path(args.out_dir) / image_path.parent.name
     out_dir.mkdir(parents=True, exist_ok=True)
+    edge_metrics_csv_path = out_dir / f"{image_path.stem}_{stem_suffix}_edge_metrics.csv"
+    write_edge_metrics_csv(edge_metrics_result, edge_metrics_csv_path)
     precedence_out_path = out_dir / f"{image_path.stem}_{stem_suffix}_precedence.png"
     render_precedence_overlay(
         rgb,
@@ -288,6 +306,74 @@ def main():
         f"deg>=4 junctions={graph_result.n_junctions_deg_ge4})"
     )
     print(f"Total edges: {graph_result.n_edges}")
+    print()
+    print("-- Edge geometry: length/width/area per atomic edge --")
+    print(
+        "(width here is physical crack width in px -- CLAUDE.md's third chronometer; "
+        "NOT the poset antichain width `w` from stage 6, a different quantity)"
+    )
+    em = edge_metrics_result
+    print(
+        f"Width trim (inner, per endpoint): {em.width_trim_inner_px:.1f} px    "
+        "[PLACEHOLDER -- not calibrated]"
+    )
+    print(
+        f"Area-ambiguity disk radius:       {em.area_ambiguity_radius_px:.1f} px    "
+        "[PLACEHOLDER -- same reasoning]"
+    )
+    print(f"Total length: {em.total_length_px:.1f} px    [measured] (= sum of branch_distance)")
+    print("Area estimate bracket (px2), all four methods cross-checked, not collapsed to one number:")
+    print(f"  core (junction-disk-excluded): {em.total_area_core_px2}    [interpreted -- PROVEN lower bound]")
+    print(f"  exact (watershed partition):   {em.total_area_px2}    [interpreted]")
+    print(f"  mask_clean total:              {em.mask_clean_total_px2}    [measured -- PROVEN upper bound]")
+    print(
+        f"  ribbon-integral (width*ds):    {em.total_area_ribbon_px2:.0f}    "
+        f"[interpreted -- EXPECTED, not proven, upper bound; this run: "
+        f"{em.n_ribbon_high} edges ran high, {em.n_ribbon_low_or_equal} ran low/equal vs exact]"
+    )
+    print(
+        f"Unassigned (pruned-away, no surviving atom): {em.n_unassigned_px} px2    "
+        "[measured -- cross-check against 'Isolated fragments pruned' above]"
+    )
+    print(
+        f"Zero-core edges (too short for a defensible core): {em.n_zero_core_edges}    [interpreted]"
+    )
+    print(
+        f"Width measured for {em.n_width_ok}/{em.n_width_ok + em.n_width_failed} edges "
+        f"(excluded length: {em.length_excluded_from_width_stat_px:.1f} px, too short for trim)    "
+        "[interpreted]"
+    )
+    if em.length_weighted_mean_width_px is not None:
+        print(f"Length-weighted mean width: {em.length_weighted_mean_width_px:.1f} px    [interpreted]")
+    print(
+        f"Crack length density: {em.crack_length_density_per_px:.5f} /px    "
+        "[interpreted -- px-space only; no um/px calibration exists yet, so only "
+        "comparable across images of matching pixel scale]"
+    )
+    if em.junction_blob_ambiguity:
+        print(
+            "Junction-blob ambiguity (per degree>=3 node, [interpreted] -- an artifact "
+            "of watershed flood order, not a measurement):"
+        )
+        for jb in em.junction_blob_ambiguity:
+            claim_str = ", ".join(
+                f"path {p}: {px}px2 ({px / jb.total_blob_px2 * 100:.0f}%)" if jb.total_blob_px2 else f"path {p}: {px}px2"
+                for p, px in sorted(jb.claims.items())
+            )
+            print(
+                f"  node {jb.node_id} at ({jb.coord[0]:.1f}, {jb.coord[1]:.1f}): "
+                f"radius={jb.radius_px:.1f}px, blob={jb.total_blob_px2}px2 -- {claim_str}"
+            )
+    print("Per-edge table (see also " + str(edge_metrics_csv_path) + "):")
+    for path_index in sorted(em.per_edge):
+        m = em.per_edge[path_index]
+        w = m.width
+        width_str = f"width_mean={w.mean_px:.1f}px (n={w.n_samples})" if w.ok else f"width=n/a ({w.failure_reason})"
+        print(
+            f"  path {path_index}: length={m.length_px:.1f}px {width_str} "
+            f"area=[core={m.area_core_px2} exact={m.area_px2} ribbon={m.area_ribbon_px2:.0f}]px2 "
+            f"(ambiguous={m.area_ambiguous_px2}px2, {m.area_ambiguous_frac * 100:.0f}%)"
+        )
     print()
     print("-- Stage 4: Junction classification (annulus tangent-fit method) --")
     print(
@@ -435,6 +521,7 @@ def main():
     if detail_out_path is not None:
         print(f"Detail overlay saved to: {detail_out_path}")
     print(f"Precedence graph overlay saved to: {precedence_out_path}")
+    print(f"Edge geometry (length/width/area, all four area methods) CSV saved to: {edge_metrics_csv_path}")
 
 
 if __name__ == "__main__":

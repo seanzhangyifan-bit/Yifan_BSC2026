@@ -10,7 +10,7 @@ exists), and to make explicit that the split below isn't a coincidence.
   for real µm-per-px/film-thickness calibration that doesn't exist yet
 - 🔴 **assumed** — no sweep or derivation backing it yet
 
-**Net: 2 🟡, 13 🔴, 0 🟢.** Most of this project's tunables are asserted, not measured —
+**Net: 2 🟡, 15 🔴, 0 🟢.** Most of this project's tunables are asserted, not measured —
 that's a real, reportable state of the pipeline right now, not a documentation gap. See
 [`docs/calibration_notes.md`](docs/calibration_notes.md) for each constant's full
 rationale (relocated verbatim from its old inline comment).
@@ -32,6 +32,8 @@ rationale (relocated verbatim from its old inline comment).
 | `KINK_WINDOW_PX_PLACEHOLDER` | [`kinks.py:27`](src/crackgraph/kinks.py) | 10.0 | 🔴 assumed | no sweep, unlike its annulus/corner-window cousins |
 | `KINK_TURN_DEG_PLACEHOLDER` | [`kinks.py:32`](src/crackgraph/kinks.py) | 45.0 | 🔴 assumed | no sweep; correctness tests only, not calibration |
 | `CORNER_TO_TANGENT_BEARING_TOL_DEG` | [`precedence.py:58`](src/crackgraph/precedence.py) | 45.0 | 🔴 assumed | comment self-documents as not yet swept |
+| `WIDTH_TRIM_INNER_PX_PLACEHOLDER` | [`edge_metrics.py`](src/crackgraph/edge_metrics.py) | 5.0 | 🔴 assumed | same "a few px" heuristic as `ANNULUS_INNER_PX_PLACEHOLDER`, no independent sweep |
+| `AREA_JUNCTION_BLOB_RADIUS_PLACEHOLDER` | [`edge_metrics.py`](src/crackgraph/edge_metrics.py) | 5.0 | 🔴 assumed | same heuristic again, no sweep |
 
 ## Not included here
 
