@@ -50,10 +50,26 @@ Junction **angle**, approach **curvature** (younger crack curls toward its T; me
 - `networkx` for the poset work (transitive closure, matching-based max-antichain, feedback arc set).
 - Package management in this environment: `pip install <x> --break-system-packages`.
 
+## Documentation map
+
+This file is the technical/scientific operating guide. Other docs cover other audiences —
+don't duplicate their content here, just know they exist:
+
+- `README.md` — how to run the pipeline, CLI flags, output layout, and a "Libraries and
+  code architecture" overview for a reader who doesn't need the thesis framing.
+- `GLOSSARY.md` — one-line definitions of the terms used above (poset, antichain, width
+  `w`, T/Y-junction, abutter/host, annulus, generation, growth-arc).
+- `CALIBRATION.md` — status table (🟢 derived / 🟡 empirical uncalibrated / 🔴 assumed) for
+  every tunable constant, with file:line pointers.
+- `docs/calibration_notes.md` — the full rationale for each constant, relocated verbatim
+  from what used to be multi-line inline comments.
+- `.vscode/launch.json` — VS Code Run/Debug configs (prompts for an image path).
+
 ## Conventions & guardrails
 
 - Every claim-bearing output should be traceable to what the method can actually support. This project uses an evidence-level discipline elsewhere in the thesis (`[measured]` / `[interpreted]` / `[speculated]` / `[cited]`); mirror that spirit in comments and docstrings — label what a number is, not just what it is called. E.g. "T-fraction is `[measured]`; the inference that small `w` implies quasi-static cracking is `[interpreted]`."
 - Prefer deterministic, reproducible measurement over anything that "looks about right". This is going in a thesis; hand-tuned magic constants need a stated justification (ideally tied to `h`).
+- New tunable constants: keep the inline comment to one line pointing at `CALIBRATION.md` (e.g. `# 🔴 assumed — see CALIBRATION.md`), and add the full rationale to `docs/calibration_notes.md` and a row to `CALIBRATION.md`'s table — don't let rationale drift back into source comments.
 - Keep functions honest about uncertainty: near-120° junctions carry weak/no ordering signal — emit no constraint there rather than a low-confidence guess.
 - Don't introduce dependencies on cloud services, browser storage, or anything non-reproducible offline.
 - Ask before large refactors. Output files for the human to merge manually; don't assume write-back to source data.
