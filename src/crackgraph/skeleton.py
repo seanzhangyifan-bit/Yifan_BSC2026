@@ -13,13 +13,7 @@ import skan
 from scipy.ndimage import distance_transform_edt
 from skimage.morphology import remove_small_objects, skeletonize
 
-# [PLACEHOLDER] Not derived from real film-thickness h or a calibrated
-# um-per-pixel value -- neither exists yet (calibration is supplied
-# manually, later). Chosen only as "somewhat larger than the annulus
-# inner-radius jitter scale (a few px)" that CLAUDE.md mentions elsewhere,
-# so as to not eat real short branches. Must be revisited once calibration
-# lands.
-SPUR_PX_PLACEHOLDER = 15
+SPUR_PX_PLACEHOLDER = 15  # 🔴 assumed — see CALIBRATION.md
 
 
 @dataclass
