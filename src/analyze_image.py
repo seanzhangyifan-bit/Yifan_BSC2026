@@ -15,6 +15,7 @@ import numpy as np
 import skan
 import skimage
 
+from .crackgraph.anisotropy import ORIENT_WINDOW_PX_PLACEHOLDER, compute_anisotropy
 from .crackgraph.binarize import binarize
 from .crackgraph.corners import (
     CORNER_MIN_TURN_DEG,
@@ -23,6 +24,7 @@ from .crackgraph.corners import (
     cross_check_junctions,
     find_background_contours,
 )
+from .crackgraph.curvature import CURVATURE_WINDOW_PX_PLACEHOLDER, compute_edge_curvature
 from .crackgraph.graph import extract_graph
 from .crackgraph.io_utils import load_image
 from .crackgraph.junctions import (
@@ -42,12 +44,28 @@ from .crackgraph.overlay import render_overlay, render_precedence_overlay
 from .crackgraph.precedence import build_precedence_graph
 from .crackgraph.region import default_corner_crop
 from .crackgraph.skeleton import SPUR_PX_PLACEHOLDER, skeletonize_and_prune
+from .crackgraph.xlsx_report import (
+    anisotropy_classification,
+    append_chunk_to_workbook,
+    corner_agreement_counts,
+    curvature_stats,
+    tortuosity_stats,
+)
 
 
 def parse_args():
     p = argparse.ArgumentParser(description="Stage 1-3 crack-graph pipeline (single image).")
     p.add_argument("image_path", type=str)
     p.add_argument("--out-dir", type=str, default="outputs")
+    p.add_argument(
+        "--xlsx-out",
+        type=str,
+        default=None,
+        help=(
+            "Append this run's results as a row to the given .xlsx workbook "
+            "(one sheet per image, one row per chunk). Off by default."
+        ),
+    )
     p.add_argument("--spur-px", type=float, default=SPUR_PX_PLACEHOLDER)
     p.add_argument("--min-object-px", type=int, default=4)
     p.add_argument("--max-overlay-dim", type=int, default=2500)
@@ -56,6 +74,8 @@ def parse_args():
     p.add_argument("--edge-margin-frac", type=float, default=0.02)
     p.add_argument("--annulus-inner-px", type=float, default=ANNULUS_INNER_PX_PLACEHOLDER)
     p.add_argument("--annulus-outer-px", type=float, default=ANNULUS_OUTER_PX_PLACEHOLDER)
+    p.add_argument("--curvature-window-px", type=float, default=CURVATURE_WINDOW_PX_PLACEHOLDER)
+    p.add_argument("--orientation-window-px", type=float, default=ORIENT_WINDOW_PX_PLACEHOLDER)
     p.add_argument("--y-angle-tol-deg", type=float, default=Y_ANGLE_TOL_DEG_PLACEHOLDER)
     p.add_argument("--t-straight-tol-deg", type=float, default=T_STRAIGHT_TOL_DEG_PLACEHOLDER)
     p.add_argument("--t-right-tol-deg", type=float, default=T_RIGHT_TOL_DEG_PLACEHOLDER)
@@ -117,6 +137,16 @@ def main():
         spur_px=args.spur_px,
     )
     graph_result = extract_graph(skeleton_result.skeleton)
+    curvature_result = compute_edge_curvature(
+        skeleton_result.skeleton,
+        graph_result,
+        window_px=args.curvature_window_px,
+    )
+    anisotropy_result = compute_anisotropy(
+        skeleton_result.skeleton,
+        graph_result,
+        window_px=args.orientation_window_px,
+    )
     junction_result = classify_junctions(
         skeleton_result.skeleton,
         graph_result,
@@ -248,6 +278,57 @@ def main():
     )
     print(f"Total edges: {graph_result.n_edges}")
     print()
+    print("-- Edge curvature & tortuosity (per-edge, independent of junction geometry) --")
+    print(
+        f"Scan window: {curvature_result.window_px:.1f} px    "
+        "[PLACEHOLDER -- not calibrated to real h/um-per-px; see scripts/curvature_window_sweep.py]"
+    )
+    tortuosity_mean, tortuosity_median = tortuosity_stats(curvature_result)
+    curvature_mean, curvature_max = curvature_stats(curvature_result)
+    n_no_profile = sum(1 for e in curvature_result.edges if e.curvature_profile_px_inv is None)
+    if tortuosity_mean is not None:
+        print(f"Tortuosity (arc/chord): mean={tortuosity_mean:.3f}, median={tortuosity_median:.3f}    [measured]")
+    else:
+        print("Tortuosity (arc/chord): no edges with a usable chord length    [measured]")
+    if curvature_mean is not None:
+        print(f"Curvature |kappa|: mean={curvature_mean:.4f} /px, max={curvature_max:.4f} /px    [measured]")
+    else:
+        print("Curvature |kappa|: no edges long enough for a windowed profile    [measured]")
+    print(
+        f"Edges without a curvature profile (shorter than 2x scan window): "
+        f"{n_no_profile} of {curvature_result.n_edges_scanned}    [measured]"
+    )
+    print()
+    print("-- Network anisotropy (length-weighted axial orientation tensor) --")
+    print(
+        f"Orientation scan window: {anisotropy_result.window_px:.1f} px    "
+        "[PLACEHOLDER -- not calibrated to real h/um-per-px]"
+    )
+    print(
+        f"Anisotropy index A: {anisotropy_result.anisotropy_index:.3f} (0=isotropic, 1=perfectly aligned), "
+        f"dominant bearing: {anisotropy_result.dominant_bearing_deg:.1f} deg    [measured]"
+    )
+    if anisotropy_result.anisotropy_index < 0.2:
+        print(
+            "  (dominant bearing is not meaningful at this low an anisotropy index -- "
+            "no clear preferred direction)"
+        )
+    print(f"Sample count: {anisotropy_result.n_samples}, total weighted length: {anisotropy_result.total_weighted_length_px:.1f} px    [measured]")
+    print("Orientation histogram (deg, weighted by arc length)    [measured]:")
+    edges_deg = anisotropy_result.histogram_bin_edges_deg
+    counts = anisotropy_result.histogram_weighted_counts
+    for lo, hi, count in zip(edges_deg[:-1], edges_deg[1:], counts):
+        bar = "#" * int(round(count / max(counts.max(), 1e-9) * 40))
+        print(f"  [{lo:5.1f}, {hi:5.1f}) {count:8.1f}  {bar}")
+    # [PLACEHOLDER -- not calibrated against a real-image junction-type census]
+    classification = anisotropy_classification(anisotropy_result)
+    print(f"Qualitative read: {classification}    [interpreted]")
+    print(
+        "  (a low A does not rule out an orthogonal bimodal/grid pattern -- this is a "
+        "known blind spot of a 2nd-order orientation tensor; check the histogram above "
+        "for two separated peaks before concluding isotropic)"
+    )
+    print()
     print("-- Stage 4: Junction classification (annulus tangent-fit method) --")
     print(
         f"Annulus radii: inner={junction_result.inner_radius_px:.1f} px, "
@@ -320,9 +401,7 @@ def main():
         f"Search radius: {args.corner_search_radius_px:.1f} px, window: {args.corner_window_px:.1f} px, "
         f"min turn: {args.corner_min_turn_deg:.1f} deg    [PLACEHOLDER -- see corners.py]"
     )
-    n_agree = sum(cc.agrees_with_tangent_fit is True for cc in corner_cross_check)
-    n_disagree = sum(cc.agrees_with_tangent_fit is False for cc in corner_cross_check)
-    n_unresolved = sum(cc.label is None for cc in corner_cross_check)
+    n_agree, n_disagree, n_unresolved = corner_agreement_counts(corner_cross_check)
     print(
         f"Agree: {n_agree}, disagree: {n_disagree}, unresolved: {n_unresolved} "
         f"(of {len(corner_cross_check)})    [interpreted -- a validation signal per CLAUDE.md's "
@@ -394,6 +473,26 @@ def main():
     if detail_out_path is not None:
         print(f"Detail overlay saved to: {detail_out_path}")
     print(f"Precedence graph overlay saved to: {precedence_out_path}")
+
+    if args.xlsx_out is not None:
+        append_chunk_to_workbook(
+            args.xlsx_out,
+            image_path=image_path,
+            region_desc=region_desc,
+            region=region if not args.full_image else None,
+            full_image_shape=(full_h, full_w),
+            binarize_result=binarize_result,
+            skeleton_result=skeleton_result,
+            graph_result=graph_result,
+            curvature_result=curvature_result,
+            anisotropy_result=anisotropy_result,
+            junction_result=junction_result,
+            kink_result=kink_result,
+            corner_cross_check=corner_cross_check,
+            overlay_png_path=out_path,
+            out_dir=out_dir,
+        )
+        print(f"Appended chunk to workbook: {args.xlsx_out} (sheet={image_path.stem!r})")
 
 
 if __name__ == "__main__":
