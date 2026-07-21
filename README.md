@@ -85,6 +85,60 @@ force cycles into an acyclic poset, and does not compute width `w` (stage
 data. Don't mistake the current overlay/report for the thesis's headline
 finding yet; `w` is still one step away.
 
+### Flaking/delamination exclusion (between stages 1 and 2)
+
+Some micrographs (so far seen on the membrane-substrate T2/T3/T4 samples)
+have large patches where the catalyst layer has physically flaked/
+delaminated off, exposing substrate underneath. Under a single global Otsu
+threshold this reads as foreground exactly like a real crack, but it isn't
+one — it's a 2D area of missing material, not a 1D fracture, and including
+it corrupts `crack_area_pct` (inflated), `avg_width_px`/`avg_edge_length_px`
+(skewed by skeletonizing the blob's own genuinely multi-branched interior —
+a *different* mechanism from the double-line loop artifact above, since a
+blob-shaped region's medial axis is inherently branchy, not a thinning
+artifact), and silently discards the fact that we have zero evidence about
+what crack pattern, if any, existed under the now-missing material.
+
+`src/crackgraph/flaking.py` identifies and excludes these regions before
+the real skeletonization ever runs:
+
+1. **Scout skeletonize** the raw mask once, purely to get a per-pixel local
+   width signal (`medial_radius`, the same EDT half-width used elsewhere in
+   this pipeline).
+2. **Identify candidates**: flag pixels whose local width exceeds
+   `WIDTH_FLAG_MULTIPLIER_K` (4×) times this image's own median
+   skeleton-sampled crack width, then keep only connected components above
+   a minimum area **and** solidity (`area / convex-hull area` ≥ 0.75) —
+   solidity is what separates a compact flaked blob from a merely
+   locally-wide crack band, which the width test alone cannot.
+3. **Grow each candidate** back out to its true boundary via mask-
+   constrained dilation (can never cross a real black boundary), capped at
+   `GROWTH_MULTIPLIER` (2.2×) times the reference width — derived, not
+   arbitrary: 2.0× exactly undoes the erosion the identification threshold
+   itself builds into the seed, +10% margin verified by inspection.
+4. **Correct the mask** (`mask_clean & ~excluded_mask`) and re-skeletonize
+   for real — flaked pixels are treated as background, not specially
+   handled, since `skeletonize_and_prune` never needs to know they were
+   ever considered foreground. Skipped entirely (no second pass) when no
+   candidates are found.
+5. **Flag cut-adjacent edges**: any graph node within a small buffer of the
+   exclusion is a truncation, not a real crack arrest — those edges are
+   dropped from length/width statistics (but kept in the connectivity
+   graph; the topology is real even though the reported length isn't).
+
+**Explicitly not attempted**: reshaping the exclusion boundary to look like
+a natural crack tip (a "meniscus" idea, considered and rejected) — that
+would be sculpting the output to look right rather than measuring anything,
+and this project's own evidence-level discipline rules that out. Dropping
+untrustworthy edges from statistics, rather than making them look clean,
+does the same job honestly.
+
+**Known gap, not yet fixed**: small, compact false positives from ordinary
+junction-blob widening (not real flaking) can still pass the solidity
+filter alone — see `flaking.py`'s module docstring. A junction-proximity
+exclusion on top of the width+solidity test would close this; not built
+yet.
+
 ### How junction angles are measured (stage 4)
 
 Real crack edges are curved, so "the angle at a junction" is only

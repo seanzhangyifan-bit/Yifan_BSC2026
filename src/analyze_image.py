@@ -23,6 +23,7 @@ from .crackgraph.corners import (
     cross_check_junctions,
     find_background_contours,
 )
+from .crackgraph.flaking import exclude_flaking_regions
 from .crackgraph.graph import extract_graph
 from .crackgraph.io_utils import load_image
 from .crackgraph.junctions import (
@@ -148,12 +149,34 @@ def main():
         stem_suffix = "corner"
 
     binarize_result = binarize(gray, sanity_band=tuple(args.otsu_sanity_band))
-    skeleton_result = skeletonize_and_prune(
+
+    # Scout pass: skeletonize the raw mask only to get a width signal
+    # (medial_radius) for flaking identification -- not necessarily the
+    # final skeleton used below. See crackgraph/flaking.py.
+    scout_skeleton_result = skeletonize_and_prune(
         binarize_result.mask,
         source_image=gray,
         min_object_px=args.min_object_px,
         spur_px=args.spur_px,
     )
+    flaking_result = exclude_flaking_regions(
+        scout_skeleton_result.mask_clean,
+        scout_skeleton_result.skel_image,
+        scout_skeleton_result.medial_radius,
+    )
+    if flaking_result.candidates:
+        # Real pass: re-skeletonize on the corrected mask so flaked
+        # regions never reach the thinning step at all -- not "ignored",
+        # genuinely treated as dark/background, same as any other pixel
+        # skeletonize_and_prune was never told is foreground.
+        skeleton_result = skeletonize_and_prune(
+            flaking_result.mask_corrected,
+            source_image=gray,
+            min_object_px=args.min_object_px,
+            spur_px=args.spur_px,
+        )
+    else:
+        skeleton_result = scout_skeleton_result
     graph_result = extract_graph(skeleton_result.skeleton)
     junction_result = classify_junctions(
         skeleton_result.skeleton,
@@ -260,6 +283,27 @@ def main():
             f"[WARNING] foreground fraction {binarize_result.foreground_fraction * 100:.2f}% "
             "is outside the expected band -- inspect the threshold/mask before trusting "
             "downstream counts."
+        )
+    print()
+    print("-- Flaking/delamination exclusion (see crackgraph/flaking.py) --")
+    print(
+        f"Reference crack width (this image, skeleton-median): "
+        f"{flaking_result.reference_width_px:.1f} px    [measured]"
+    )
+    print(
+        f"Candidates found: {len(flaking_result.candidates)}    "
+        "[interpreted -- width+solidity flagged, not junction-blob-filtered yet]"
+    )
+    for c in flaking_result.candidates:
+        print(f"  area={c.area_px2} px2  solidity={c.solidity:.3f}  bbox={c.bbox}")
+    print(
+        f"Excluded area: {flaking_result.excluded_area_px2} px2 "
+        f"({flaking_result.excluded_area_pct:.3f}% of image)    [measured]"
+    )
+    if flaking_result.candidates:
+        print(
+            "Mask corrected and re-skeletonized (second pass) -- excluded pixels treated as "
+            "background, not folded into crack area/width/length."
         )
     print()
     print("-- Stage 2: Skeletonize + prune --")
