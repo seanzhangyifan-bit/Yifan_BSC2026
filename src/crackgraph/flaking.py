@@ -251,12 +251,20 @@ def exclude_flaking_regions(
 
 
 def cut_adjacent_path_indices(
-    graph_result, excluded_mask: np.ndarray, *, buffer_px: float = CUT_ADJACENT_BUFFER_PX
+    skeleton, graph_result, excluded_mask: np.ndarray, *, buffer_px: float = CUT_ADJACENT_BUFFER_PX
 ) -> set[int]:
-    """Path indices of edges incident to a node (junction or endpoint)
-    within buffer_px of excluded_mask -- these edges were truncated by the
-    exclusion cut, not by a real crack arrest, so their length/width are
-    not real measurements and should be dropped from those statistics.
+    """Path indices of edges whose skeleton path comes within buffer_px of
+    excluded_mask at ANY point along the path -- not just at an endpoint
+    node. A truncated stub's endpoint will always be close, but a
+    disk-dilation growth frontier is rounded, not a straight guillotine
+    cut, so it can graze alongside a corridor's wall for a stretch without
+    fully severing it -- in that case the edge survives as one piece with
+    both real endpoints far away, but its *path* still runs right next to
+    an artificial, algorithm-introduced boundary partway along. Checking
+    only the endpoints would miss exactly that case.
+
+    Flagged edges' length/width are not real measurements and should be
+    dropped from those statistics.
 
     Deliberately geometric (distance to a mask we already computed), not
     based on junction type/angle classification -- topology right at a cut
@@ -270,20 +278,14 @@ def cut_adjacent_path_indices(
 
     buffer_px_int = max(1, int(np.ceil(buffer_px)))
     buffer_mask = binary_dilation(excluded_mask, footprint=disk(buffer_px_int))
-
     h, w = excluded_mask.shape
-    node_coords = graph_result.node_coords
-    node_ids = graph_result.node_ids
-    flagged_node_ids = set()
-    for node_id, (row, col) in zip(node_ids, node_coords):
-        r = int(np.clip(round(row), 0, h - 1))
-        c = int(np.clip(round(col), 0, w - 1))
-        if buffer_mask[r, c]:
-            flagged_node_ids.add(int(node_id))
 
-    if not flagged_node_ids:
-        return set()
+    flagged = set()
+    for path_index in graph_result.summary.index:
+        coords = skeleton.path_coordinates(int(path_index))
+        rr = np.clip(np.round(coords[:, 0]).astype(int), 0, h - 1)
+        cc = np.clip(np.round(coords[:, 1]).astype(int), 0, w - 1)
+        if buffer_mask[rr, cc].any():
+            flagged.add(int(path_index))
 
-    summary = graph_result.summary
-    is_flagged = summary["node_id_src"].isin(flagged_node_ids) | summary["node_id_dst"].isin(flagged_node_ids)
-    return set(summary.index[is_flagged].tolist())
+    return flagged

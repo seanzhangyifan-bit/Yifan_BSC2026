@@ -90,7 +90,9 @@ def compute_row(image_path: Path) -> dict:
     # measurements, so they're dropped from those two stats specifically
     # (but kept in the connectivity graph below: they're still real
     # topology, just with an untrustworthy length).
-    cut_adjacent = cut_adjacent_path_indices(graph_result, flaking_result.excluded_mask)
+    cut_adjacent = cut_adjacent_path_indices(
+        skeleton_result.skeleton, graph_result, flaking_result.excluded_mask
+    )
     summary = graph_result.summary
     length_ok_mask = ~summary.index.isin(cut_adjacent)
 
