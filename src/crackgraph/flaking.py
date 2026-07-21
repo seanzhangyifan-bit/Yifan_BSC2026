@@ -23,10 +23,15 @@ reads a genuine half-width rather than "however close this pixel happens to
 be to an edge"), median rather than mean so a blob's own messy interior
 skeleton (a small fraction of total skeleton mileage) can't drag the
 reference value up. Connected components of the flagged region are kept as
-candidates only above MIN_CANDIDATE_AREA_PX2 and SOLIDITY_MIN -- solidity
-(area / convex-hull area) separates compact blobs (high solidity) from
-merely-locally-wide crack bands (elongated, low solidity), which the width
-test alone cannot.
+candidates only above MIN_CANDIDATE_AREA_PX2 -- width is the single
+identification criterion, deliberately: an earlier version also required
+high solidity (area / convex-hull area) to separate compact blobs from
+merely-locally-wide, elongated crack bands, but that second criterion was
+dropped after a real elongated candidate on T2-A_membran_v2 (solidity
+0.674, well below the 0.75 cutoff) was confirmed by inspection to be real
+delamination, not a wide crack -- solidity was excluding genuine cases and
+was harder to justify than width alone. One criterion, explainable, beats
+two where the second one is doing more harm than good.
 
 Treatment: WIDTH_FLAG_MULTIPLIER_K=4 means a flagged seed pixel is, by
 construction, more than (K/2) * reference_width_px from the nearest
@@ -74,13 +79,6 @@ WIDTH_FLAG_MULTIPLIER_K = 4.0
 # flaking candidate at all, screening out small noise specks. 🔴 assumed
 MIN_CANDIDATE_AREA_PX2 = 500
 
-# Minimum solidity (area / convex-hull area) for a flagged component to
-# count as a compact blob rather than a merely-locally-wide, elongated
-# crack band. Real candidates measured this session: 0.83-0.96 (compact
-# blobs) vs 0.67 (a wide-crack false positive) -- 0.75 sits between them.
-# 🔴 assumed, not swept against a larger sample.
-SOLIDITY_MIN = 0.75
-
 # Growth budget, in multiples of the reference crack width, for recovering
 # each candidate's true boundary from its (by-construction eroded) seed.
 # 2.0 = WIDTH_FLAG_MULTIPLIER_K / 2 exactly undoes the seed's own erosion;
@@ -111,7 +109,9 @@ CUT_ADJACENT_BUFFER_WIDTH_MULTIPLIER = 1.0
 class FlakingCandidate:
     label: int
     area_px2: int  # [measured]
-    solidity: float  # [measured] area / convex-hull area
+    solidity: float  # [measured] area / convex-hull area -- reported for diagnostic
+    # visibility only, NOT a filter criterion (see module docstring for why
+    # solidity was dropped as a pass/fail gate).
     bbox: tuple[int, int, int, int]  # (min_row, min_col, max_row, max_col)
 
 
@@ -143,11 +143,12 @@ def identify_candidates(
     *,
     K: float = WIDTH_FLAG_MULTIPLIER_K,
     min_area_px2: int = MIN_CANDIDATE_AREA_PX2,
-    solidity_min: float = SOLIDITY_MIN,
 ) -> tuple[list[FlakingCandidate], np.ndarray]:
     """Returns (candidates, labeled_wide_mask) -- the label image is needed
     by grow_and_exclude to recover each candidate's own flagged seed
-    pixels."""
+    pixels. Width (+ minimum area) is the single identification criterion
+    -- see module docstring for why a second, solidity-based criterion was
+    tried and dropped."""
     if reference_width_px <= 0:
         return [], np.zeros(mask_clean.shape, dtype=int)
 
@@ -158,7 +159,7 @@ def identify_candidates(
     candidates = [
         FlakingCandidate(label=rp.label, area_px2=int(rp.area), solidity=float(rp.solidity), bbox=rp.bbox)
         for rp in regionprops(labeled)
-        if rp.area >= min_area_px2 and rp.solidity >= solidity_min
+        if rp.area >= min_area_px2
     ]
     return candidates, labeled
 
@@ -215,7 +216,6 @@ def exclude_flaking_regions(
     *,
     K: float = WIDTH_FLAG_MULTIPLIER_K,
     min_area_px2: int = MIN_CANDIDATE_AREA_PX2,
-    solidity_min: float = SOLIDITY_MIN,
     growth_multiplier: float = GROWTH_MULTIPLIER,
     step_px: int = GROWTH_STEP_PX,
 ) -> FlakingResult:
@@ -229,7 +229,7 @@ def exclude_flaking_regions(
     reference_width_px = compute_reference_width_px(skel_image, medial_radius)
     candidates, labeled_wide_mask = identify_candidates(
         mask_clean, medial_radius, reference_width_px,
-        K=K, min_area_px2=min_area_px2, solidity_min=solidity_min,
+        K=K, min_area_px2=min_area_px2,
     )
 
     if not candidates:

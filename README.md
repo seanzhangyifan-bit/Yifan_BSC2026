@@ -108,9 +108,13 @@ the real skeletonization ever runs:
 2. **Identify candidates**: flag pixels whose local width exceeds
    `WIDTH_FLAG_MULTIPLIER_K` (4×) times this image's own median
    skeleton-sampled crack width, then keep only connected components above
-   a minimum area **and** solidity (`area / convex-hull area` ≥ 0.75) —
-   solidity is what separates a compact flaked blob from a merely
-   locally-wide crack band, which the width test alone cannot.
+   a minimum area. Width is the single identification criterion,
+   deliberately — an earlier version also required high solidity
+   (`area / convex-hull area` ≥ 0.75) to separate compact blobs from
+   merely locally-wide, elongated crack bands, but that was dropped after a
+   real elongated candidate (solidity 0.674) was confirmed by inspection to
+   be genuine delamination, not a wide crack — solidity was excluding real
+   cases and was harder to justify than width alone.
 3. **Grow each candidate** back out to its true boundary via mask-
    constrained dilation (can never cross a real black boundary), capped at
    `GROWTH_MULTIPLIER` (2.2×) times the reference width — derived, not
@@ -121,10 +125,15 @@ the real skeletonization ever runs:
    handled, since `skeletonize_and_prune` never needs to know they were
    ever considered foreground. Skipped entirely (no second pass) when no
    candidates are found.
-5. **Flag cut-adjacent edges**: any graph node within a small buffer of the
-   exclusion is a truncation, not a real crack arrest — those edges are
-   dropped from length/width statistics (but kept in the connectivity
-   graph; the topology is real even though the reported length isn't).
+5. **Flag cut-adjacent edges**: any point along a graph edge's path within
+   `CUT_ADJACENT_BUFFER_WIDTH_MULTIPLIER` (1.0×) times the reference width
+   of the exclusion is a truncation, not a real crack arrest — those edges
+   are dropped from length/width statistics (but kept in the connectivity
+   graph; the topology is real even though the reported length isn't). Full
+   path, not just the two endpoint nodes — a first version checked only
+   endpoints and measurably missed edges that graze the exclusion mid-path
+   without terminating there (disk-dilation growth has a rounded, not
+   straight, frontier).
 
 **Explicitly not attempted**: reshaping the exclusion boundary to look like
 a natural crack tip (a "meniscus" idea, considered and rejected) — that
@@ -134,10 +143,9 @@ untrustworthy edges from statistics, rather than making them look clean,
 does the same job honestly.
 
 **Known gap, not yet fixed**: small, compact false positives from ordinary
-junction-blob widening (not real flaking) can still pass the solidity
-filter alone — see `flaking.py`'s module docstring. A junction-proximity
-exclusion on top of the width+solidity test would close this; not built
-yet.
+junction-blob widening (not real flaking) can still pass the width+area
+test alone — see `flaking.py`'s module docstring. A junction-proximity
+exclusion on top of the width test would close this; not built yet.
 
 ### How junction angles are measured (stage 4)
 

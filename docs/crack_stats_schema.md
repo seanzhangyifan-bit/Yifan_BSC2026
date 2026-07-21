@@ -210,7 +210,7 @@ see §4.
 | 12 | `n_components` | Number of disconnected pieces in the crack network (graph connected-components count). Uses the **full** graph including cut-adjacent edges — they're real topology, only their reported length is untrustworthy, not their existence. | count | `measured` |
 | 13 | `giant_component_fraction` | (total crack length in the single largest connected piece) ÷ (total crack length, all pieces) — 1.0 means the network is one fully connected web; well below 1 means it's still fragmented into separate islands. Also uses the full graph, same reasoning as `n_components`. | fraction, 0–1 | `measured` |
 | 14 | `flaking_excluded_area_pct` | Share of image area excluded as flaking/delamination — see §4b | % of image area | `measured` |
-| 15 | `flaking_n_candidates` | Number of flaking regions identified (width + solidity flagged, grown to their true boundary) — see §4b | count | `interpreted` |
+| 15 | `flaking_n_candidates` | Number of flaking regions identified (width-flagged, grown to their true boundary) — see §4b | count | `interpreted` |
 | 16 | `flaking_n_edges_excluded_near_cut` | Number of graph edges touching the flaking-exclusion boundary, dropped from the length/width stats above (columns 8-11) — see §4b | count | `measured` |
 
 **Caveats that matter for correct use:**
@@ -247,20 +247,24 @@ double-line loop artifact above, since a blob-shaped region's skeleton is inhere
 thinning artifact).
 
 `src/crackgraph/flaking.py` identifies candidate regions (local width far exceeding the image's own
-typical crack width, in a compact/high-solidity shape — this is what separates a real flaked blob
-from a merely locally-wide crack band), grows each one back out to its true boundary via
+typical crack width — width is the single identification criterion, deliberately; an earlier version
+also required high solidity to separate compact blobs from elongated crack bands, but that was
+dropped after a real elongated candidate, solidity 0.674, was confirmed by inspection to be genuine
+delamination — solidity was excluding real cases), grows each one back out to its true boundary via
 mask-constrained dilation, and excludes the result from the mask *before* the real skeletonization
-runs — so flaked pixels never contribute a spurious skeleton at all. Graph edges that end up touching
-the exclusion boundary (`flaking_n_edges_excluded_near_cut`) are truncation artifacts of the cut, not
-real crack arrests, so they're dropped from the length/width statistics (columns 8-11) but kept in
-the connectivity graph for columns 12-13, since their topology is real even though their reported
-length isn't.
+runs — so flaked pixels never contribute a spurious skeleton at all. Graph edges whose path comes
+within one reference-crack-width of the exclusion boundary at any point (`flaking_n_edges_excluded_near_cut`,
+not just an edge's two endpoint nodes — an endpoint-only check measurably misses edges that graze the
+exclusion mid-path without terminating there) are truncation artifacts of the cut, not real crack
+arrests, so they're dropped from the length/width statistics (columns 8-11) but kept in the
+connectivity graph for columns 12-13, since their topology is real even though their reported length
+isn't.
 
 **Known gap, not yet fixed**: small, compact false positives from ordinary junction-blob widening
-(not real flaking) can still pass the solidity filter alone — see `flaking.py`'s module docstring.
-`flaking_n_candidates` should therefore be read as "candidates passing the current width+solidity
-test," not as a confirmed count of real flaking regions — spot-check by eye before trusting it on a
-new image the way every other selection criterion in this doc has been.
+(not real flaking) can still pass the width+area test alone — see `flaking.py`'s module docstring.
+`flaking_n_candidates` should therefore be read as "candidates passing the current width test," not
+as a confirmed count of real flaking regions — spot-check by eye before trusting it on a new image
+the way every other selection criterion in this doc has been.
 
 ## 5. Evidence-level legend
 
