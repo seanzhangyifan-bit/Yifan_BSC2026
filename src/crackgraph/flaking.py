@@ -96,11 +96,15 @@ GROWTH_MULTIPLIER = 2.2
 # go (that's GROWTH_MULTIPLIER).
 GROWTH_STEP_PX = 3
 
-# Buffer distance (px) from the excluded region within which a graph node
-# (junction or endpoint) is treated as "cut-adjacent" and its incident
-# edges dropped from length/width statistics -- see
-# cut_adjacent_path_indices. 🔴 assumed.
-CUT_ADJACENT_BUFFER_PX = 10.0
+# Buffer distance, in multiples of this image's own reference crack width,
+# within which an edge's path is treated as "cut-adjacent" and dropped from
+# length/width statistics -- see cut_adjacent_path_indices. A flat pixel
+# value (originally 10px) was tried first and measured too small: on
+# T2-A_membran_v2 it flagged only 46 edges and visibly missed most of the
+# boundary perimeter, while 1.0x reference width flagged 86 and covered the
+# whole perimeter. 🟡 empirical -- verified by inspection on one real image,
+# not swept.
+CUT_ADJACENT_BUFFER_WIDTH_MULTIPLIER = 1.0
 
 
 @dataclass
@@ -251,11 +255,17 @@ def exclude_flaking_regions(
 
 
 def cut_adjacent_path_indices(
-    skeleton, graph_result, excluded_mask: np.ndarray, *, buffer_px: float = CUT_ADJACENT_BUFFER_PX
+    skeleton,
+    graph_result,
+    excluded_mask: np.ndarray,
+    reference_width_px: float,
+    *,
+    buffer_width_multiplier: float = CUT_ADJACENT_BUFFER_WIDTH_MULTIPLIER,
 ) -> set[int]:
-    """Path indices of edges whose skeleton path comes within buffer_px of
-    excluded_mask at ANY point along the path -- not just at an endpoint
-    node. A truncated stub's endpoint will always be close, but a
+    """Path indices of edges whose skeleton path comes within
+    buffer_width_multiplier * reference_width_px of excluded_mask at ANY
+    point along the path -- not just at an endpoint node. A truncated
+    stub's endpoint will always be close, but a
     disk-dilation growth frontier is rounded, not a straight guillotine
     cut, so it can graze alongside a corridor's wall for a stretch without
     fully severing it -- in that case the edge survives as one piece with
@@ -276,6 +286,7 @@ def cut_adjacent_path_indices(
     if not excluded_mask.any() or len(graph_result.summary) == 0:
         return set()
 
+    buffer_px = buffer_width_multiplier * reference_width_px
     buffer_px_int = max(1, int(np.ceil(buffer_px)))
     buffer_mask = binary_dilation(excluded_mask, footprint=disk(buffer_px_int))
     h, w = excluded_mask.shape
