@@ -17,7 +17,9 @@ import argparse
 from pathlib import Path
 
 import networkx as nx
+import numpy as np
 import pandas as pd
+from scipy.ndimage import distance_transform_edt
 
 from src.crackgraph.binarize import binarize
 from src.crackgraph.cache_io import save_analysis_cache
@@ -63,6 +65,31 @@ CONFIRMED_SCALE_BAR_IMAGES = ["T5-M_H190_v2_mm000001.jpg"]
 ADDITIONAL_IMAGES = ["data/raw/humidity_loading_ptfe/23RH_PTFE_v1_mm000003.jpg"]
 
 RAW_GLOB = "data/raw/**/*_mm000001.jpg"
+
+
+def median_pixelwise_width_px(skel, graph_result, cut_adjacent: set[int], medial_radius: np.ndarray) -> float:
+    """Median of 2 * medial_radius sampled at every skeleton pixel belonging to a
+    non-cut-adjacent edge -- a genuine per-pixel width measurement, unlike avg_width_px's
+    global area/total-length ratio. Reuses cut_adjacent_path_indices' own exclusion set
+    (rather than a second, separately-invented buffer rule) so this stays methodologically
+    consistent with avg_width_px/avg_edge_length_px's existing cut-adjacent exclusion.
+    Median, not mean, matches compute_reference_width_px's convention in flaking.py: a
+    handful of anomalously wide pixels (junction blobs, near-miss flaking) shouldn't drag a
+    single summary number around. [interpreted] -- a stated aggregation over [measured]
+    per-pixel distance-transform values.
+    """
+    h, w = medial_radius.shape
+    widths = []
+    for path_index in graph_result.summary.index:
+        if path_index in cut_adjacent:
+            continue
+        coords = skel.path_coordinates(int(path_index))
+        rr = np.clip(np.round(coords[:, 0]).astype(int), 0, h - 1)
+        cc = np.clip(np.round(coords[:, 1]).astype(int), 0, w - 1)
+        widths.append(2.0 * medial_radius[rr, cc])
+    if not widths:
+        return float("nan")
+    return float(np.median(np.concatenate(widths)))
 
 
 def compute_row(image_path: Path, *, cache_dir: Path | None = None) -> dict:
@@ -115,6 +142,23 @@ def compute_row(image_path: Path, *, cache_dir: Path | None = None) -> dict:
         total_length_px / n_edges_for_length if n_edges_for_length > 0 else float("nan")
     )
 
+    # True per-pixel width, as opposed to avg_width_px's area/length ratio -- see
+    # median_pixelwise_width_px's docstring. Cheap: distance_transform_edt is one
+    # vectorized call over the same mask_clean already in memory.
+    medial_radius = distance_transform_edt(skeleton_result.mask_clean)
+    median_width_px = median_pixelwise_width_px(
+        skeleton_result.skeleton, graph_result, cut_adjacent, medial_radius
+    )
+
+    # crack_area_pct divides by the WHOLE image; this divides by the area we actually have
+    # evidence about (whole image minus the flaking exclusion, which could be cracked or not
+    # underneath -- we don't know, see flaking.py). Always computed, no calibration factor
+    # needed (both numerator and denominator are pixel counts).
+    valid_area_px2 = full_w * full_h - flaking_result.excluded_area_px2
+    crack_area_pct_excl_flakes = (
+        100.0 * crack_area_px2 / valid_area_px2 if valid_area_px2 > 0 else float("nan")
+    )
+
     # Percolation view of the same graph: how many disconnected crack
     # fragments survived stage 2's pruning (fragments/spurs shorter than
     # spur_px_threshold are already gone before this ever runs -- these
@@ -140,11 +184,12 @@ def compute_row(image_path: Path, *, cache_dir: Path | None = None) -> dict:
 
     is_bad_frame = any(s in image_path.name for s in KNOWN_BAD_FRAME_SUBSTRINGS)
     if is_bad_frame:
-        crack_area_mm2 = avg_width_um = avg_edge_length_um = None
+        crack_area_mm2 = avg_width_um = avg_edge_length_um = median_width_um = None
     else:
         crack_area_mm2 = crack_area_px2 * (UM_PER_PX_MM_TAG ** 2) / 1e6
         avg_width_um = avg_width_px * UM_PER_PX_MM_TAG
         avg_edge_length_um = avg_edge_length_px * UM_PER_PX_MM_TAG
+        median_width_um = median_width_px * UM_PER_PX_MM_TAG
 
     stats_row = {
         "image_filename": image_path.name,
@@ -153,9 +198,12 @@ def compute_row(image_path: Path, *, cache_dir: Path | None = None) -> dict:
         "image_height_px": full_h,
         "scale_bar_check": "no blue bar (visually confirmed)",
         "crack_area_pct": 100.0 * crack_area_px2 / (full_w * full_h),
+        "crack_area_pct_excl_flakes": crack_area_pct_excl_flakes,
         "crack_area_mm2": crack_area_mm2,
         "avg_width_px": avg_width_px,
         "avg_width_um": avg_width_um,
+        "median_width_px": median_width_px,
+        "median_width_um": median_width_um,
         "avg_edge_length_px": avg_edge_length_px,
         "avg_edge_length_um": avg_edge_length_um,
         "n_components": n_components,

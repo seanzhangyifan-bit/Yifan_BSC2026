@@ -213,14 +213,20 @@ see §4.
 | 15 | `flaking_n_candidates` | Number of flaking regions identified (width-flagged, grown to their true boundary) — see §4b | count | `interpreted` |
 | 16 | `flaking_n_edges_excluded_near_cut` | Number of graph edges touching the flaking-exclusion boundary, dropped from the length/width stats above (columns 8-11) — see §4b | count | `measured` |
 | 17 | `n_corner_artifacts_pruned` | Number of skeleton branches removed during stage 2 pruning because their width trends monotonically with position (a medial-axis branch tracing into a concave mask-boundary corner) rather than because they were short — see §4c | count | `interpreted` |
+| 18 | `crack_area_pct_excl_flakes` | `crack_area_px² ÷ (image_width_px × image_height_px × (1 − flaking_excluded_area_pct ÷ 100)) × 100` — same numerator as column 6, but the denominator excludes the flaking-exclusion area (column 14, converted back from a percentage to pixels) instead of counting the whole image, since that region is missing material, not confirmed non-crack, and this pipeline has zero evidence what (if anything) was under it before it flaked off. Equals column 6 exactly wherever `flaking_excluded_area_pct` is 0 (most images). | % of non-excluded image area | `measured` |
+| 19 | `median_width_px` | Median of `2 × medial_radius` sampled at every pixel of every skeleton edge NOT touching the flaking-exclusion cut (the same edge exclusion columns 8-11 already use) — a genuine per-pixel distance-transform measurement, unlike column 8's area/length ratio. See `median_pixelwise_width_px` in `scripts/export_crack_stats.py` and the caveat below. | px | `interpreted` |
+| 20 | `median_width_um` | `median_width_px × 0.6098` | µm | `calibrated` |
 
 **Caveats that matter for correct use:**
 
-- **`avg_width_px`** is a crude cross-check estimate (total area ÷ total length), not the more
-  detailed distance-transform width used elsewhere in this pipeline. On real images the two methods
-  agreed to within ~6.6%, in a consistent direction (this crude version reads slightly lower) — close
-  enough to trust as a width estimate, but treat the two as *different formulas that happen to agree
-  closely*, not identical numbers.
+- **`avg_width_px`** (column 8) is a crude cross-check estimate (total area ÷ total length), not
+  a direct per-pixel measurement — **`median_width_px`** (column 19) is that direct measurement,
+  added later once the per-image analysis cache made it cheap to compute without re-running
+  binarize/skeletonize (see `docs/crack_stats_v2_status.md` for when and how). On the original
+  39-image set the two formulas were only cross-checked in aggregate (~6.6% agreement, crude
+  version reading slightly lower) — treat that figure as a rough historical sanity check, not a
+  guarantee for every image or every batch; report actual per-image agreement when both columns are
+  present rather than assuming it holds.
 - **`avg_edge_length_px`** answers "how far apart are two junctions/endpoints, on average" — it is
   the mean length of one atomic graph edge, not the mean length of a whole physical crack (a crack
   that passes straight through several junctions without arresting there would count as several

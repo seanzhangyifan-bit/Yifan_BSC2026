@@ -273,10 +273,52 @@ via a single `distance_transform_edt` call).
         going from fragmented to fully connected) -- `[interpreted]`, not yet verified as a
         real trend rather than two-samples-per-condition noise, but a real pattern worth
         following up on its own terms, independent of the sanity-check question above.
-- [ ] Sanity-check pattern above -- not investigated further this pass, flagged for next steps
+- [x] Sanity-check pattern above -- partially resolved. User's read: the "high" cluster
+      (T2/T3/T4 membrane, T5-PTFE_H190, 22.8%-29.4%) is expected variation, not alarming --
+      "some things can have a lot of cracks, that sanity check isn't that good" -- this batch
+      was deliberately chosen to vary solvent-ratio/gap-height, and the 1-15% band was never
+      calibrated for that. The near-zero `T5-PTFE_H50` pair remains open (not yet visually
+      confirmed), though the width divergence noted just below is itself a relevant new data
+      point for that question.
 - [ ] `lu`/`ro` images -- deferred; `data/cleaned_pics/` (a fuller local mirror of the OneDrive
       source than `data/raw/`) has `lu`/`mm`/`ro` triples for 17 of the 19 samples already
       copied into `data/raw/` (missing for `T5-PTFE_H50_v1` only -- confirmed against the
       original OneDrive source directly, not just the local copy: that replicate's capture
       session never included `lu`/`ro` at all, no `v3` exists to substitute). Not copied into
       `data/raw/` or run yet -- separate future step, user's explicit direction.
+- [x] `median_width_px`/`median_width_um` (true per-pixel distance-transform width) and
+      `crack_area_pct_excl_flakes` (crack-area density excluding the flaking-exclusion region
+      from the denominator) added to `scripts/export_crack_stats.py` -- see
+      `docs/crack_stats_schema.md` columns 18-20 for the exact formulas. Both are wired into
+      the live `compute_row()` path (future runs get them automatically) and were also
+      retroactively backfilled into all 19 already-cached `stats.json` files (and
+      `crack_stats.xlsx` regenerated) **without re-running binarize/skeletonize/flaking**,
+      confirming the caching design's own stated purpose -- only `skan.Skeleton` +
+      `extract_graph` + `cut_adjacent_path_indices` were reconstructed from the cached
+      `mask_corrected.npz`/`skeleton_final.npz`/`excluded_mask.npz` arrays, plus one
+      `distance_transform_edt` call. Took 369.5s for all 19 (~19s/image on average) -- slower
+      than the "low tens of seconds total" estimate in the plan, because graph
+      reconstruction (`skan.summarize()` + the per-edge `cut_adjacent_path_indices` loop) on
+      these full-resolution images is itself non-trivial, not because anything expensive was
+      accidentally re-run.
+
+      `median_width_px` reuses `avg_width_px`'s existing cut-adjacent edge exclusion (not a
+      new buffer rule), so the two are directly comparable. Across all 19 images they agree
+      to a median 7.0% / mean 8.5% absolute relative difference -- close to the historical
+      ~6.6% figure from the old 39-image set, but with real spread: most images sit in the
+      1-15% range (both directions -- `median_width_px` reads higher on the RH/humidity and
+      T3/T4 images, lower on the T5-PTFE gap-height images), except:
+      - **`T5-PTFE_H50_v1`/`v2`**: -27.6% / -27.5% -- by far the largest divergence in the
+        batch, `median_width_px` reading well below `avg_width_px` (5.66px/4.47px vs.
+        7.81px/6.16px). This is the same near-zero-foreground pair already flagged as an open
+        sanity-check concern above -- a network this sparse (0.02%-0.13% foreground) is
+        exactly where a global area/length ratio and a true per-pixel median would be
+        expected to diverge most (few edges, so the ratio has little averaging to smooth over
+        outlier-width pixels/junction blobs) -- `[interpreted]`, reported as a relevant new
+        data point for that still-open question, not a resolution of it on its own.
+
+      `crack_area_pct_excl_flakes` differs from `crack_area_pct` only on images with a nonzero
+      flaking exclusion (9 of 19) -- by construction, since the two formulas are identical
+      when `flaking_excluded_area_pct` is 0. Largest correction: `T5-PTFE_H190_v2` at +4.2%
+      relative (24.56% -> 25.59%), then `T2-A_membran_v2` at +1.7% (26.32% -> 26.76%); the
+      rest are under 2%.
