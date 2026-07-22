@@ -156,6 +156,12 @@ via a single `distance_transform_edt` call).
 - [x] `overlay.py`: `render_crack_stats_overlay()`
 - [x] `export_crack_stats.py`: `compute_row()` gains `cache_dir`, `main()` gains `--cache-dir`
 - [x] This status doc
-- [ ] Single-image pilot run (real files on disk, `T2-A_membran_v2`) -- next
+- [x] Single-image pilot run (real files on disk, `T2-A_membran_v2`) -- 73.4s total (in line
+      with the 69.4s stage-timing estimate plus overlay rendering + cache writing). All 7
+      files present with sane sizes (mask/skeleton/excluded-mask arrays ~68KB-678KB compressed,
+      `pruned_branches.npz` 15KB for 183 records, `overlay.png` 3.5MB). Cache round-tripped
+      correctly against real data (84 corner_artifact + 54 fragment + 45 spur = 183, matching
+      the stats.json count exactly). Overlay visually confirmed against this session's earlier
+      prototype-script renders of the same image.
 - [ ] Full 18-image batch -- deliberately not started, separate step after the pilot is
       confirmed good
