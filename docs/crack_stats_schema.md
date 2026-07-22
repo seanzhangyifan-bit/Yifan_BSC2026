@@ -212,6 +212,7 @@ see §4.
 | 14 | `flaking_excluded_area_pct` | Share of image area excluded as flaking/delamination — see §4b | % of image area | `measured` |
 | 15 | `flaking_n_candidates` | Number of flaking regions identified (width-flagged, grown to their true boundary) — see §4b | count | `interpreted` |
 | 16 | `flaking_n_edges_excluded_near_cut` | Number of graph edges touching the flaking-exclusion boundary, dropped from the length/width stats above (columns 8-11) — see §4b | count | `measured` |
+| 17 | `n_corner_artifacts_pruned` | Number of skeleton branches removed during stage 2 pruning because their width trends monotonically with position (a medial-axis branch tracing into a concave mask-boundary corner) rather than because they were short — see §4c | count | `interpreted` |
 
 **Caveats that matter for correct use:**
 
@@ -265,6 +266,25 @@ isn't.
 `flaking_n_candidates` should therefore be read as "candidates passing the current width test," not
 as a confirmed count of real flaking regions — spot-check by eye before trusting it on a new image
 the way every other selection criterion in this doc has been.
+
+### 4c. Corner-tracing artifact pruning (column 17)
+
+The medial axis transform underlying skeletonization mathematically must trace a branch
+into every concave corner of the mask boundary, regardless of how long that branch is —
+this is a correct property of the medial axis, not thinning noise, and it is blind to
+length, so the fixed-length spur pruning that already removes short dead ends
+(`SPUR_PX_PLACEHOLDER`) does not catch it. `src/crackgraph/skeleton.py` additionally
+flags a branch as this kind of artifact if its local width (from the same distance
+transform used elsewhere in this pipeline) trends monotonically with position along the
+branch (Pearson correlation vs. `CORR_THRESHOLD`, currently 0.99) rather than staying
+flat the way a genuine, noisy-but-stable-width crack does — see the module docstring
+and `docs/calibration_notes.md` for the full derivation and the rejected alternative
+criteria. Flagged branches are pruned from the skeleton entirely (same iterative,
+cascading removal as length-based spur pruning), so they affect `crack_area_pct`,
+`avg_width_px`, and `avg_edge_length_px` the same way real pruning always has — there is
+no separate "excluded but topology kept" treatment here, unlike the flaking cut-adjacent
+case in §4b, because these branches are not truncated real edges, they are not real
+edges at all.
 
 ## 5. Evidence-level legend
 

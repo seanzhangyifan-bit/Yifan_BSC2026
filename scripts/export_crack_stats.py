@@ -154,6 +154,7 @@ def compute_row(image_path: Path) -> dict:
         "flaking_excluded_area_pct": flaking_result.excluded_area_pct,
         "flaking_n_candidates": len(flaking_result.candidates),
         "flaking_n_edges_excluded_near_cut": len(cut_adjacent),
+        "n_corner_artifacts_pruned": skeleton_result.n_corner_artifacts_pruned,
     }
 
 

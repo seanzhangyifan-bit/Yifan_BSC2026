@@ -4,6 +4,41 @@ Homotopy-preserving thinning (skimage's Zhang's algorithm), followed by
 iterative spur pruning via skan.Skeleton.prune_paths. Pruning is iterative,
 not a single pass: removing a spur can expose a new short branch at a
 junction that was previously higher-valence, so a single pass under-prunes.
+
+Corner-tracing artifacts (in addition to plain short spurs): the medial
+axis transform mathematically *must* trace a skeleton branch into every
+concave corner of the mask boundary -- this is not thinning noise, it is a
+correct property of the medial axis, and it is blind to length. A branch
+tracing into a real notch (e.g. the ragged edge of a flaked-off region, or
+a background inlet between two crack walls) can be far longer than
+SPUR_PX_PLACEHOLDER and survive flat-length pruning untouched. Confirmed on
+a real case this session (T2-A_membran_v2): a branch with a near-perfectly
+linear 2.0px -> 121.7px width ramp over 45px, visually confirmed tracing
+into a real black wedge with no crack present.
+
+Two other criteria were tried and rejected before settling on the one
+below: a windowed tip-width comparison (too conservative, missed
+medium/long artifacts entirely) and a "fraction of the branch above its own
+tip-median width" test (mathematically flawed -- for a genuinely real,
+noisy-but-stable-width crack, the tip-region median is a random draw from
+the same distribution as the rest of the branch, so ~50% of pixels exceed
+it by symmetric noise alone; the >50% threshold sat right at a coin flip
+for exactly the branches that should survive).
+
+What is used instead: the Pearson correlation between pixel position
+(0 = the free tip, where one exists) and local width (2 * medial_radius)
+along the branch. A genuine crack's width is noisy but flat around a
+steady value -> correlation near 0. A corner-tracing artifact's width
+ramps monotonically toward the notch it's chasing -> correlation near +1.
+This sidesteps the coin-flip problem because it tests for a trend, not a
+fraction above a reference drawn from the same noisy population.
+
+This targets the same general problem as several standard skeleton-pruning
+methods from the literature -- Discrete Curve Evolution pruning (Bai, Liu &
+Latecki, IEEE TPAMI 2007), the lambda-medial-axis (Chazal & Lieutier,
+Graphical Models 2005), and the scale-axis transform (Giesen et al., SoCG
+2009) -- but the correlation test here is a much simpler, single-parameter
+stand-in, not a reimplementation of any of them.
 """
 
 from dataclasses import dataclass
@@ -14,6 +49,25 @@ from scipy.ndimage import distance_transform_edt
 from skimage.morphology import remove_small_objects, skeletonize
 
 SPUR_PX_PLACEHOLDER = 15  # 🔴 assumed — see CALIBRATION.md
+
+# Pearson correlation (pixel position vs. local width) above which a
+# branch is treated as a corner-tracing medial-axis artifact rather than a
+# real crack spur. Swept at 0.8/0.9/0.95/0.99 on T2-A_membran_v2's full
+# image (1439 eligible branches; 229/187/139/84 flagged respectively) and
+# reviewed visually at matched crops: raising the threshold sheds short
+# corner-artifact chains (one chain of 6 short zigzag spurs went from 6/6
+# flagged at 0.8 to 1/6 at 0.99) while nothing inspected suggested 0.8 was
+# flagging genuine open-field cracks. 0.99 was chosen to prioritize never
+# touching a real crack over catching every short artifact. 🟡 empirical,
+# uncalibrated — see CALIBRATION.md.
+CORR_THRESHOLD = 0.99
+
+# Minimum branch length (px) for the correlation test to be meaningful at
+# all; shorter branches don't have enough points for a Pearson correlation
+# to mean anything, so they're never flagged by this criterion -- emit no
+# constraint rather than guess, per CLAUDE.md's near-120-degree-junction
+# precedent. 🔴 assumed — see CALIBRATION.md.
+MIN_LEN_FOR_CORR_PX = 4
 
 
 @dataclass
@@ -29,7 +83,50 @@ class SkeletonResult:
     n_fragments_pruned: int  # [measured]
     pruned_fragment_lengths: list[float]  # [measured], px
     spur_px_threshold: float  # [PLACEHOLDER]
+    n_corner_artifacts_pruned: int  # [measured]
+    pruned_corner_artifact_lengths: list[float]  # [measured], px
+    corner_artifact_corr_threshold: float | None  # [PLACEHOLDER], None = criterion disabled
     iters_used: int
+
+
+def _tip_ordered_width_profile(
+    skel: skan.Skeleton,
+    medial_radius: np.ndarray,
+    path_index: int,
+    node_id_src: int,
+    node_id_dst: int,
+) -> np.ndarray:
+    """Local width (2 * medial_radius) along a branch's pixel path, ordered
+    so index 0 is the free (degree-1) end when the branch has one. Both
+    ends of a branch_type==0 isolated fragment are degree-1; in that case
+    the orientation is arbitrary (there is no junction to trace away
+    from)."""
+    coords = skel.path_coordinates(int(path_index))
+    if skel.degrees[int(node_id_dst)] == 1:
+        coords = coords[::-1]
+    rr = np.clip(np.round(coords[:, 0]).astype(int), 0, medial_radius.shape[0] - 1)
+    cc = np.clip(np.round(coords[:, 1]).astype(int), 0, medial_radius.shape[1] - 1)
+    return 2.0 * medial_radius[rr, cc]
+
+
+def is_corner_tracing_artifact(
+    widths: np.ndarray,
+    *,
+    corr_threshold: float = CORR_THRESHOLD,
+    min_len_px: int = MIN_LEN_FOR_CORR_PX,
+) -> bool:
+    """True if width trends monotonically with position along the branch
+    (a corner-tracing medial-axis artifact) rather than staying flat
+    (a genuine, noisy-but-stable-width crack). See module docstring for
+    why correlation, not a fixed-reference fraction, is used."""
+    n = len(widths)
+    if n < min_len_px:
+        return False
+    if widths.std() == 0:
+        return False
+    positions = np.arange(n)
+    corr = np.corrcoef(positions, widths)[0, 1]
+    return bool(corr > corr_threshold)
 
 
 def skeletonize_and_prune(
@@ -38,6 +135,7 @@ def skeletonize_and_prune(
     source_image: np.ndarray | None = None,
     min_object_px: int = 4,
     spur_px: float = SPUR_PX_PLACEHOLDER,
+    corner_artifact_corr_threshold: float | None = CORR_THRESHOLD,
     max_iters: int = 10,
 ) -> SkeletonResult:
     mask_clean = remove_small_objects(mask, min_size=min_object_px)
@@ -55,6 +153,7 @@ def skeletonize_and_prune(
 
     pruned_spur_lengths: list[float] = []
     pruned_fragment_lengths: list[float] = []
+    pruned_corner_artifact_lengths: list[float] = []
     iters_used = 0
 
     for i in range(max_iters):
@@ -65,11 +164,35 @@ def skeletonize_and_prune(
         is_fragment = (summary["branch_type"] == 0) & (summary["branch_distance"] < spur_px)
         spur_rows = summary.index[is_spur]
         fragment_rows = summary.index[is_fragment]
-        if len(spur_rows) == 0 and len(fragment_rows) == 0:
+        length_flagged_rows = spur_rows.union(fragment_rows)
+
+        # Corner-artifact check: only for branches the length-based
+        # criterion didn't already catch -- it exists specifically for the
+        # medium/long artifacts spur_px is blind to (see module docstring),
+        # so keep the two pruning reasons mutually exclusive for reporting.
+        corner_artifact_rows = summary.index[:0]
+        if corner_artifact_corr_threshold is not None:
+            corner_eligible = summary.index[
+                summary["branch_type"].isin((0, 1)) & ~summary.index.isin(length_flagged_rows)
+            ]
+            is_corner_artifact = [
+                is_corner_tracing_artifact(
+                    _tip_ordered_width_profile(
+                        skel, medial_radius, path_index,
+                        summary.at[path_index, "node_id_src"], summary.at[path_index, "node_id_dst"],
+                    ),
+                    corr_threshold=corner_artifact_corr_threshold,
+                )
+                for path_index in corner_eligible
+            ]
+            corner_artifact_rows = corner_eligible[np.array(is_corner_artifact, dtype=bool)]
+
+        if len(spur_rows) == 0 and len(fragment_rows) == 0 and len(corner_artifact_rows) == 0:
             break
         pruned_spur_lengths.extend(summary.loc[spur_rows, "branch_distance"].tolist())
         pruned_fragment_lengths.extend(summary.loc[fragment_rows, "branch_distance"].tolist())
-        all_rows = spur_rows.union(fragment_rows)
+        pruned_corner_artifact_lengths.extend(summary.loc[corner_artifact_rows, "branch_distance"].tolist())
+        all_rows = length_flagged_rows.union(corner_artifact_rows)
         skel = skel.prune_paths(all_rows.to_numpy())
         iters_used = i + 1
 
@@ -87,5 +210,8 @@ def skeletonize_and_prune(
         n_fragments_pruned=len(pruned_fragment_lengths),
         pruned_fragment_lengths=pruned_fragment_lengths,
         spur_px_threshold=spur_px,
+        n_corner_artifacts_pruned=len(pruned_corner_artifact_lengths),
+        pruned_corner_artifact_lengths=pruned_corner_artifact_lengths,
+        corner_artifact_corr_threshold=corner_artifact_corr_threshold,
         iters_used=iters_used,
     )

@@ -213,6 +213,41 @@ pipeline is invoked with `spur_px=3` (an override, not the placeholder default) 
 the sweep/test harnesses deliberately bypass this constant's default value rather than
 validating it.
 
+## CORR_THRESHOLD
+
+`src/crackgraph/skeleton.py:63` — value `0.99`
+
+> Pearson correlation (pixel position vs. local width) above which a branch is treated as
+> a corner-tracing medial-axis artifact rather than a real crack spur. Swept at
+> 0.8/0.9/0.95/0.99 on T2-A_membran_v2's full image (1439 eligible branches; 229/187/139/84
+> flagged respectively) and reviewed visually at matched crops: raising the threshold sheds
+> short corner-artifact chains (one chain of 6 short zigzag spurs went from 6/6 flagged at
+> 0.8 to 1/6 at 0.99) while nothing inspected suggested 0.8 was flagging genuine open-field
+> cracks. 0.99 was chosen to prioritize never touching a real crack over catching every
+> short artifact.
+
+No dedicated sweep script (the sweep this session was done by hand, comparing four
+full-image renders and matched zoomed crops, not a scripted RMSE-style sweep like
+`ANNULUS_OUTER_PX_PLACEHOLDER`/`CORNER_WINDOW_PX`). The rejected alternative criterion this
+threshold replaced — "fraction of the branch above its own tip-region median width,
+flagged if >50%" — was found to be mathematically flawed, not just under-tuned: for a
+genuinely real, noisy-but-stable-width crack, the tip-region median is a random draw from
+the same distribution as the rest of the branch, so ~50% of pixels exceed it by symmetric
+noise alone, making the >50% threshold a coin flip for exactly the branches that should
+survive. That is why this constant is a correlation coefficient, not a fraction.
+
+## MIN_LEN_FOR_CORR_PX
+
+`src/crackgraph/skeleton.py:70` — value `4`
+
+> Minimum branch length (px) for the correlation test to be meaningful at all; shorter
+> branches don't have enough points for a Pearson correlation to mean anything, so they're
+> never flagged by this criterion.
+
+No sweep. Chosen as a bare minimum (a correlation over 2-3 points is essentially
+unconstrained) rather than derived or measured; revisit if short branches turn out to be a
+meaningful fraction of real corner-tracing artifacts.
+
 ## KINK_WINDOW_PX_PLACEHOLDER
 
 `src/crackgraph/kinks.py:27` — value `10.0`

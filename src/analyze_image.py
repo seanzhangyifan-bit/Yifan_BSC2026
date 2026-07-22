@@ -42,7 +42,7 @@ from .crackgraph.kinks import (
 from .crackgraph.overlay import render_overlay, render_precedence_overlay
 from .crackgraph.precedence import build_precedence_graph
 from .crackgraph.region import default_corner_crop
-from .crackgraph.skeleton import SPUR_PX_PLACEHOLDER, skeletonize_and_prune
+from .crackgraph.skeleton import CORR_THRESHOLD, SPUR_PX_PLACEHOLDER, skeletonize_and_prune
 
 # Derived from the 31 real Keyence Vorbeladung captures in data/raw/ as of this
 # writing (width 7254-7434 px, height 7526-7679 px), rounded generously. One
@@ -58,6 +58,7 @@ def parse_args():
     p.add_argument("image_path", type=str)
     p.add_argument("--out-dir", type=str, default="outputs")
     p.add_argument("--spur-px", type=float, default=SPUR_PX_PLACEHOLDER)
+    p.add_argument("--corner-artifact-corr-threshold", type=float, default=CORR_THRESHOLD)
     p.add_argument("--min-object-px", type=int, default=4)
     p.add_argument("--max-overlay-dim", type=int, default=2500)
     p.add_argument("--otsu-sanity-band", type=float, nargs=2, default=(0.01, 0.15))
@@ -158,6 +159,7 @@ def main():
         source_image=gray,
         min_object_px=args.min_object_px,
         spur_px=args.spur_px,
+        corner_artifact_corr_threshold=args.corner_artifact_corr_threshold,
     )
     flaking_result = exclude_flaking_regions(
         scout_skeleton_result.mask_clean,
@@ -174,6 +176,7 @@ def main():
             source_image=gray,
             min_object_px=args.min_object_px,
             spur_px=args.spur_px,
+            corner_artifact_corr_threshold=args.corner_artifact_corr_threshold,
         )
     else:
         skeleton_result = scout_skeleton_result
@@ -321,6 +324,17 @@ def main():
     print(
         f"Isolated fragments pruned: {skeleton_result.n_fragments_pruned}, "
         f"example lengths: {example_fragments}   [measured]"
+    )
+    print(
+        f"Corner-artifact correlation threshold: {skeleton_result.corner_artifact_corr_threshold}   "
+        "[PLACEHOLDER -- see crackgraph/skeleton.py module docstring]"
+    )
+    example_corner_artifacts = [round(x, 1) for x in skeleton_result.pruned_corner_artifact_lengths[:5]]
+    print(
+        f"Corner-tracing artifacts pruned: {skeleton_result.n_corner_artifacts_pruned}, "
+        f"example lengths: {example_corner_artifacts}   "
+        "[interpreted -- medial-axis branches tracing into a concave mask-boundary "
+        "corner, flagged by width-vs-position trend, not length]"
     )
     print(f"Prune iterations used: {skeleton_result.iters_used}")
     print()
