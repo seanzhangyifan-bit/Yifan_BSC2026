@@ -342,6 +342,17 @@ def render_overlay(
     return scale
 
 
+def _spreadsheet_col_label(n: int) -> str:
+    """0-indexed column number -> spreadsheet-style label (0->A, 25->Z,
+    26->AA, ...)."""
+    label = ""
+    n += 1
+    while n > 0:
+        n, rem = divmod(n - 1, 26)
+        label = chr(65 + rem) + label
+    return label
+
+
 def render_crack_stats_overlay(
     rgb: np.ndarray,
     skel: skan.Skeleton,
@@ -351,6 +362,7 @@ def render_crack_stats_overlay(
     out_path: str | Path,
     *,
     max_overlay_dim: int = 2500,
+    grid_cell_px: int | None = None,
 ) -> float:
     """Save a crack-stats-scoped overlay PNG: the final pruned skeleton,
     the flaking-exclusion region tinted, and cut-adjacent edges (from
@@ -362,6 +374,14 @@ def render_crack_stats_overlay(
     (LANCZOS for the photo, NEAREST for the boolean mask so its edges stay
     sharp rather than blurring into fractional alpha), skeleton/edge
     coordinates are scaled numerically. Returns the scale factor used.
+
+    grid_cell_px (default None, e.g. pass 700 to enable): spreadsheet-style
+    labeled grid squares (row letters A/B/C.. down the left, column
+    numbers 1/2/3.. across the top, e.g. "square E4") instead of raw pixel
+    coordinates -- meant to be pointed at verbally ("the speck is in E4"),
+    not read as a precise coordinate. Cell boundaries are still defined in
+    ORIGINAL full-resolution pixel coordinates internally, so a square can
+    always be translated back to an exact pixel range if needed.
     """
     h, w = rgb.shape[:2]
     scale = min(1.0, max_overlay_dim / max(h, w))
@@ -413,6 +433,33 @@ def render_crack_stats_overlay(
     ax.set_xlim(0, disp_w)
     ax.set_ylim(disp_h, 0)
     ax.axis("off")
+
+    if grid_cell_px is not None:
+        x_bounds = np.arange(0, w, grid_cell_px)
+        if x_bounds[-1] < w:
+            x_bounds = np.append(x_bounds, w)
+        y_bounds = np.arange(0, h, grid_cell_px)
+        if y_bounds[-1] < h:
+            y_bounds = np.append(y_bounds, h)
+
+        for x in x_bounds:
+            ax.axvline(x * scale, color="cyan", linewidth=0.4, alpha=0.5, zorder=9)
+        for y in y_bounds:
+            ax.axhline(y * scale, color="cyan", linewidth=0.4, alpha=0.5, zorder=9)
+
+        label_style = dict(
+            fontsize=7, color="cyan", zorder=10, ha="center", va="center",
+            bbox=dict(boxstyle="round,pad=0.1", fc="black", ec="cyan", lw=0.5, alpha=0.75),
+        )
+        n_cols = len(x_bounds) - 1
+        n_rows = len(y_bounds) - 1
+        for c in range(n_cols):
+            mid_x = (x_bounds[c] + x_bounds[c + 1]) / 2 * scale
+            ax.annotate(str(c + 1), xy=(mid_x, 10), xycoords="data", **label_style)
+        for r in range(n_rows):
+            mid_y = (y_bounds[r] + y_bounds[r + 1]) / 2 * scale
+            ax.annotate(_spreadsheet_col_label(r), xy=(10, mid_y), xycoords="data", **label_style)
+
     if display_excluded.any() or cut_adjacent_path_indices:
         ax.legend(
             loc="upper center", bbox_to_anchor=(0.5, -0.02), ncol=2,

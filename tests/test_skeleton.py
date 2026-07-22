@@ -9,7 +9,7 @@ genuine constant-width line must never be flagged.
 import numpy as np
 from skimage.draw import polygon
 
-from src.crackgraph.skeleton import is_corner_tracing_artifact, skeletonize_and_prune
+from src.crackgraph.skeleton import HOLE_AREA_THRESHOLD_PX2, is_corner_tracing_artifact, skeletonize_and_prune
 
 import skan
 
@@ -91,3 +91,33 @@ def test_constant_width_line_is_never_flagged_as_corner_artifact():
     mask[120:127, 10:250] = True  # straight line only, no wedge
     result = skeletonize_and_prune(mask, spur_px=3, corner_artifact_corr_threshold=0.8)
     assert result.n_corner_artifacts_pruned == 0
+
+
+def test_small_enclosed_hole_is_filled_before_skeletonize():
+    # A crack-like band (not a filled blob -- skeletonize_and_prune on a
+    # solid block degenerately prunes to nothing) with a tiny fully-
+    # enclosed background hole well below HOLE_AREA_THRESHOLD_PX2 -- should
+    # be filled by remove_small_holes before skeletonize() ever sees it,
+    # per the user's own observation that small black specks were
+    # surviving into the real pass untouched.
+    mask = np.zeros((100, 200), dtype=bool)
+    mask[40:60, 10:190] = True  # 20px-thick horizontal band
+    hole_side = 5  # 25 px^2, well under the 50 px^2 threshold
+    assert hole_side * hole_side < HOLE_AREA_THRESHOLD_PX2
+    mask[47:47 + hole_side, 95:95 + hole_side] = False
+
+    result = skeletonize_and_prune(mask, spur_px=3)
+    assert result.mask_clean[47:47 + hole_side, 95:95 + hole_side].all()
+
+
+def test_large_enclosed_hole_is_not_filled():
+    # A hole above the threshold must survive -- filling has to be
+    # size-gated, not unconditional.
+    mask = np.zeros((100, 200), dtype=bool)
+    mask[30:70, 10:190] = True  # 40px-thick band, wide enough to enclose the hole
+    hole_side = 12  # 144 px^2, well over the 50 px^2 threshold
+    assert hole_side * hole_side > HOLE_AREA_THRESHOLD_PX2
+    mask[44:44 + hole_side, 95:95 + hole_side] = False
+
+    result = skeletonize_and_prune(mask, spur_px=3)
+    assert not result.mask_clean[44:44 + hole_side, 95:95 + hole_side].any()

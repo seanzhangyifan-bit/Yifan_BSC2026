@@ -163,5 +163,18 @@ via a single `distance_transform_edt` call).
       correctly against real data (84 corner_artifact + 54 fragment + 45 spur = 183, matching
       the stats.json count exactly). Overlay visually confirmed against this session's earlier
       prototype-script renders of the same image.
+- [x] Grid-square overlay (`grid_cell_px` param, spreadsheet-style A1/B2 labels) and
+      `HOLE_AREA_THRESHOLD_PX2` (small-hole-filling before both skeletonize passes) added
+      after the user reviewed the first pilot overlay and (a) wanted labeled squares instead
+      of raw pixel gridlines to point things out verbally, and (b) correctly noticed small
+      black specks weren't being cleaned up before the real skeletonize pass -- confirmed by
+      grep that `remove_small_holes` was never wired into `src/`, only used in earlier
+      throwaway prototype scripts. Re-ran the full pipeline on `T2-A_membran_v2` with the fix:
+      real, non-trivial changes, not cosmetic -- `n_components` 41->35, `avg_edge_length_px`
+      228.9->249.9 (+9%), `flaking_n_edges_excluded_near_cut` 76->40 (nearly halved),
+      `n_corner_artifacts_pruned` 84->89. `crack_area_pct` barely moved (26.33%->26.32%).
+      This confirms the fix matters and wasn't just a cosmetic no-op on this image -- worth
+      re-checking on other images in the batch, not assuming it's always this small.
 - [ ] Full 18-image batch -- deliberately not started, separate step after the pilot is
-      confirmed good
+      confirmed good (now needs re-running with the hole-fill fix included, since the
+      pilot's numbers above changed meaningfully after it landed)

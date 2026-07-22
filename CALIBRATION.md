@@ -10,7 +10,7 @@ exists), and to make explicit that the split below isn't a coincidence.
   for real µm-per-px/film-thickness calibration that doesn't exist yet
 - 🔴 **assumed** — no sweep or derivation backing it yet
 
-**Net: 3 🟡, 16 🔴, 0 🟢.** Most of this project's tunables are asserted, not measured —
+**Net: 3 🟡, 17 🔴, 0 🟢.** Most of this project's tunables are asserted, not measured —
 that's a real, reportable state of the pipeline right now, not a documentation gap. See
 [`docs/calibration_notes.md`](docs/calibration_notes.md) for each constant's full
 rationale (relocated verbatim from its old inline comment).
@@ -29,6 +29,7 @@ rationale (relocated verbatim from its old inline comment).
 | `ABUTTER_AGREEMENT_TOL_DEG` | [`corners.py:82`](src/crackgraph/corners.py) | 30.0 | 🔴 assumed | no sweep |
 | `BEARING_MATCH_TOL_DEG` | [`corners.py:88`](src/crackgraph/corners.py) | 30.0 | 🔴 assumed | no sweep |
 | `SPUR_PX_PLACEHOLDER` | [`skeleton.py:22`](src/crackgraph/skeleton.py) | 15 | 🔴 assumed | heuristic tied to another unswept placeholder; tests override it (`spur_px=3`) rather than validate it |
+| `HOLE_AREA_THRESHOLD_PX2` | [`skeleton.py:91`](src/crackgraph/skeleton.py) | 50 | 🔴 assumed | carried over unchanged from an earlier prototype comparison script; not independently derived or swept |
 | `CORR_THRESHOLD` | [`skeleton.py:63`](src/crackgraph/skeleton.py) | 0.99 | 🟡 empirical, uncalibrated | 4-point visual sweep (0.8/0.9/0.95/0.99) on one real image, T2-A_membran_v2 |
 | `MIN_LEN_FOR_CORR_PX` | [`skeleton.py:70`](src/crackgraph/skeleton.py) | 4 | 🔴 assumed | no sweep; floor for a Pearson correlation to be meaningful at all |
 | `KINK_WINDOW_PX_PLACEHOLDER` | [`kinks.py:27`](src/crackgraph/kinks.py) | 10.0 | 🔴 assumed | no sweep, unlike its annulus/corner-window cousins |

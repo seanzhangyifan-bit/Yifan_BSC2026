@@ -213,6 +213,26 @@ pipeline is invoked with `spur_px=3` (an override, not the placeholder default) 
 the sweep/test harnesses deliberately bypass this constant's default value rather than
 validating it.
 
+## HOLE_AREA_THRESHOLD_PX2
+
+`src/crackgraph/skeleton.py:91` — value `50`
+
+> Area (px^2) below which a fully-enclosed background hole inside the foreground mask gets
+> filled in, right after `remove_small_objects` and before `skeletonize()`. A tiny
+> thresholding gap inside an otherwise-solid crack (dust, a faint pixel, a one-off
+> segmentation miss) is still one crack, not two -- left unfilled it can force the skeleton
+> to trace around it, producing a spurious small loop/branch at that exact spot.
+
+Value carried over unchanged from an earlier, informal prototype comparison script this same
+session (not committed to `src/` at the time) -- not independently derived or swept here.
+That prototype found filling had a small measured effect on one specific image (310px total
+filled image-wide, 0px within the one crop specifically inspected) -- a single data point on
+a single image, not a general claim the effect is always negligible. Added to production
+after the user pointed out small black specks were visibly surviving into the real
+skeletonize pass untouched -- i.e. this constant existed informally before it existed in
+`src/`, and this entry is the first time its provenance is written down properly rather than
+left in a throwaway script.
+
 ## CORR_THRESHOLD
 
 `src/crackgraph/skeleton.py:63` — value `0.99`

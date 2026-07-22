@@ -75,9 +75,20 @@ from dataclasses import dataclass
 import numpy as np
 import skan
 from scipy.ndimage import distance_transform_edt
-from skimage.morphology import remove_small_objects, skeletonize
+from skimage.morphology import remove_small_holes, remove_small_objects, skeletonize
 
 SPUR_PX_PLACEHOLDER = 15  # 🔴 assumed — see CALIBRATION.md
+
+# Area (px^2) below which a fully-enclosed background hole inside the
+# foreground mask gets filled in, right after remove_small_objects and
+# before skeletonize(). A tiny thresholding gap inside an otherwise-solid
+# crack (dust, a faint pixel, a one-off segmentation miss) is still one
+# crack, not two -- left unfilled it can force the skeleton to trace
+# around it, producing a spurious small loop/branch at that exact spot.
+# 50 px^2 is carried over unchanged from an earlier prototype comparison
+# script (informal, not swept or independently derived here) -- see
+# CALIBRATION.md.
+HOLE_AREA_THRESHOLD_PX2 = 50
 
 # Pearson correlation (pixel position vs. local width) above which a
 # branch is treated as a corner-tracing medial-axis artifact rather than a
@@ -181,6 +192,7 @@ def skeletonize_and_prune(
     max_iters: int = 10,
 ) -> SkeletonResult:
     mask_clean = remove_small_objects(mask, min_size=min_object_px)
+    mask_clean = remove_small_holes(mask_clean, area_threshold=HOLE_AREA_THRESHOLD_PX2)
     skel_image = skeletonize(mask_clean)
     n_pixels_pre = int(skel_image.sum())
 
