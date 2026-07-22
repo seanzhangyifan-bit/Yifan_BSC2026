@@ -10,6 +10,39 @@ completed* 39-row workbook's columns) and [`docs/calibration_notes.md`](calibrat
 (the source of truth for *why* each constant has its value -- this doc points there rather
 than duplicating).
 
+## Current deliverable (read this first)
+
+`outputs/crack_stats_v2/thesis_stats.xlsx` -- 19 rows (see "Scope" below for which images and
+why), 8 columns matching the thesis write-up's own Table __ notation exactly:
+
+| column | meaning | internal source column |
+|---|---|---|
+| `crack` (%) | crack area, share of the *analyzable* image area -- flaking area dropped from the denominator, not counted as non-crack | `crack_area_pct_excl_flakes` |
+| `flaking` (%) | image area excluded as suspected delamination, including the safety margin around it | `flaking_excluded_area_pct` |
+| `wcrack` (µm) | median crack width, a true per-pixel distance-transform measurement (not an area/length ratio) | `median_width_um` |
+| `N` (-) | number of disconnected pieces in the crack network | `n_components` |
+| `fgc` (-) | share of total crack length belonging to the single largest connected piece | `giant_component_fraction` |
+| `ledge` (µm) | median crack-segment length, whole image | `median_edge_length_um` |
+| `ledge,gc` (µm) | median crack-segment length, restricted to the giant component | `median_edge_length_gc_um` |
+| `dgc` (µm) | giant component's own physical spatial reach -- straight-line distance between its two farthest-apart skeleton pixels | `giant_component_span_um` |
+
+All 8 were derived from the existing per-image analysis cache
+(`mask_corrected.npz`/`skeleton_final.npz`/`excluded_mask.npz`) -- **no image in this batch was
+re-binarized, re-skeletonized, or otherwise re-analyzed** to produce this file; every number here
+traces back to the one original run per image (see "Full 19-image batch run" below).
+`outputs/crack_stats_v2/crack_stats.xlsx` is the same 19 images with all 26 internal columns
+(including the legacy `crack_area_pct`/`avg_width_px`/`avg_edge_length_px` these 8 were checked
+against, and QA fields like `flaking_n_candidates`) -- kept as a separate, non-thesis-facing file
+for cross-checking; see [`docs/crack_stats_schema.md`](crack_stats_schema.md) §4 for every column's
+exact formula.
+
+Both files' `dgc` reflects the closed-loop fix below (`T5-PTFE_H50_v2` = 70.27µm, not `NaN`); both
+files were last regenerated in the "Follow-up" entry at the bottom of this doc's status log.
+
+Everything below this point is the chronological work log that produced the numbers above -- read
+it for *why* a specific number is what it is, or *how* a specific fix was verified. Not required
+reading just to use the spreadsheet.
+
 ## Goal
 
 Redo crack stats now that two things are new in stage 2 since the last full export

@@ -15,6 +15,20 @@ crack-ordering/precedence data. Those exist for a different purpose (reconstruct
 order of crack growth from junction geometry) and are out of scope here on purpose, not by
 oversight.
 
+**This 39-row file itself has 13 columns (1-17, minus a few added later than the snapshot's own
+date) — it predates columns 18-26 below.** Those 9 columns (`crack_area_pct_excl_flakes`,
+`median_width_px`/`um`, `median_edge_length_px`/`um`, `median_edge_length_gc_px`/`um`,
+`giant_component_span_px`/`um`) were added to `compute_row()` afterward, as part of a *separate*
+effort — see [`docs/crack_stats_v2_status.md`](crack_stats_v2_status.md) — that reprocessed a
+scoped 19-image batch, not this 39-row set. **They exist in `outputs/crack_stats_v2/crack_stats.xlsx`
+and `outputs/crack_stats_v2/thesis_stats.xlsx`, not in the frozen 39-row file this section
+describes** (regenerating the 39-row file would pick them up automatically, since they're now a
+permanent part of `compute_row()`, but nobody has re-run it since). Read the rest of this
+document as the column reference for what `compute_row()` currently produces, not as a literal
+description of one specific frozen file — §2-§8 below (provenance, calibration, the 39-row data
+quality note) are specific to the 39-row snapshot and don't apply to the 19-image batch; §4's
+column table applies to both.
+
 ## 2. How the 24 rows were selected
 
 Raw filenames in this project follow the pattern:
