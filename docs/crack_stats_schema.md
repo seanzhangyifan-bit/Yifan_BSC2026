@@ -216,6 +216,12 @@ see §4.
 | 18 | `crack_area_pct_excl_flakes` | `crack_area_px² ÷ (image_width_px × image_height_px × (1 − flaking_excluded_area_pct ÷ 100)) × 100` — same numerator as column 6, but the denominator excludes the flaking-exclusion area (column 14, converted back from a percentage to pixels) instead of counting the whole image, since that region is missing material, not confirmed non-crack, and this pipeline has zero evidence what (if anything) was under it before it flaked off. Equals column 6 exactly wherever `flaking_excluded_area_pct` is 0 (most images). | % of non-excluded image area | `measured` |
 | 19 | `median_width_px` | Median of `2 × medial_radius` sampled at every pixel of every skeleton edge NOT touching the flaking-exclusion cut (the same edge exclusion columns 8-11 already use) — a genuine per-pixel distance-transform measurement, unlike column 8's area/length ratio. See `median_pixelwise_width_px` in `scripts/export_crack_stats.py` and the caveat below. | px | `interpreted` |
 | 20 | `median_width_um` | `median_width_px × 0.6098` | µm | `calibrated` |
+| 21 | `median_edge_length_px` | Median `branch_distance` over edges NOT touching the flaking-exclusion cut (same exclusion as columns 8-11) -- median rather than column 10's mean, for the same reason column 19 is a median. | px | `interpreted` |
+| 22 | `median_edge_length_um` | `median_edge_length_px × 0.6098` | µm | `calibrated` |
+| 23 | `median_edge_length_gc_px` | Same as column 21, restricted to edges whose both endpoints lie in the giant component (column 13's component, chosen by summed edge length). | px | `interpreted` |
+| 24 | `median_edge_length_gc_um` | `median_edge_length_gc_px × 0.6098` | µm | `calibrated` |
+| 25 | `giant_component_span_px` | Straight-line distance between the two farthest-apart nodes within the giant component -- physical spatial reach, distinguishing a large multi-crack network from a single long crack. `NaN` when the giant component has fewer than 2 distinct nodes (see the closed-loop caveat below). | px | `interpreted` |
+| 26 | `giant_component_span_um` | `giant_component_span_px × 0.6098` | µm | `calibrated` |
 
 **Caveats that matter for correct use:**
 
@@ -241,6 +247,17 @@ see §4.
   despeckling and spur-pruning (isolated fragments and dead-end spurs shorter than a fixed pixel
   threshold are removed before this analysis ever runs). These are "components at least
   roughly-a-crack-length long," not literally every disconnected mark in the raw image.
+- **`giant_component_span_px`/`um`** (columns 25-26) can be `NaN` even though
+  `giant_component_fraction` is a valid number: a giant component consisting of a single
+  closed crack loop with no junctions is represented by skan as one node with a self-loop
+  edge -- one node, so "distance between the two farthest nodes" isn't defined. Seen in
+  practice on `T5-PTFE_H50_v2` (giant component = 1 node, a 362px self-loop) -- reported as
+  `NaN`, not backfilled with e.g. the loop's own length, since that would answer a different
+  question (loop perimeter, not spatial span).
+- **`median_edge_length_gc_px`/`um`** and **`giant_component_span_px`/`um`** both use the
+  giant component chosen by summed edge length (same definition as `giant_component_fraction`,
+  column 13) -- a component can have fewer nodes than another and still be "the giant
+  component" if its total length is greater.
 
 ### 4b. Flaking/delamination exclusion (columns 14-16)
 

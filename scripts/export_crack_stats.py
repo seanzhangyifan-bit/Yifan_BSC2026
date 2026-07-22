@@ -20,6 +20,8 @@ import networkx as nx
 import numpy as np
 import pandas as pd
 from scipy.ndimage import distance_transform_edt
+from scipy.spatial import ConvexHull
+from scipy.spatial.distance import pdist
 
 from src.crackgraph.binarize import binarize
 from src.crackgraph.cache_io import save_analysis_cache
@@ -90,6 +92,66 @@ def median_pixelwise_width_px(skel, graph_result, cut_adjacent: set[int], medial
     if not widths:
         return float("nan")
     return float(np.median(np.concatenate(widths)))
+
+
+def median_edge_length_px(summary, cut_adjacent: set[int], node_filter: set | None = None) -> float:
+    """Median branch_distance (px) over edges not touching the flaking cut,
+    optionally restricted to edges whose endpoints both lie in node_filter
+    (used to isolate the giant component). Median rather than
+    avg_edge_length_px's mean, for the same reason median_width_px isn't a
+    mean: a handful of very long or very short segments (an artery-like
+    branch, a tiny spur that survived pruning) shouldn't dominate a single
+    summary number. [interpreted] aggregation over [measured] per-edge
+    lengths.
+    """
+    mask = ~summary.index.isin(cut_adjacent)
+    if node_filter is not None:
+        mask &= summary["node_id_src"].isin(node_filter) & summary["node_id_dst"].isin(node_filter)
+    lengths = summary.loc[mask, "branch_distance"]
+    if len(lengths) == 0:
+        return float("nan")
+    return float(lengths.median())
+
+
+def giant_component_nodes(G: nx.Graph) -> set:
+    """Node ids belonging to the connected component with the largest
+    total skeleton length -- the same 'giant' definition
+    giant_component_fraction already uses (by summed edge length, not node
+    count: a component with fewer, longer edges can beat one with more,
+    shorter edges). Uses the FULL graph (including cut-adjacent stub
+    edges) -- component membership is real topology even where an edge's
+    own reported length is untrustworthy.
+    """
+    components = list(nx.connected_components(G))
+    if not components:
+        return set()
+    lengths = [
+        sum(d["branch_distance"] for _, _, d in G.subgraph(c).edges(data=True))
+        for c in components
+    ]
+    return components[int(np.argmax(lengths))]
+
+
+def giant_component_span_px(node_coords: np.ndarray) -> float:
+    """Straight-line distance (px) between the two farthest-apart points
+    in node_coords (row, col pairs). The diameter of a point set is
+    always realized by two of its convex-hull vertices, so this reduces
+    the search to pairs among the hull instead of all-pairs -- relevant
+    since a dense network's giant component can have thousands of nodes.
+    Falls back to brute force over every point if the hull is degenerate
+    (all nodes exactly collinear, e.g. a single isolated crack) -- scipy's
+    ConvexHull raises on that input rather than returning a 2-point hull.
+    """
+    if len(node_coords) < 2:
+        return float("nan")
+    pts = node_coords
+    if len(node_coords) > 3:
+        try:
+            pts = node_coords[ConvexHull(node_coords).vertices]
+        except Exception:
+            pts = node_coords
+    d = pdist(pts)
+    return float(d.max()) if len(d) > 0 else float("nan")
 
 
 def compute_row(image_path: Path, *, cache_dir: Path | None = None) -> dict:
@@ -173,23 +235,40 @@ def compute_row(image_path: Path, *, cache_dir: Path | None = None) -> dict:
     )
     n_components = nx.number_connected_components(G)
     full_total_length_px = float(summary["branch_distance"].sum())
-    if n_components > 0 and full_total_length_px > 0:
-        component_lengths = [
-            sum(d["branch_distance"] for _, _, d in G.subgraph(c).edges(data=True))
-            for c in nx.connected_components(G)
-        ]
-        giant_component_fraction = max(component_lengths) / full_total_length_px
+    gc_nodes = giant_component_nodes(G)
+    if n_components > 0 and full_total_length_px > 0 and gc_nodes:
+        gc_length_px = sum(
+            d["branch_distance"] for _, _, d in G.subgraph(gc_nodes).edges(data=True)
+        )
+        giant_component_fraction = gc_length_px / full_total_length_px
     else:
         giant_component_fraction = float("nan")
+
+    # Structure *within* the giant component (as opposed to just its share of
+    # total length above): median segment length on the whole image vs. just
+    # within the giant component, and the giant component's own physical
+    # spatial reach (straight-line span between its two farthest nodes) --
+    # distinguishes a large multi-crack network from a single long crack.
+    median_edge_length_px_val = median_edge_length_px(summary, cut_adjacent)
+    median_edge_length_gc_px = median_edge_length_px(summary, cut_adjacent, node_filter=gc_nodes)
+    node_id_to_coord = dict(zip(graph_result.node_ids.tolist(), graph_result.node_coords))
+    gc_coords = (
+        np.array([node_id_to_coord[n] for n in gc_nodes]) if gc_nodes else np.zeros((0, 2))
+    )
+    giant_component_span_px_val = giant_component_span_px(gc_coords)
 
     is_bad_frame = any(s in image_path.name for s in KNOWN_BAD_FRAME_SUBSTRINGS)
     if is_bad_frame:
         crack_area_mm2 = avg_width_um = avg_edge_length_um = median_width_um = None
+        median_edge_length_um = median_edge_length_gc_um = giant_component_span_um = None
     else:
         crack_area_mm2 = crack_area_px2 * (UM_PER_PX_MM_TAG ** 2) / 1e6
         avg_width_um = avg_width_px * UM_PER_PX_MM_TAG
         avg_edge_length_um = avg_edge_length_px * UM_PER_PX_MM_TAG
         median_width_um = median_width_px * UM_PER_PX_MM_TAG
+        median_edge_length_um = median_edge_length_px_val * UM_PER_PX_MM_TAG
+        median_edge_length_gc_um = median_edge_length_gc_px * UM_PER_PX_MM_TAG
+        giant_component_span_um = giant_component_span_px_val * UM_PER_PX_MM_TAG
 
     stats_row = {
         "image_filename": image_path.name,
@@ -206,8 +285,14 @@ def compute_row(image_path: Path, *, cache_dir: Path | None = None) -> dict:
         "median_width_um": median_width_um,
         "avg_edge_length_px": avg_edge_length_px,
         "avg_edge_length_um": avg_edge_length_um,
+        "median_edge_length_px": median_edge_length_px_val,
+        "median_edge_length_um": median_edge_length_um,
         "n_components": n_components,
         "giant_component_fraction": giant_component_fraction,
+        "median_edge_length_gc_px": median_edge_length_gc_px,
+        "median_edge_length_gc_um": median_edge_length_gc_um,
+        "giant_component_span_px": giant_component_span_px_val,
+        "giant_component_span_um": giant_component_span_um,
         "flaking_excluded_area_pct": flaking_result.excluded_area_pct,
         "flaking_n_candidates": len(flaking_result.candidates),
         "flaking_n_edges_excluded_near_cut": len(cut_adjacent),

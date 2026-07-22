@@ -322,3 +322,55 @@ via a single `distance_transform_edt` call).
       when `flaking_excluded_area_pct` is 0. Largest correction: `T5-PTFE_H190_v2` at +4.2%
       relative (24.56% -> 25.59%), then `T2-A_membran_v2` at +1.7% (26.32% -> 26.76%); the
       rest are under 2%.
+
+- [x] **Thesis-notation redirect**: the user supplied final thesis write-up text (Methods +
+      Table __) defining 8 statistics under new short names (`crack`, `flaking`, `wcrack`, `N`,
+      `fgc`, `ledge`, `ledge,gc`, `dgc`) and asked whether these could be derived from the
+      existing 19-image cache with **no new image analysis**. Checked each one against what's
+      already stored/derivable:
+
+      | thesis name | source | status |
+      |---|---|---|
+      | `crack` (%) | `crack_area_pct_excl_flakes` | already cached, direct rename |
+      | `flaking` (%) | `flaking_excluded_area_pct` | already cached, direct rename |
+      | `wcrack` (µm) | `median_width_um` | already cached, direct rename |
+      | `N` (-) | `n_components` | already cached, direct rename |
+      | `fgc` (-) | `giant_component_fraction` | already cached, direct rename |
+      | `ledge` (µm) | new: median (not `avg_edge_length_px`'s mean) edge length, whole image | new formula, cache-derivable |
+      | `ledge,gc` (µm) | new: same median, restricted to giant-component edges | new formula, cache-derivable |
+      | `dgc` (µm) | new: straight-line span between the giant component's two farthest nodes | new formula, cache-derivable |
+
+      All 8 confirmed derivable from `mask_corrected.npz`/`skeleton_final.npz`/`excluded_mask.npz`
+      alone -- no re-run of binarize/skeletonize/flaking-correction needed for any of them.
+
+      Implementation: added `median_edge_length_px()`, `giant_component_nodes()` (refactored out
+      of the existing `giant_component_fraction` block so both use the identical "giant by summed
+      length, not node count" definition), and `giant_component_span_px()` (convex-hull-reduced
+      diameter, with a brute-force fallback for exactly-collinear point sets, which a straight
+      single-crack giant component produces and which makes `scipy.spatial.ConvexHull` raise) to
+      `scripts/export_crack_stats.py` -- see `docs/crack_stats_schema.md` columns 21-26. Wired
+      into the live `compute_row()` (future runs get these automatically) and backfilled onto all
+      19 cached images the same way as the previous retrofit, 119.6s total this time (cache was
+      already warm from the previous backfill, so no `distance_transform_edt` recompute was
+      needed for these three -- only graph reconstruction). 6 new unit tests added (median vs.
+      mean distinction, cut-adjacent exclusion, node-filter isolation, giant-component-by-length
+      selection, known-diagonal span, collinear-fallback span) -- full suite 114/114 passing.
+
+      **New deliverable**: `outputs/crack_stats_v2/thesis_stats.xlsx` -- 19 rows, exactly the 8
+      renamed columns above plus `image_filename`/`source_folder` for reference. Separate file
+      from the internal `crack_stats.xlsx` (which keeps every column, thesis-named or not) per
+      the user's explicit request, not a replacement for it.
+
+      **Genuine new edge case surfaced, not a bug**: `T5-PTFE_H50_v2`'s `dgc` is `NaN` -- its
+      giant component turned out to be a single closed crack loop with no junctions at all, which
+      skan represents as one node with a self-loop edge. "Distance between the two farthest
+      nodes" isn't defined for one node, so `NaN` is the honest answer, not a fabricated 0 or the
+      loop's own perimeter (a different question). Documented in the schema doc caveats.
+
+      **Sanity-check cross-reference**: the new `N`/`fgc` values read exactly as the thesis
+      text's own worked interpretation predicts -- `T5-PTFE_H95` (`fgc` ~0.011, `N` ~1500-2000)
+      matches "many similarly sized individual cracks" (§ thesis text, `N` near `1/fgc` when
+      `fgc` << 0.5), while `T4-M`/`T3-M`/`T2-A_membran` (`fgc` > 0.97) match "one large
+      interconnected network." Not new evidence on its own (these are renamed existing numbers),
+      but confirms the renamed/re-derived values are behaving sensibly against the thesis
+      text's own qualitative description before handing the sheet over.

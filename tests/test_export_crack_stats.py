@@ -2,14 +2,23 @@
 scripts/export_crack_stats.py's existing area/length avg_width_px -- see
 docs/crack_stats_schema.md section 4 and the module docstring on
 median_pixelwise_width_px for why this exists alongside, not instead of,
-the older ratio-based estimate.
+the older ratio-based estimate. Also covers the thesis-notation additions
+(median_edge_length_px, giant_component_nodes, giant_component_span_px)
+added for the ledge / ledge_gc / dgc statistics -- see
+docs/crack_stats_v2_status.md for what prompted them.
 """
 
+import networkx as nx
 import numpy as np
 import pandas as pd
 from scipy.ndimage import distance_transform_edt
 
-from scripts.export_crack_stats import median_pixelwise_width_px
+from scripts.export_crack_stats import (
+    giant_component_nodes,
+    giant_component_span_px,
+    median_edge_length_px,
+    median_pixelwise_width_px,
+)
 from src.crackgraph.graph import extract_graph
 from src.crackgraph.skeleton import skeletonize_and_prune
 
@@ -86,3 +95,84 @@ def test_no_edges_returns_nan():
         medial_radius=np.zeros((10, 10)),
     )
     assert np.isnan(median_width_px)
+
+
+def test_median_edge_length_is_median_not_mean():
+    # [10, 10, 100, 5] -- mean is 31.25, median is 10; using median must NOT
+    # match avg_edge_length_px's mean-based value.
+    summary = pd.DataFrame({
+        "node_id_src": [0, 1, 2, 3],
+        "node_id_dst": [1, 2, 3, 4],
+        "branch_distance": [10.0, 10.0, 100.0, 5.0],
+    })
+    assert median_edge_length_px(summary, cut_adjacent=set()) == 10.0
+
+
+def test_median_edge_length_excludes_cut_adjacent():
+    summary = pd.DataFrame({
+        "node_id_src": [0, 1, 2, 3],
+        "node_id_dst": [1, 2, 3, 4],
+        "branch_distance": [10.0, 10.0, 100.0, 5.0],
+    })
+    # Drop the 100.0 outlier (as if it were flagged cut-adjacent) -- median
+    # of the remaining [10, 10, 5] is 10.
+    result = median_edge_length_px(summary, cut_adjacent={2})
+    assert result == 10.0
+
+
+def test_median_edge_length_node_filter_isolates_giant_component():
+    summary = pd.DataFrame({
+        "node_id_src": [0, 1, 2, 3],
+        "node_id_dst": [1, 2, 3, 4],
+        "branch_distance": [10.0, 10.0, 100.0, 5.0],
+    })
+    # Edges 0 (0-1) and 1 (1-2) have both endpoints in {0, 1, 2}; edges 2
+    # and 3 each touch a node outside the filter and must be dropped.
+    result = median_edge_length_px(summary, cut_adjacent=set(), node_filter={0, 1, 2})
+    assert result == 10.0
+
+
+def test_median_edge_length_no_matching_edges_returns_nan():
+    summary = pd.DataFrame({
+        "node_id_src": [0],
+        "node_id_dst": [1],
+        "branch_distance": [10.0],
+    })
+    assert np.isnan(median_edge_length_px(summary, cut_adjacent={0}))
+
+
+def test_giant_component_nodes_picks_largest_total_length_not_largest_node_count():
+    # Component {0, 1, 2} has 3 nodes but only 10px of total length;
+    # component {3, 4} has 2 nodes but 100px of total length -- the giant
+    # component must be chosen by summed edge length, matching
+    # giant_component_fraction's own definition, not by node count.
+    G = nx.Graph()
+    G.add_edge(0, 1, branch_distance=5.0)
+    G.add_edge(1, 2, branch_distance=5.0)
+    G.add_edge(3, 4, branch_distance=100.0)
+    assert giant_component_nodes(G) == {3, 4}
+
+
+def test_giant_component_nodes_empty_graph_returns_empty_set():
+    assert giant_component_nodes(nx.Graph()) == set()
+
+
+def test_giant_component_span_matches_known_diagonal():
+    coords = np.array([[0, 0], [0, 100], [100, 0], [100, 100], [50, 50]])
+    span = giant_component_span_px(coords)
+    assert abs(span - float(np.hypot(100, 100))) < 1e-6
+
+
+def test_giant_component_span_handles_collinear_points():
+    # A straight-line component (e.g. one isolated crack) is a degenerate
+    # convex hull -- scipy's ConvexHull raises on exactly-collinear input,
+    # so this must fall back to brute force rather than propagate that
+    # error.
+    coords = np.array([[0, 0], [0, 10], [0, 20], [0, 30]])
+    span = giant_component_span_px(coords)
+    assert abs(span - 30.0) < 1e-6
+
+
+def test_giant_component_span_fewer_than_two_nodes_returns_nan():
+    assert np.isnan(giant_component_span_px(np.zeros((1, 2))))
+    assert np.isnan(giant_component_span_px(np.zeros((0, 2))))
