@@ -1,0 +1,103 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>crack_stats: method schematic + real examples</title>
+<style>
+body { font-family: -apple-system, Segoe UI, Helvetica, Arial, sans-serif; margin: 2rem auto; max-width: 980px; color: #1a1a1a; line-height: 1.5; padding: 0 1rem; }
+h1 { font-size: 1.6rem; }
+h2 { font-size: 1.2rem; margin-top: 2.5rem; border-bottom: 1px solid #ddd; padding-bottom: 0.3rem; }
+.case { border: 1px solid #ddd; border-radius: 8px; padding: 1rem 1.25rem; margin: 1.25rem 0; }
+.case img { max-width: 100%; border: 1px solid #eee; border-radius: 4px; }
+table { border-collapse: collapse; margin-top: 0.75rem; font-size: 0.92rem; }
+th, td { border: 1px solid #ddd; padding: 0.35rem 0.7rem; text-align: left; }
+th { background: #f5f5f5; }
+.note { color: #555; font-size: 0.9rem; }
+.badge { display: inline-block; padding: 0.1rem 0.5rem; border-radius: 4px; font-size: 0.78rem; font-weight: 600; }
+.badge.synthetic { background: #e6f4ea; color: #1e7e34; }
+.badge.real { background: #eaf1fb; color: #1a56a8; }
+</style></head><body>
+<h1>crack_stats: method schematic + real examples</h1>
+<p>Two independent halves. The <b>schematic</b> cases run known-ground-truth
+synthetic patterns through the exact binarize &rarr; skeletonize &rarr;
+graph-extract chain <code>export_crack_stats.py</code> uses, and check the
+measured numbers against hand-computable exact answers &mdash; this is the
+proof that the pipeline measures what it claims to measure, fully
+reproducible from <code>examples/generate_examples.py</code> with no
+external data. The <b>real</b> cases show the same pipeline on actual
+micrographs from this project's private raw dataset (not bundled in this
+export &mdash; see README.md); the numbers shown are the pipeline's actual
+output on real data, included for illustration, not independently
+re-verifiable without that dataset.</p>
+
+<h2>Schematic proof (synthetic, reproducible)</h2>
+
+<div class="case">
+  <h3>Schematic 1: straight line, known length × thickness <span class="badge synthetic">synthetic</span></h3>
+  <p class="note">A single 72×7px arm, no junction. Ground truth is exact up to end-cap/pixel-discretization rounding: one skeleton edge, filled area ≈ length × thickness.</p>
+  <img src="images/schematic_straight_line.png" alt="Schematic 1: straight line, known length × thickness">
+  <table>
+    <tr><th>quantity</th><th>expected / ground truth</th><th>measured</th></tr>
+    <tr><td>n_edges</td><td>1 (exactly)</td><td>1</td></tr>
+<tr><td>crack_area_px2</td><td>504</td><td>511.0</td></tr>
+<tr><td>avg_width_px</td><td>7 (thickness)</td><td>7.47</td></tr>
+<tr><td>avg_edge_length_px</td><td>≈72 (length)</td><td>68.41</td></tr>
+  </table>
+</div>
+
+<div class="case">
+  <h3>Schematic 2: T-junction, known topology <span class="badge synthetic">synthetic</span></h3>
+  <p class="note">One straight host line with a second arm meeting it at 90° from the midpoint (does not cross through). Ground truth: exactly 3 skeleton edges (host-left, host-right, abutter), 1 degree-3 junction node, 3 endpoints, one connected piece. (This export computes edge count/topology only — the T-vs-Y angle classification itself is a separate, unexported part of the parent project; see README.md.)</p>
+  <img src="images/schematic_t_junction.png" alt="Schematic 2: T-junction, known topology">
+  <table>
+    <tr><th>quantity</th><th>expected / ground truth</th><th>measured</th></tr>
+    <tr><td>n_edges</td><td>3 (exactly)</td><td>3</td></tr>
+<tr><td>n_junctions_deg3</td><td>1 (exactly)</td><td>1</td></tr>
+<tr><td>n_endpoints</td><td>3 (exactly)</td><td>3</td></tr>
+  </table>
+</div>
+
+
+<h2>Real examples (sparse / medium / dense)</h2>
+
+<div class="case">
+  <h3>Real example: sparse (T5-PTFE_H50_v1_mm000001.jpg) <span class="badge real">real</span></h3>
+  <p class="note">Lowest crack-area reading in the full 39-row dataset (~0.04%) -- included to show the method on a near-empty case, not just dense ones.</p>
+  <img src="images/real_sparse.png" alt="Real example: sparse (T5-PTFE_H50_v1_mm000001.jpg)">
+  <table>
+    <tr><th>quantity</th><th>expected / ground truth</th><th>measured</th></tr>
+    <tr><td>image size</td><td>—</td><td>7327×7611 px</td></tr>
+<tr><td>crack_area_pct</td><td>— (real data, no ground truth)</td><td>0.042%</td></tr>
+<tr><td>n_edges</td><td>—</td><td>26</td></tr>
+<tr><td>avg_width_px</td><td>—</td><td>12.35</td></tr>
+<tr><td>avg_edge_length_px</td><td>—</td><td>73.28</td></tr>
+  </table>
+</div>
+
+<div class="case">
+  <h3>Real example: medium (T5-M_H190_v1_mm000001.jpg) <span class="badge real">real</span></h3>
+  <p class="note">This project's own canonical worked example (docs/crack_stats_schema.md §8) -- ~14.5% crack area, typical mid-range density.</p>
+  <img src="images/real_medium.png" alt="Real example: medium (T5-M_H190_v1_mm000001.jpg)">
+  <table>
+    <tr><th>quantity</th><th>expected / ground truth</th><th>measured</th></tr>
+    <tr><td>image size</td><td>—</td><td>7328×7612 px</td></tr>
+<tr><td>crack_area_pct</td><td>— (real data, no ground truth)</td><td>14.463%</td></tr>
+<tr><td>n_edges</td><td>—</td><td>1893</td></tr>
+<tr><td>avg_width_px</td><td>—</td><td>22.51</td></tr>
+<tr><td>avg_edge_length_px</td><td>—</td><td>189.32</td></tr>
+  </table>
+</div>
+
+<div class="case">
+  <h3>Real example: dense (T3-PTFE_v1_mm000001.jpg) <span class="badge real">real</span></h3>
+  <p class="note">~28.7% crack area, essentially fully percolated (giant_component_fraction > 0.9) -- the dense end of the range.</p>
+  <img src="images/real_dense.png" alt="Real example: dense (T3-PTFE_v1_mm000001.jpg)">
+  <table>
+    <tr><th>quantity</th><th>expected / ground truth</th><th>measured</th></tr>
+    <tr><td>image size</td><td>—</td><td>7338×7619 px</td></tr>
+<tr><td>crack_area_pct</td><td>— (real data, no ground truth)</td><td>28.716%</td></tr>
+<tr><td>n_edges</td><td>—</td><td>22510</td></tr>
+<tr><td>avg_width_px</td><td>—</td><td>19.02</td></tr>
+<tr><td>avg_edge_length_px</td><td>—</td><td>37.50</td></tr>
+  </table>
+</div>
+
+
+</body></html>

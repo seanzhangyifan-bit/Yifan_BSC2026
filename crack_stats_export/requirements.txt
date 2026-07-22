@@ -1,0 +1,22 @@
+# Pinned to the versions this export was built and verified against (fresh
+# venv, `pip install -r requirements.txt` only -- verified this list is
+# complete and sufficient, not just "happens to work in a venv that already
+# has everything else installed").
+# Not officially pinned anywhere in the parent repository (it has no
+# requirements.txt/pyproject.toml of its own) -- these are a known-good
+# snapshot, not a guarantee that other versions won't work.
+
+# Used directly by export_crack_stats.py / crackgraph/:
+numpy==2.2.6
+pandas==2.3.3
+scipy==1.15.3
+scikit-image==0.25.2
+networkx==3.4.2
+skan==0.13.1
+Pillow==12.3.0
+openpyxl==3.1.5
+
+# Used directly by examples/generate_examples.py (matplotlib happens to also
+# come in transitively via skan today, but it's imported directly here too --
+# pinned explicitly rather than relying on another package's dependency list):
+matplotlib==3.10.9

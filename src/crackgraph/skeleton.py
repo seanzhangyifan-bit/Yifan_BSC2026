@@ -4,6 +4,35 @@ Homotopy-preserving thinning (skimage's Zhang's algorithm), followed by
 iterative spur pruning via skan.Skeleton.prune_paths. Pruning is iterative,
 not a single pass: removing a spur can expose a new short branch at a
 junction that was previously higher-valence, so a single pass under-prunes.
+
+KNOWN LIMITATION -- spurious skeleton loops, not fixed by spur_px: Zhang's
+thinning is pixel-local (each pixel is erased or kept based only on its
+immediate neighborhood, never on the shape's overall width or center), so
+on a locally wide or slightly irregular crack band it can trace both edges
+of the band for a short stretch before merging back into one line, leaving
+a small closed loop instead of a single centerline. This is a well-known
+general sensitivity of skeleton/medial-axis methods to boundary noise, not
+specific to this codebase.
+
+The pruning loop above is structurally blind to this: it only ever removes
+branch_type 0 (isolated fragment) and branch_type 1 (spur, one endpoint
+degree-1) branches, never branch_type 2 (junction-to-junction) or 3
+(cycle) -- and a loop's two strands are anchored to the graph at both
+ends, so they are always type 2 or 3, regardless of how spur_px is tuned.
+
+Measured, not assumed: `scripts/skeleton_loop_sweep.py` audits every image
+in the real dataset for junction-to-junction edges shorter than that
+image's own average crack width (the fingerprint of this artifact). Result
+across the 39-image dataset: 0% to 55.2% of all edges per image, only
+weakly correlated with average crack width (r ~ 0.31 against
+avg_width_px) and NOT cleanly explained by substrate -- Membran and PTFE
+samples have essentially the same mean (~9.7% vs ~9.3%), and the single
+worst offender in the dataset is a Membran sample. This inflates n_edges
+and deflates avg_edge_length_px for affected images (see
+docs/crack_stats_schema.md S4); it has a much larger effect on the planned
+junction-census/T-vs-Y work, since many of the extra "junctions" this
+creates aren't real crack meetings. No fix is implemented yet -- documented
+as a known, measured limitation, not silently worked around.
 """
 
 from dataclasses import dataclass

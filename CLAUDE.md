@@ -66,6 +66,38 @@ A second, independent entry point for a first look at spatial variation across a
 - **`src/crackgraph/html_report.py`**: one master HTML report (`outputs/report.html`) covering *every* coating and image analyzed so far -- explicitly not one HTML per coating and not one per image. A small JSON registry (`outputs/report_data.json`) is the source of truth; the HTML is always regenerated in full from it (`update_master_report`), grouped by coating, one image block per image. Re-running on the same `(coating, image_stem)` replaces its existing block instead of duplicating it.
 - **What's built vs. deferred**: today, each image's block in the master HTML holds only its overview figure. Embedding overlays, per-image xlsx-style numeric tables, or other per-image outputs into the same HTML is future work, not started.
 
+## Standalone crack-stats export (for the sibling `image_visualization` repo)
+
+A fourth, independent entry point -- a stripped-down stage 1-3 only (binarize -> skeletonize ->
+graph extraction, no junctions/anisotropy/curvature/ordering) batch export, built for external
+consumption rather than in-repo analysis.
+
+- **`scripts/export_crack_stats.py`**: globs `data/raw/**/*_mm000001.jpg` plus an explicit
+  `ADDITIONAL_IMAGES` override list (for samples where the default `000001` index is wrong -- e.g.
+  an undersized non-standard capture), excludes `CONFIRMED_SCALE_BAR_IMAGES` (files matching the
+  `_mm000001` naming pattern but directly verified to carry a scale bar anyway), and writes
+  `outputs/crack_stats.xlsx`. Full column reference, evidence-level legend (measured/interpreted/
+  calibrated), and calibration-factor provenance/scope live in `docs/crack_stats_schema.md` -- read
+  that file rather than re-deriving any of it here.
+- **Downstream consumer, stated explicitly**: `../image_visualization` ("figlib" in its own docs) is
+  a sibling Claude Code project, a figure-making toolkit over the same `all_pics/` source catalogue
+  this repo's `data/raw/` is drawn from. It reads `crack_stats.xlsx` via `figlib/crack_data.py` and
+  never hand-edits it -- corrections happen here and get re-copied over there. This is the actual
+  "different Claude program" the export exists for; keep `docs/crack_stats_schema.md` honest about
+  anything figlib's own code (`_sample_id()`, its `crack_levels_table` configs) already assumes,
+  rather than duplicating figlib's own docs here.
+- **`v1`/`v2` replicate convention**: a filename's `v#` is a physically distinct replicate capture of
+  the same condition, not a document-revision number. The export includes every replicate that
+  passes the scale-bar/size checks -- it does not collapse multiple replicates down to one canonical
+  row per condition. Consumers wanting per-condition statistics group rows by `image_filename` with
+  the trailing `_mm######.jpg` index stripped, and average only where >=2 replicates exist (matching
+  what figlib's own `crack_levels_table` figures already do).
+- **Naming-convention caveat**: the `mm000000`/`mm000001` naming pattern does *not* reliably predict
+  which file carries the burned-in blue scale bar -- every candidate needs a direct visual check
+  (bottom-right corner crop) before inclusion. Two confirmed exceptions exist so far (details in
+  `docs/crack_stats_schema.md` §2/§2b) -- don't re-trust the naming pattern alone if this export is
+  ever regenerated against a larger image set.
+
 ## Synthetic-pattern validation gallery
 
 A third independent entry point: a visual, human-reviewable companion to the numeric-tolerance pytest suite (`tests/test_junction_angle.py`, `test_corners.py`, `test_curvature.py`, `test_kinks.py`, `test_anisotropy.py`), not a replacement for it.
