@@ -247,13 +247,26 @@ def compute_row(image_path: Path, *, cache_dir: Path | None = None) -> dict:
     # Structure *within* the giant component (as opposed to just its share of
     # total length above): median segment length on the whole image vs. just
     # within the giant component, and the giant component's own physical
-    # spatial reach (straight-line span between its two farthest nodes) --
+    # spatial reach (straight-line span between its two farthest points) --
     # distinguishes a large multi-crack network from a single long crack.
     median_edge_length_px_val = median_edge_length_px(summary, cut_adjacent)
     median_edge_length_gc_px = median_edge_length_px(summary, cut_adjacent, node_filter=gc_nodes)
-    node_id_to_coord = dict(zip(graph_result.node_ids.tolist(), graph_result.node_coords))
+
+    # dgc: sampled from every pixel on every edge INSIDE the giant component, not just
+    # its junction/endpoint node coordinates. A component made of a single closed loop
+    # with no junctions at all (skan represents it as one node with a self-loop edge) has
+    # only one node coordinate, so a node-only span is undefined there even though the
+    # loop itself has real physical extent -- its own pixel path does not have this
+    # problem. Uses the FULL graph (no cut_adjacent filtering), same policy as
+    # giant_component_nodes: a pixel's position is real even where an edge's reported
+    # length is untrustworthy from truncation at the flaking cut.
+    gc_edge_mask = summary["node_id_src"].isin(gc_nodes) & summary["node_id_dst"].isin(gc_nodes)
     gc_coords = (
-        np.array([node_id_to_coord[n] for n in gc_nodes]) if gc_nodes else np.zeros((0, 2))
+        np.concatenate([
+            skeleton_result.skeleton.path_coordinates(int(idx))
+            for idx in summary.index[gc_edge_mask]
+        ])
+        if gc_edge_mask.any() else np.zeros((0, 2))
     )
     giant_component_span_px_val = giant_component_span_px(gc_coords)
 

@@ -220,7 +220,7 @@ see §4.
 | 22 | `median_edge_length_um` | `median_edge_length_px × 0.6098` | µm | `calibrated` |
 | 23 | `median_edge_length_gc_px` | Same as column 21, restricted to edges whose both endpoints lie in the giant component (column 13's component, chosen by summed edge length). | px | `interpreted` |
 | 24 | `median_edge_length_gc_um` | `median_edge_length_gc_px × 0.6098` | µm | `calibrated` |
-| 25 | `giant_component_span_px` | Straight-line distance between the two farthest-apart nodes within the giant component -- physical spatial reach, distinguishing a large multi-crack network from a single long crack. `NaN` when the giant component has fewer than 2 distinct nodes (see the closed-loop caveat below). | px | `interpreted` |
+| 25 | `giant_component_span_px` | Straight-line distance between the two farthest-apart points on the giant component's own skeleton pixel path (every pixel of every edge inside it, not just its junction/endpoint nodes) -- physical spatial reach, distinguishing a large multi-crack network from a single long crack. `NaN` only when the graph is entirely empty (no edges at all) -- see the closed-loop caveat below for why sampling the full pixel path, not just node coordinates, matters. | px | `interpreted` |
 | 26 | `giant_component_span_um` | `giant_component_span_px × 0.6098` | µm | `calibrated` |
 
 **Caveats that matter for correct use:**
@@ -233,6 +233,15 @@ see §4.
   version reading slightly lower) — treat that figure as a rough historical sanity check, not a
   guarantee for every image or every batch; report actual per-image agreement when both columns are
   present rather than assuming it holds.
+  When `median_width_px` is recomputed from the per-image cache rather than live (as it was
+  for this batch), it's derived from `mask_corrected.npz` re-despeckled with the same
+  `remove_small_objects`/`remove_small_holes` calls `skeleton.py`'s own second pass uses --
+  the cached array alone is the *pre*-despeckle mask, not the *post*-despeckle one the live
+  pipeline actually measures width from. Checked directly: on the one image where the two
+  masks differ at all (6 of 14.3M pixels), the recomputed `median_width_px` was bit-for-bit
+  identical either way -- the median is insensitive to a handful of filled-in specks far from
+  any sampled skeleton pixel -- but the re-despeckle step is applied regardless, so this is
+  exact by construction, not just empirically close.
 - **`avg_edge_length_px`** answers "how far apart are two junctions/endpoints, on average" — it is
   the mean length of one atomic graph edge, not the mean length of a whole physical crack (a crack
   that passes straight through several junctions without arresting there would count as several
@@ -247,13 +256,16 @@ see §4.
   despeckling and spur-pruning (isolated fragments and dead-end spurs shorter than a fixed pixel
   threshold are removed before this analysis ever runs). These are "components at least
   roughly-a-crack-length long," not literally every disconnected mark in the raw image.
-- **`giant_component_span_px`/`um`** (columns 25-26) can be `NaN` even though
-  `giant_component_fraction` is a valid number: a giant component consisting of a single
-  closed crack loop with no junctions is represented by skan as one node with a self-loop
-  edge -- one node, so "distance between the two farthest nodes" isn't defined. Seen in
-  practice on `T5-PTFE_H50_v2` (giant component = 1 node, a 362px self-loop) -- reported as
-  `NaN`, not backfilled with e.g. the loop's own length, since that would answer a different
-  question (loop perimeter, not spatial span).
+- **`giant_component_span_px`/`um`** (columns 25-26) samples every skeleton pixel on every
+  edge inside the giant component, not just its junction/endpoint node coordinates. This
+  matters for a giant component that's a single closed crack loop with no junctions at all --
+  skan represents that as one node with a self-loop edge, so a node-coordinate-only span
+  would be undefined (one point) even though the loop itself has real physical extent. Seen
+  in practice on `T5-PTFE_H50_v2`: giant component = 1 node, a 312-pixel closed-loop path
+  spanning a ~107x108px bounding box -- sampling the full path gives a real ~70µm span,
+  where a node-only approach would have returned `NaN`. `NaN` is now only possible when the
+  graph has no edges at all (an empty image), matching every other connectivity stat's own
+  empty-graph behavior.
 - **`median_edge_length_gc_px`/`um`** and **`giant_component_span_px`/`um`** both use the
   giant component chosen by summed edge length (same definition as `giant_component_fraction`,
   column 13) -- a component can have fewer nodes than another and still be "the giant

@@ -23,6 +23,7 @@ from src.crackgraph.graph import extract_graph
 from src.crackgraph.skeleton import skeletonize_and_prune
 
 
+
 def test_median_width_matches_known_band_thickness():
     # A single straight band, constant 10px thickness, long enough that
     # skeletonization settles into one clean centerline. No junction, so
@@ -176,3 +177,46 @@ def test_giant_component_span_handles_collinear_points():
 def test_giant_component_span_fewer_than_two_nodes_returns_nan():
     assert np.isnan(giant_component_span_px(np.zeros((1, 2))))
     assert np.isnan(giant_component_span_px(np.zeros((0, 2))))
+
+def test_giant_component_span_handles_a_closed_loop_with_no_junctions():
+    # A rectangular ring (constant band width, hollowed-out middle) is
+    # topologically a simple closed curve -- no junctions anywhere along it,
+    # since every skeleton pixel has degree 2. skan still needs one node id
+    # to anchor the loop in its graph representation, so this produces
+    # exactly one node with a self-loop edge -- the same topology observed
+    # on the real T5-PTFE_H50_v2 image, whose giant component turned out to
+    # be exactly this shape. A node-coordinate-only span is undefined for a
+    # single point; the fix (this test) is to build the span from the
+    # self-loop edge's own full pixel path instead, which does have real
+    # spatial extent.
+    mask = np.zeros((160, 220), dtype=bool)
+    mask[20:140, 20:200] = True
+    mask[35:125, 35:185] = False
+
+    result = skeletonize_and_prune(mask, spur_px=3)
+    graph_result = extract_graph(result.skeleton)
+    summary = graph_result.summary
+    G = nx.from_pandas_edgelist(
+        summary, source="node_id_src", target="node_id_dst", edge_attr="branch_distance"
+    )
+    gc_nodes = giant_component_nodes(G)
+    assert gc_nodes == {0}, "expected the single self-loop node, confirming the topology this test targets"
+
+    # Old (broken) approach: node coordinates only -- one point, span is NaN.
+    node_id_to_coord = dict(zip(graph_result.node_ids.tolist(), graph_result.node_coords))
+    old_coords = np.array([node_id_to_coord[n] for n in gc_nodes])
+    assert np.isnan(giant_component_span_px(old_coords))
+
+    # New (fixed) approach: full pixel path of every edge inside the giant component.
+    gc_edge_mask = summary["node_id_src"].isin(gc_nodes) & summary["node_id_dst"].isin(gc_nodes)
+    new_coords = np.concatenate([
+        result.skeleton.path_coordinates(int(idx)) for idx in summary.index[gc_edge_mask]
+    ])
+    span = giant_component_span_px(new_coords)
+
+    # The ring's outer footprint is 120 rows x 180 cols, its medial-axis loop
+    # sits inset by half the ~15px band width on each side -- the diagonal
+    # of that loop should be in the right ballpark, well clear of both 0
+    # and NaN.
+    assert not np.isnan(span)
+    assert 150 < span < 220

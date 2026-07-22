@@ -331,14 +331,14 @@ via a single `distance_transform_edt` call).
 
       | thesis name | source | status |
       |---|---|---|
-      | `crack` (%) | `crack_area_pct_excl_flakes` | already cached, direct rename |
-      | `flaking` (%) | `flaking_excluded_area_pct` | already cached, direct rename |
-      | `wcrack` (µm) | `median_width_um` | already cached, direct rename |
-      | `N` (-) | `n_components` | already cached, direct rename |
-      | `fgc` (-) | `giant_component_fraction` | already cached, direct rename |
+      | `crack` (%) | `crack_area_pct_excl_flakes` | **real methodology correction, not a rename** -- denominator excludes the flaking-excluded area (legacy `crack_area_pct`, still present unrenamed in the internal spreadsheet, divides by the whole image instead). Already computed correctly and cached; only the doc wording describing it was wrong, corrected here. |
+      | `flaking` (%) | `flaking_excluded_area_pct` | already cached, direct rename -- no formula change |
+      | `wcrack` (µm) | `median_width_um` | **real methodology correction, not a rename** -- a true per-pixel median (legacy `avg_width_px` is a single global `crack_area / skeleton_length` ratio, not a median or a per-pixel measurement of anything). Excludes cut-adjacent (flaking-cut-truncated) edges, same as the legacy width/length stats -- an implementation detail the thesis prose doesn't spell out, flagged here explicitly. Already computed correctly and cached; only the doc wording was wrong. |
+      | `N` (-) | `n_components` | already cached, direct rename -- never touched by any edit this project has made |
+      | `fgc` (-) | `giant_component_fraction` | already cached, direct rename -- the underlying code was refactored this session (extracted into `giant_component_nodes()`), but verified bit-for-bit identical to the original formula on every image checked, so this is still a true no-op, not a hidden formula change |
       | `ledge` (µm) | new: median (not `avg_edge_length_px`'s mean) edge length, whole image | new formula, cache-derivable |
       | `ledge,gc` (µm) | new: same median, restricted to giant-component edges | new formula, cache-derivable |
-      | `dgc` (µm) | new: straight-line span between the giant component's two farthest nodes | new formula, cache-derivable |
+      | `dgc` (µm) | new: straight-line span between the giant component's two farthest points, sampled from every skeleton pixel in the component (not just its junction/endpoint nodes) | new formula, cache-derivable -- see the dedicated entry below for why node coordinates alone weren't enough |
 
       All 8 confirmed derivable from `mask_corrected.npz`/`skeleton_final.npz`/`excluded_mask.npz`
       alone -- no re-run of binarize/skeletonize/flaking-correction needed for any of them.
@@ -374,3 +374,64 @@ via a single `distance_transform_edt` call).
       interconnected network." Not new evidence on its own (these are renamed existing numbers),
       but confirms the renamed/re-derived values are behaving sensibly against the thesis
       text's own qualitative description before handing the sheet over.
+
+- [x] **Follow-up: `crack`/`wcrack` doc wording corrected, `dgc`'s NaN case fixed**. User pushback
+      on the entry above, verified rather than just addressed by rewording:
+
+      1. **"`crack`/`wcrack`: already cached, direct rename" was misleading.** Both are real
+         methodology corrections over their legacy counterparts (`crack` excludes the flaking area
+         from the denominator, `wcrack` is a true per-pixel median vs. a global ratio) -- the
+         mapping table above is now reworded to say so explicitly. The already-reported numbers
+         were correct throughout; only the description was wrong. Checked `N`/`fgc` too, on the
+         same suspicion -- these two genuinely are exact, unchanged carryovers (verified
+         bit-for-bit identical between the old inline formula, the refactored
+         `giant_component_nodes()`-based formula, and the stored value, on 4 real images including
+         `T5-PTFE_H50_v2`) -- no wording fix needed there.
+
+      2. **Found, and closed, a real (but harmless) cache-reconstruction gap**: `mask_corrected.npz`
+         caches the *input* to the second (real) `skeletonize_and_prune` call, not its *output*
+         (`skeleton_result.mask_clean`, after that call's own despeckling runs again) -- so
+         `median_width_px` recomputed from cache wasn't using a byte-exact reconstruction of what
+         the live pipeline actually measured width from. Measured the real difference (6 of 14.3M
+         pixels on `T2-A_membran_v1`, 0 on two other images checked) and confirmed it changed the
+         reported `median_width_px` by exactly zero (bit-for-bit identical, `31.04834939252005`
+         either way) -- the median doesn't move when six stray filled-in specks don't land on a
+         sampled skeleton pixel. Still fixed for real (re-despeckle `mask_corrected` with the same
+         `remove_small_objects`/`remove_small_holes` calls `skeleton.py` uses before computing
+         `medial_radius`) rather than left as an unverified "probably fine."
+
+      3. **`dgc`'s `NaN` on `T5-PTFE_H50_v2` was a real modeling gap, not a data-availability
+         problem.** `giant_component_span_px` only received the giant component's sparse
+         junction/endpoint node coordinates; that component turned out to be a single closed crack
+         loop with no junctions at all (skan represents it as one node with a self-loop edge), so
+         a span between "two farthest nodes" was undefined for a 1-point set. The user asked why
+         this wasn't just `0` -- checked the loop's actual pixel path first: 312 points, a real
+         closed ring spanning a ~107x108px bounding box, not a 1-2 pixel artifact, so `0` would
+         have been a false "no spatial extent" claim, not a cautious one. **Fix**: the span is now
+         sampled from every skeleton pixel on every edge inside the giant component (via
+         `skel.path_coordinates`), not just its node coordinates -- `giant_component_span_px()`
+         itself needed no change, only what gets passed into it. Tested against all 19 images
+         before committing to the fix (not just the one broken row):
+
+        | image | dgc before (um) | dgc after (um) |
+        |---|---|---|
+        | `T5-PTFE_H50_v2` | NaN | 70.27 |
+        | `T5-PTFE_H190_v1` | 6369.81 | 6407.78 (+0.6%) |
+        | `T5-PTFE_H190_v2` | 6380.28 | 6404.90 (+0.4%) |
+        | `T3-M_v2` | 6348.39 | 6377.22 (+0.5%) |
+        | `T3-M_v1` | 6323.35 | 6332.55 (+0.1%) |
+        | `T2-A_membran_v1` | 6422.76 | 6423.18 (+0.01%) |
+        | remaining 13 of 19 | -- | unchanged |
+
+         Confirms the "pixel cloud is a superset of the node set, so the new value can only be
+         >= the old one" prediction held on every real image -- the fix generalizes, it isn't a
+         patch for one row. Added a regression test
+         (`test_giant_component_span_handles_a_closed_loop_with_no_junctions`) using a synthetic
+         rectangular-ring mask, confirmed to reproduce the exact same single-self-loop topology as
+         the real `T5-PTFE_H50_v2` case before asserting on it.
+
+      Re-ran the cache-only backfill with both fixes (2 and 3) applied -- 384.3s for all 19 images
+      (no re-run of binarize/skeletonize/flaking), `thesis_stats.xlsx`/`crack_stats.xlsx`
+      regenerated. Net effect on the actual spreadsheet the user cares about: `crack`, `flaking`,
+      `wcrack`, `N`, `fgc`, `ledge`, `ledge_gc` unchanged on all 19 rows; `dgc` changed on exactly
+      the 6 rows in the table above.
