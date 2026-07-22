@@ -122,11 +122,67 @@ an approximation. Result: 6.6s, 37x faster, zero behavior change.
 components, 6 flaking candidates, 76 cut-adjacent, 84 corner-artifacts pruned -- unchanged).
 At ~69s/image, the 18-image batch is roughly ~21 minutes total.
 
-**Deferred, not abandoned** (only worth revisiting if ~21 min turns out to be too slow in
-practice): `skeletonize`'s `method='lee'` vs default `'zhang'` timing comparison; downsampling
-the scout pass (needs verifying `reference_width_px` doesn't shift meaningfully first); a
-non-iterative single-pass scout prune. Bounding-box pre-filtering `cut_adjacent_path_indices`
-is now moot -- that function is already fast.
+**Deferred, not abandoned** at the time (revisited below once hole-filling + cache/overlay
+existed): `skeletonize`'s `method='lee'` vs default `'zhang'` timing comparison; downsampling
+the scout pass; a non-iterative single-pass scout prune. Bounding-box pre-filtering
+`cut_adjacent_path_indices` was already moot -- that function was already fast.
+
+### Second pass: full re-run with hole-filling, caching, and overlay rendering included
+
+The numbers above stopped at the analysis stage -- they never measured `HOLE_AREA_THRESHOLD_PX2`
+(didn't exist yet), `save_analysis_cache`, or `render_crack_stats_overlay`, all now a
+permanent part of every image's run. Re-timed the same image, current code, full breakdown:
+
+| stage | time (s) |
+|---|---|
+| load_image | 0.99 |
+| binarize | 0.86 |
+| **scout skeletonize_and_prune** | **38.05** |
+| &nbsp;&nbsp;remove_small_objects | 0.80 |
+| &nbsp;&nbsp;remove_small_holes | 1.00 |
+| &nbsp;&nbsp;**skeletonize()** | **22.83** |
+| &nbsp;&nbsp;prune loop (skan summarize/prune_paths, corner-artifact check) | 13.41 |
+| exclude_flaking_regions | 2.77 |
+| **real skeletonize_and_prune** | **22.83** |
+| &nbsp;&nbsp;remove_small_objects | 0.83 |
+| &nbsp;&nbsp;remove_small_holes | 0.81 |
+| &nbsp;&nbsp;skeletonize() | 9.98 |
+| &nbsp;&nbsp;prune loop | 11.21 |
+| extract_graph | 0.01 |
+| cut_adjacent_path_indices | 6.68 |
+| stats + networkx | 0.05 |
+| save_analysis_cache (6 files) | 0.81 |
+| render_crack_stats_overlay (with grid) | 3.54 |
+| **TOTAL** | **76.58** |
+
+Stats matched the prior real run exactly (crack_area_pct 26.32%, n_components 35, etc.) --
+confirms the re-run is correct, not just fast/slow.
+
+**What this settles**: hole-filling is cheap (~1.0s scout, ~0.8s real -- one more vectorized
+skimage call, not a loop, exactly as expected). Cache-writing is cheap (0.81s for all 6
+compressed files -- boolean arrays that are mostly False/0 compress well). Overlay rendering
+is moderate but not dominant (3.54s for ~1400 edges plus grid annotations). None of these are
+worth optimizing further right now -- inventing a fix for a cost that isn't real would just be
+added complexity for no benefit.
+
+**What's now the actual bottleneck**: `skeletonize()` itself, 22.83s (scout) + 9.98s (real) =
+32.8s, ~43% of the total 76.6s -- by far the single largest identifiable cost. The scout
+pass's copy alone (22.83s) is nearly 30% of the *entire* pipeline, spent purely to extract one
+number (`reference_width_px`) from a skeleton that's discarded right after. Second largest:
+the prune-loop remainder (13.41s scout + 11.21s real = 24.6s, ~32%) -- this is skan's own
+`summarize()`/`Skeleton` construction and `prune_paths()` machinery, confirmed (via the
+earlier corner-artifact sub-timing, which measured ~0.1s total) to NOT be the corner-artifact
+correlation check -- that's still negligible, folded into this remainder but not responsible
+for it.
+
+Together, `skeletonize()` + the prune-loop remainder are ~75% of total runtime, and both are
+core, load-bearing operations (thinning algorithm, graph construction), not free wins like the
+EDT swap was. The scout pass's disproportionate skeletonize() cost (22.83s to extract one
+median-width statistic) is now the most concrete, evidence-backed lead for further
+optimization -- worth actually investigating (downsampled scout mask, or a non-skeleton width
+estimate) as a follow-up, not attempted in this pass since it wasn't asked for yet and needs
+its own correctness verification (does a cheaper method change `reference_width_px` enough to
+matter downstream?) before being trusted.
 
 ## Caching design
 
