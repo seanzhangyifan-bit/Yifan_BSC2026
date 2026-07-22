@@ -70,12 +70,20 @@ def test_wedge_pruned_when_criterion_enabled():
     assert result.n_corner_artifacts_pruned >= 1
     assert not _has_branch_near_length(result.skeleton, branch_type=1, length=60.0, tol=10.0)
 
+    corner_records = [b for b in result.pruned_branches if b.reason == "corner_artifact"]
+    assert len(corner_records) == 1
+    record = corner_records[0]
+    assert abs(record.branch_distance - 60.0) < 10.0
+    assert record.coords.shape[1] == 2
+    assert len(record.coords) > 1
+
 
 def test_wedge_survives_when_criterion_disabled():
     mask = _wedge_artifact_mask()
     result = skeletonize_and_prune(mask, spur_px=3, corner_artifact_corr_threshold=None)
     assert result.n_corner_artifacts_pruned == 0
     assert _has_branch_near_length(result.skeleton, branch_type=1, length=60.0, tol=10.0)
+    assert [b for b in result.pruned_branches if b.reason == "corner_artifact"] == []
 
 
 def test_constant_width_line_is_never_flagged_as_corner_artifact():

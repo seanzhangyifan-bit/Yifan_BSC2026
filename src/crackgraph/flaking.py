@@ -65,6 +65,7 @@ independent sweep) except where noted -- see CALIBRATION.md's convention.
 from dataclasses import dataclass, field
 
 import numpy as np
+from scipy.ndimage import distance_transform_edt
 from skimage.measure import label, regionprops
 from skimage.morphology import binary_dilation, disk
 
@@ -282,13 +283,24 @@ def cut_adjacent_path_indices(
     classification would be asking the least reliable part of the pipeline
     to police itself. See flaking.py module docstring and CLAUDE.md's
     "emit no constraint rather than a low-confidence guess" principle.
+
+    The buffer mask is built via distance_transform_edt thresholded at
+    buffer_px, not skimage's binary_dilation(disk(...)) -- "within radius R
+    of excluded_mask" is exactly what a disk-footprint dilation computes
+    too, but large-footprint morphological dilation over a full-resolution
+    (~7250x7600px) image is dramatically slower than EDT for the same
+    result: measured on T2-A_membran_v2, 242.8s (dilation) vs 6.6s (EDT),
+    with the output mask and flagged-edge set coming out 100% pixel- and
+    set-identical -- not an approximation, the same computation done
+    faster. This was the single largest cost in the whole crack-stats
+    pipeline before this change (~80% of one image's total runtime).
     """
     if not excluded_mask.any() or len(graph_result.summary) == 0:
         return set()
 
     buffer_px = buffer_width_multiplier * reference_width_px
     buffer_px_int = max(1, int(np.ceil(buffer_px)))
-    buffer_mask = binary_dilation(excluded_mask, footprint=disk(buffer_px_int))
+    buffer_mask = distance_transform_edt(~excluded_mask) <= buffer_px_int
     h, w = excluded_mask.shape
 
     flagged = set()

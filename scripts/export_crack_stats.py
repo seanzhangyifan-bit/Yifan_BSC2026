@@ -20,9 +20,11 @@ import networkx as nx
 import pandas as pd
 
 from src.crackgraph.binarize import binarize
+from src.crackgraph.cache_io import save_analysis_cache
 from src.crackgraph.flaking import cut_adjacent_path_indices, exclude_flaking_regions
 from src.crackgraph.graph import extract_graph
 from src.crackgraph.io_utils import load_image
+from src.crackgraph.overlay import render_crack_stats_overlay
 from src.crackgraph.skeleton import skeletonize_and_prune
 
 # Source: an external calibration tool (figlib/calibration.py,
@@ -63,8 +65,15 @@ ADDITIONAL_IMAGES = ["data/raw/humidity_loading_ptfe/23RH_PTFE_v1_mm000003.jpg"]
 RAW_GLOB = "data/raw/**/*_mm000001.jpg"
 
 
-def compute_row(image_path: Path) -> dict:
-    gray, _rgb = load_image(image_path)
+def compute_row(image_path: Path, *, cache_dir: Path | None = None) -> dict:
+    """cache_dir is optional and off by default -- when set, also writes
+    the six-file analysis cache plus an overlay.png into
+    cache_dir/image_path.stem/ (see src/crackgraph/cache_io.py and
+    docs/crack_stats_v2_status.md), so a later session can regenerate a
+    figure or re-check a number without re-running binarize/skeletonize/
+    prune on the full-resolution image. Existing callers that don't pass
+    cache_dir see no behavior change."""
+    gray, rgb = load_image(image_path)
     full_h, full_w = gray.shape
 
     binarize_result = binarize(gray)
@@ -137,7 +146,7 @@ def compute_row(image_path: Path) -> dict:
         avg_width_um = avg_width_px * UM_PER_PX_MM_TAG
         avg_edge_length_um = avg_edge_length_px * UM_PER_PX_MM_TAG
 
-    return {
+    stats_row = {
         "image_filename": image_path.name,
         "source_folder": image_path.parent.name,
         "image_width_px": full_w,
@@ -157,10 +166,32 @@ def compute_row(image_path: Path) -> dict:
         "n_corner_artifacts_pruned": skeleton_result.n_corner_artifacts_pruned,
     }
 
+    if cache_dir is not None:
+        image_stem = image_path.stem
+        save_analysis_cache(
+            cache_dir, image_stem,
+            skeleton_result=skeleton_result, flaking_result=flaking_result, stats_row=stats_row,
+        )
+        render_crack_stats_overlay(
+            rgb, skeleton_result.skeleton, graph_result,
+            flaking_result.excluded_mask, cut_adjacent,
+            cache_dir / image_stem / "overlay.png",
+        )
+
+    return stats_row
+
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--out", type=str, default="outputs/crack_stats.xlsx")
+    p.add_argument(
+        "--cache-dir", type=str, default=None,
+        help=(
+            "Also write the per-image analysis cache (mask/skeleton/excluded-region arrays, "
+            "pruned-branch records, stats.json, overlay.png) here -- see cache_io.py. "
+            "Off by default; existing callers see no behavior change."
+        ),
+    )
     args = p.parse_args()
 
     repo_root = Path(__file__).resolve().parent.parent
@@ -175,10 +206,12 @@ def main():
     for p in skipped:
         print(f"[skip] {p.relative_to(repo_root)} -- confirmed blue scale-bar overlay, excluded")
 
+    cache_dir = repo_root / args.cache_dir if args.cache_dir else None
+
     rows = []
     for i, image_path in enumerate(image_paths, 1):
         print(f"[{i}/{len(image_paths)}] {image_path.relative_to(repo_root)}")
-        rows.append(compute_row(image_path))
+        rows.append(compute_row(image_path, cache_dir=cache_dir))
 
     out_path = repo_root / args.out
     out_path.parent.mkdir(parents=True, exist_ok=True)

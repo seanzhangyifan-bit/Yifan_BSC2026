@@ -71,6 +71,18 @@ MIN_LEN_FOR_CORR_PX = 4
 
 
 @dataclass
+class PrunedBranchRecord:
+    """One pruned branch's full pixel path, kept for later diagnostic
+    visualization (e.g. "what got cut and why") without having to re-run
+    the analysis -- SkeletonResult's length-only fields exist for the
+    console report and aren't enough to redraw a branch's location."""
+
+    reason: str  # "spur" | "fragment" | "corner_artifact"
+    branch_distance: float  # [measured], px
+    coords: np.ndarray  # (N, 2) row, col -- captured via skel.path_coordinates() before pruning
+
+
+@dataclass
 class SkeletonResult:
     skeleton: skan.Skeleton
     skel_image: np.ndarray
@@ -86,6 +98,7 @@ class SkeletonResult:
     n_corner_artifacts_pruned: int  # [measured]
     pruned_corner_artifact_lengths: list[float]  # [measured], px
     corner_artifact_corr_threshold: float | None  # [PLACEHOLDER], None = criterion disabled
+    pruned_branches: list[PrunedBranchRecord]  # [measured] every pruned branch, coords + reason
     iters_used: int
 
 
@@ -154,6 +167,7 @@ def skeletonize_and_prune(
     pruned_spur_lengths: list[float] = []
     pruned_fragment_lengths: list[float] = []
     pruned_corner_artifact_lengths: list[float] = []
+    pruned_branches: list[PrunedBranchRecord] = []
     iters_used = 0
 
     for i in range(max_iters):
@@ -192,6 +206,24 @@ def skeletonize_and_prune(
         pruned_spur_lengths.extend(summary.loc[spur_rows, "branch_distance"].tolist())
         pruned_fragment_lengths.extend(summary.loc[fragment_rows, "branch_distance"].tolist())
         pruned_corner_artifact_lengths.extend(summary.loc[corner_artifact_rows, "branch_distance"].tolist())
+
+        # Coordinates must be captured now, before prune_paths() below --
+        # skel is replaced with a fresh Skeleton each call and path indices
+        # are not stable across that boundary.
+        for reason, rows in (
+            ("spur", spur_rows),
+            ("fragment", fragment_rows),
+            ("corner_artifact", corner_artifact_rows),
+        ):
+            for path_index in rows:
+                pruned_branches.append(
+                    PrunedBranchRecord(
+                        reason=reason,
+                        branch_distance=float(summary.at[path_index, "branch_distance"]),
+                        coords=skel.path_coordinates(int(path_index)),
+                    )
+                )
+
         all_rows = length_flagged_rows.union(corner_artifact_rows)
         skel = skel.prune_paths(all_rows.to_numpy())
         iters_used = i + 1
@@ -213,5 +245,6 @@ def skeletonize_and_prune(
         n_corner_artifacts_pruned=len(pruned_corner_artifact_lengths),
         pruned_corner_artifact_lengths=pruned_corner_artifact_lengths,
         corner_artifact_corr_threshold=corner_artifact_corr_threshold,
+        pruned_branches=pruned_branches,
         iters_used=iters_used,
     )
