@@ -20,9 +20,9 @@ Redo crack stats now that two things are new in stage 2 since the last full expo
 - Correlation-based corner-artifact pruning (`src/crackgraph/skeleton.py`,
   `CORR_THRESHOLD`) -- commit `1be3da6`.
 
-## Scope: 18-image batch
+## Scope: 19-image batch
 
-Three groups, resolved from an initial ambiguous request via direct clarification with the
+Three groups (19 images total, not 18 -- an earlier off-by-one error in this doc confused "18 remaining after the pilot" with "18 total"; corrected here), resolved from an initial ambiguous request via direct clarification with the
 user:
 
 1. **T2/T3/T4 solvent-ratio, membrane, high gap-height** (6 files): `T2-A_membran_v1/v2`,
@@ -120,7 +120,7 @@ an approximation. Result: 6.6s, 37x faster, zero behavior change.
 
 **Net**: 306.1s -> 69.4s per image (4.4x), all downstream numbers identical (1450 edges, 41
 components, 6 flaking candidates, 76 cut-adjacent, 84 corner-artifacts pruned -- unchanged).
-At ~69s/image, the 18-image batch is roughly ~21 minutes total.
+At ~69s/image, the 19-image batch is roughly ~21 minutes total.
 
 **Deferred, not abandoned** at the time (revisited below once hole-filling + cache/overlay
 existed): `skeletonize`'s `method='lee'` vs default `'zhang'` timing comparison; downsampling
@@ -231,6 +231,52 @@ via a single `distance_transform_edt` call).
       `n_corner_artifacts_pruned` 84->89. `crack_area_pct` barely moved (26.33%->26.32%).
       This confirms the fix matters and wasn't just a cosmetic no-op on this image -- worth
       re-checking on other images in the batch, not assuming it's always this small.
-- [ ] Full 18-image batch -- deliberately not started, separate step after the pilot is
-      confirmed good (now needs re-running with the hole-fill fix included, since the
-      pilot's numbers above changed meaningfully after it landed)
+- [x] Full 19-image batch run, current code (hole-fill fix + EDT fix + grid overlay
+      included) -- 19/19 succeeded, 0 crashes, 991.9s (16.5 min) total wall-clock, well under
+      the ~24 min estimate (per-image time varied a lot more than the single-image estimate
+      suggested: 21.3s to 106.5s, driven mostly by how much foreground each image actually
+      has to skeletonize, not a fixed cost). `outputs/crack_stats_v2/crack_stats.xlsx` has all
+      19 rows; each per-image folder has all 8 files (6 cache files + `overlay.png` +
+      `overlay_grid.png`). 3 stats.json files spot-checked against the xlsx, exact match.
+
+      **Sanity-check finding, not yet resolved**: 10 of 19 images (>half) failed the
+      binarization sanity check (expected foreground fraction 1-15%) --
+
+      | pattern | images | foreground fraction |
+      |---|---|---|
+      | high (all of T2/T3/T4 solvent-ratio membrane) | T2-A_membran v1/v2, T3-M v1/v2, T4-M v1/v2 | 22.8%-28.0% |
+      | high (T5 highest gap height) | T5-PTFE_H190 v1/v2 | 28.6%-29.4% |
+      | near-zero | T5-PTFE_H50 v1/v2 | 0.04%-0.13% |
+      | passing | all 5 dew-point (RH) images, T5-PTFE_H95 v1/v2, T5-PTFE_H145 v1/v2 | 1.45%-14.5% |
+
+      This directly amplifies the open validation concern above (T2-A_membran_v2, the
+      CORR_THRESHOLD calibration image, was already known to fail this check) -- it is not an
+      isolated anomaly, it's a systematic pattern affecting the majority of this specific
+      scoped batch. Two different situations, not one:
+      - The "high" cluster (T2/T3/T4 membrane, T5-PTFE_H190) is plausibly a **real physical
+        effect**: solvent-ratio and gap-height are exactly the variables this batch was
+        deliberately chosen to vary, so a wider real range of crack density than the
+        historical 1-15% band (calibrated against the original, differently-composed 39-image
+        dataset) is a believable, not alarming, explanation -- not yet confirmed, just
+        plausible.
+      - The near-zero `T5-PTFE_H50` pair is a different, more concerning case: 0.02-0.13% is
+        close enough to "no crack detected at all" that it's worth a direct visual check
+        (open the raw image, or the `overlay.png`) to confirm it's genuinely an
+        almost-uncracked sample and not an Otsu threshold failure on that specific image
+        before trusting the number.
+      - Notable, unprompted side observation from the same run: `T5-PTFE_H95`
+        (`giant_component_fraction` ~0.011, `n_components` ~1500-2000) is extremely
+        fragmented compared to every other image (`giant_component_fraction` mostly >0.97) --
+        combined with `T5-PTFE_H50`'s low-but-less-extreme fragmentation (0.03-0.17) and
+        `H145`/`H190`'s near-fully-connected networks (0.75-0.98), the gap-height series shows
+        what looks like a percolation-transition-shaped trend (H50 -> H95 -> H145 -> H190
+        going from fragmented to fully connected) -- `[interpreted]`, not yet verified as a
+        real trend rather than two-samples-per-condition noise, but a real pattern worth
+        following up on its own terms, independent of the sanity-check question above.
+- [ ] Sanity-check pattern above -- not investigated further this pass, flagged for next steps
+- [ ] `lu`/`ro` images -- deferred; `data/cleaned_pics/` (a fuller local mirror of the OneDrive
+      source than `data/raw/`) has `lu`/`mm`/`ro` triples for 17 of the 19 samples already
+      copied into `data/raw/` (missing for `T5-PTFE_H50_v1` only -- confirmed against the
+      original OneDrive source directly, not just the local copy: that replicate's capture
+      session never included `lu`/`ro` at all, no `v3` exists to substitute). Not copied into
+      `data/raw/` or run yet -- separate future step, user's explicit direction.
