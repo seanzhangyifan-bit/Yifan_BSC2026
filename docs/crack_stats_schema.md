@@ -201,14 +201,18 @@ see §4.
 | 3 | `image_width_px` | Original raw image width | px | `measured` |
 | 4 | `image_height_px` | Original raw image height | px | `measured` |
 | 5 | `scale_bar_check` | Result of the direct per-image visual check described in §2 (not the naming-convention inference) | text | — |
-| 6 | `crack_area_pct` | `binarize_result.foreground_fraction × 100` — share of image pixels classified as crack by Otsu thresholding | % of image area | `measured` |
+| 6 | `crack_area_pct` | `corrected_mask.sum() ÷ (image_width_px × image_height_px) × 100` — share of image pixels classified as crack by Otsu thresholding, **after** flaking exclusion (see §4b) and despeckling (tiny objects below `min_object_px` removed). Was `binarize_result.foreground_fraction` (the raw, uncorrected mask) before flaking exclusion existed — see §4b for the size of that correction. | % of image area | `measured` |
 | 7 | `crack_area_mm2` | `crack_area_px² × (0.6098 µm/px)² ÷ 1e6` | mm² | `calibrated` |
-| 8 | `avg_width_px` | `crack_area_px² ÷ total_skeleton_length_px` — an area-based width estimate, **not** the distance-transform-sampled width used elsewhere in this pipeline. See §caveat below. | px | `interpreted` |
+| 8 | `avg_width_px` | `crack_area_px² ÷ total_skeleton_length_px` (length excluding cut-adjacent edges, §4b) — an area-based width estimate, **not** the distance-transform-sampled width used elsewhere in this pipeline. See §caveat below. | px | `interpreted` |
 | 9 | `avg_width_um` | `avg_width_px × 0.6098` | µm | `calibrated` |
-| 10 | `avg_edge_length_px` | `total_skeleton_length_px ÷ n_edges` — mean distance between one graph node (junction or endpoint) and the next. **Not** "average crack length" — see §caveat below. | px | `measured` |
+| 10 | `avg_edge_length_px` | `total_skeleton_length_px ÷ n_edges`, both **excluding cut-adjacent edges** (§4b) — mean distance between one graph node (junction or endpoint) and the next. **Not** "average crack length" — see §caveat below. | px | `measured` |
 | 11 | `avg_edge_length_um` | `avg_edge_length_px × 0.6098` | µm | `calibrated` |
-| 12 | `n_components` | Number of disconnected pieces in the crack network (graph connected-components count) | count | `measured` |
-| 13 | `giant_component_fraction` | (total crack length in the single largest connected piece) ÷ (total crack length, all pieces) — 1.0 means the network is one fully connected web; well below 1 means it's still fragmented into separate islands | fraction, 0–1 | `measured` |
+| 12 | `n_components` | Number of disconnected pieces in the crack network (graph connected-components count). Uses the **full** graph including cut-adjacent edges — they're real topology, only their reported length is untrustworthy, not their existence. | count | `measured` |
+| 13 | `giant_component_fraction` | (total crack length in the single largest connected piece) ÷ (total crack length, all pieces) — 1.0 means the network is one fully connected web; well below 1 means it's still fragmented into separate islands. Also uses the full graph, same reasoning as `n_components`. | fraction, 0–1 | `measured` |
+| 14 | `flaking_excluded_area_pct` | Share of image area excluded as flaking/delamination — see §4b | % of image area | `measured` |
+| 15 | `flaking_n_candidates` | Number of flaking regions identified (width-flagged, grown to their true boundary) — see §4b | count | `interpreted` |
+| 16 | `flaking_n_edges_excluded_near_cut` | Number of graph edges touching the flaking-exclusion boundary, dropped from the length/width stats above (columns 8-11) — see §4b | count | `measured` |
+| 17 | `n_corner_artifacts_pruned` | Number of skeleton branches removed during stage 2 pruning because their width trends monotonically with position (a medial-axis branch tracing into a concave mask-boundary corner) rather than because they were short — see §4c | count | `interpreted` |
 
 **Caveats that matter for correct use:**
 
@@ -231,6 +235,56 @@ see §4.
   despeckling and spur-pruning (isolated fragments and dead-end spurs shorter than a fixed pixel
   threshold are removed before this analysis ever runs). These are "components at least
   roughly-a-crack-length long," not literally every disconnected mark in the raw image.
+
+### 4b. Flaking/delamination exclusion (columns 14-16)
+
+Some samples (seen so far on membrane-substrate T2/T3/T4) have patches where the catalyst layer has
+physically flaked off, exposing substrate underneath — bright under Otsu thresholding like a real
+crack, but it's a 2D area of missing material, not a 1D fracture, and we have zero evidence what
+crack pattern (if any) existed under the now-missing material. Left uncorrected, this inflated
+`crack_area_pct` and corrupted `avg_width_px`/`avg_edge_length_px` (skeletonizing a flaked blob's
+filled interior produces a genuinely multi-branched medial axis — a different mechanism from the
+double-line loop artifact above, since a blob-shaped region's skeleton is inherently branchy, not a
+thinning artifact).
+
+`src/crackgraph/flaking.py` identifies candidate regions (local width far exceeding the image's own
+typical crack width — width is the single identification criterion, deliberately; an earlier version
+also required high solidity to separate compact blobs from elongated crack bands, but that was
+dropped after a real elongated candidate, solidity 0.674, was confirmed by inspection to be genuine
+delamination — solidity was excluding real cases), grows each one back out to its true boundary via
+mask-constrained dilation, and excludes the result from the mask *before* the real skeletonization
+runs — so flaked pixels never contribute a spurious skeleton at all. Graph edges whose path comes
+within one reference-crack-width of the exclusion boundary at any point (`flaking_n_edges_excluded_near_cut`,
+not just an edge's two endpoint nodes — an endpoint-only check measurably misses edges that graze the
+exclusion mid-path without terminating there) are truncation artifacts of the cut, not real crack
+arrests, so they're dropped from the length/width statistics (columns 8-11) but kept in the
+connectivity graph for columns 12-13, since their topology is real even though their reported length
+isn't.
+
+**Known gap, not yet fixed**: small, compact false positives from ordinary junction-blob widening
+(not real flaking) can still pass the width+area test alone — see `flaking.py`'s module docstring.
+`flaking_n_candidates` should therefore be read as "candidates passing the current width test," not
+as a confirmed count of real flaking regions — spot-check by eye before trusting it on a new image
+the way every other selection criterion in this doc has been.
+
+### 4c. Corner-tracing artifact pruning (column 17)
+
+The medial axis transform underlying skeletonization mathematically must trace a branch
+into every concave corner of the mask boundary, regardless of how long that branch is —
+this is a correct property of the medial axis, not thinning noise, and it is blind to
+length, so the fixed-length spur pruning that already removes short dead ends
+(`SPUR_PX_PLACEHOLDER`) does not catch it. `src/crackgraph/skeleton.py` additionally
+flags a branch as this kind of artifact if its local width (from the same distance
+transform used elsewhere in this pipeline) trends monotonically with position along the
+branch (Pearson correlation vs. `CORR_THRESHOLD`, currently 0.99) rather than staying
+flat the way a genuine, noisy-but-stable-width crack does — see the module docstring
+and `docs/calibration_notes.md` for the full derivation and the rejected alternative
+criteria. Flagged branches are pruned from the skeleton entirely (same iterative,
+cascading removal as length-based spur pruning), so they affect `crack_area_pct`,
+`avg_width_px`, and `avg_edge_length_px` the same way real pruning always has — there is
+no separate "excluded but topology kept" treatment here, unlike the flaking cut-adjacent
+case in §4b, because these branches are not truncated real edges, they are not real
+edges at all.
 
 ## 5. Evidence-level legend
 

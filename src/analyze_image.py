@@ -31,6 +31,7 @@ from .crackgraph.edge_metrics import (
     compute_edge_metrics,
     write_edge_metrics_csv,
 )
+from .crackgraph.flaking import exclude_flaking_regions
 from .crackgraph.graph import extract_graph
 from .crackgraph.io_utils import load_image
 from .crackgraph.junctions import (
@@ -49,7 +50,7 @@ from .crackgraph.kinks import (
 from .crackgraph.overlay import render_overlay, render_precedence_overlay
 from .crackgraph.precedence import build_precedence_graph
 from .crackgraph.region import default_corner_crop
-from .crackgraph.skeleton import SPUR_PX_PLACEHOLDER, skeletonize_and_prune
+from .crackgraph.skeleton import CORR_THRESHOLD, SPUR_PX_PLACEHOLDER, skeletonize_and_prune
 from .crackgraph.xlsx_report import (
     anisotropy_classification,
     append_chunk_to_workbook,
@@ -81,6 +82,7 @@ def parse_args():
         ),
     )
     p.add_argument("--spur-px", type=float, default=SPUR_PX_PLACEHOLDER)
+    p.add_argument("--corner-artifact-corr-threshold", type=float, default=CORR_THRESHOLD)
     p.add_argument("--min-object-px", type=int, default=4)
     p.add_argument("--max-overlay-dim", type=int, default=2500)
     p.add_argument("--otsu-sanity-band", type=float, nargs=2, default=(0.01, 0.15))
@@ -176,12 +178,36 @@ def main():
         stem_suffix = "corner"
 
     binarize_result = binarize(gray, sanity_band=tuple(args.otsu_sanity_band))
-    skeleton_result = skeletonize_and_prune(
+
+    # Scout pass: skeletonize the raw mask only to get a width signal
+    # (medial_radius) for flaking identification -- not necessarily the
+    # final skeleton used below. See crackgraph/flaking.py.
+    scout_skeleton_result = skeletonize_and_prune(
         binarize_result.mask,
         source_image=gray,
         min_object_px=args.min_object_px,
         spur_px=args.spur_px,
+        corner_artifact_corr_threshold=args.corner_artifact_corr_threshold,
     )
+    flaking_result = exclude_flaking_regions(
+        scout_skeleton_result.mask_clean,
+        scout_skeleton_result.skel_image,
+        scout_skeleton_result.medial_radius,
+    )
+    if flaking_result.candidates:
+        # Real pass: re-skeletonize on the corrected mask so flaked
+        # regions never reach the thinning step at all -- not "ignored",
+        # genuinely treated as dark/background, same as any other pixel
+        # skeletonize_and_prune was never told is foreground.
+        skeleton_result = skeletonize_and_prune(
+            flaking_result.mask_corrected,
+            source_image=gray,
+            min_object_px=args.min_object_px,
+            spur_px=args.spur_px,
+            corner_artifact_corr_threshold=args.corner_artifact_corr_threshold,
+        )
+    else:
+        skeleton_result = scout_skeleton_result
     graph_result = extract_graph(skeleton_result.skeleton)
     curvature_result = compute_edge_curvature(
         skeleton_result.skeleton,
@@ -310,6 +336,27 @@ def main():
             "downstream counts."
         )
     print()
+    print("-- Flaking/delamination exclusion (see crackgraph/flaking.py) --")
+    print(
+        f"Reference crack width (this image, skeleton-median): "
+        f"{flaking_result.reference_width_px:.1f} px    [measured]"
+    )
+    print(
+        f"Candidates found: {len(flaking_result.candidates)}    "
+        "[interpreted -- width+solidity flagged, not junction-blob-filtered yet]"
+    )
+    for c in flaking_result.candidates:
+        print(f"  area={c.area_px2} px2  solidity={c.solidity:.3f}  bbox={c.bbox}")
+    print(
+        f"Excluded area: {flaking_result.excluded_area_px2} px2 "
+        f"({flaking_result.excluded_area_pct:.3f}% of image)    [measured]"
+    )
+    if flaking_result.candidates:
+        print(
+            "Mask corrected and re-skeletonized (second pass) -- excluded pixels treated as "
+            "background, not folded into crack area/width/length."
+        )
+    print()
     print("-- Stage 2: Skeletonize + prune --")
     print(
         f"Skeleton pixel count (pre/post-prune): "
@@ -325,6 +372,17 @@ def main():
     print(
         f"Isolated fragments pruned: {skeleton_result.n_fragments_pruned}, "
         f"example lengths: {example_fragments}   [measured]"
+    )
+    print(
+        f"Corner-artifact correlation threshold: {skeleton_result.corner_artifact_corr_threshold}   "
+        "[PLACEHOLDER -- see crackgraph/skeleton.py module docstring]"
+    )
+    example_corner_artifacts = [round(x, 1) for x in skeleton_result.pruned_corner_artifact_lengths[:5]]
+    print(
+        f"Corner-tracing artifacts pruned: {skeleton_result.n_corner_artifacts_pruned}, "
+        f"example lengths: {example_corner_artifacts}   "
+        "[interpreted -- medial-axis branches tracing into a concave mask-boundary "
+        "corner, flagged by width-vs-position trend, not length]"
     )
     print(f"Prune iterations used: {skeleton_result.iters_used}")
     print()

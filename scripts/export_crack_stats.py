@@ -20,8 +20,11 @@ import networkx as nx
 import pandas as pd
 
 from src.crackgraph.binarize import binarize
+from src.crackgraph.cache_io import save_analysis_cache
+from src.crackgraph.flaking import cut_adjacent_path_indices, exclude_flaking_regions
 from src.crackgraph.graph import extract_graph
 from src.crackgraph.io_utils import load_image
+from src.crackgraph.overlay import render_crack_stats_overlay
 from src.crackgraph.skeleton import skeletonize_and_prune
 
 # Source: an external calibration tool (figlib/calibration.py,
@@ -62,20 +65,54 @@ ADDITIONAL_IMAGES = ["data/raw/humidity_loading_ptfe/23RH_PTFE_v1_mm000003.jpg"]
 RAW_GLOB = "data/raw/**/*_mm000001.jpg"
 
 
-def compute_row(image_path: Path) -> dict:
-    gray, _rgb = load_image(image_path)
+def compute_row(image_path: Path, *, cache_dir: Path | None = None) -> dict:
+    """cache_dir is optional and off by default -- when set, also writes
+    the six-file analysis cache plus an overlay.png into
+    cache_dir/image_path.stem/ (see src/crackgraph/cache_io.py and
+    docs/crack_stats_v2_status.md), so a later session can regenerate a
+    figure or re-check a number without re-running binarize/skeletonize/
+    prune on the full-resolution image. Existing callers that don't pass
+    cache_dir see no behavior change."""
+    gray, rgb = load_image(image_path)
     full_h, full_w = gray.shape
 
     binarize_result = binarize(gray)
-    skeleton_result = skeletonize_and_prune(binarize_result.mask, source_image=gray)
+
+    # Scout pass: skeletonize the raw mask only to get a width signal for
+    # flaking identification. Real pass re-skeletonizes on the corrected
+    # mask so flaked/delaminated regions never reach the thinning step --
+    # see src/crackgraph/flaking.py.
+    scout_skeleton_result = skeletonize_and_prune(binarize_result.mask, source_image=gray)
+    flaking_result = exclude_flaking_regions(
+        scout_skeleton_result.mask_clean,
+        scout_skeleton_result.skel_image,
+        scout_skeleton_result.medial_radius,
+    )
+    if flaking_result.candidates:
+        skeleton_result = skeletonize_and_prune(flaking_result.mask_corrected, source_image=gray)
+    else:
+        skeleton_result = scout_skeleton_result
     graph_result = extract_graph(skeleton_result.skeleton)
 
-    crack_area_px2 = binarize_result.foreground_fraction * full_w * full_h
-    total_length_px = float(graph_result.summary["branch_distance"].sum())
+    # Edges touching the exclusion cut are truncated by our own correction,
+    # not by a real crack arrest -- their length/width are not real
+    # measurements, so they're dropped from those two stats specifically
+    # (but kept in the connectivity graph below: they're still real
+    # topology, just with an untrustworthy length).
+    cut_adjacent = cut_adjacent_path_indices(
+        skeleton_result.skeleton, graph_result, flaking_result.excluded_mask,
+        flaking_result.reference_width_px,
+    )
+    summary = graph_result.summary
+    length_ok_mask = ~summary.index.isin(cut_adjacent)
+
+    crack_area_px2 = float(skeleton_result.mask_clean.sum())
+    total_length_px = float(summary.loc[length_ok_mask, "branch_distance"].sum())
+    n_edges_for_length = int(length_ok_mask.sum())
 
     avg_width_px = crack_area_px2 / total_length_px if total_length_px > 0 else float("nan")
     avg_edge_length_px = (
-        total_length_px / graph_result.n_edges if graph_result.n_edges > 0 else float("nan")
+        total_length_px / n_edges_for_length if n_edges_for_length > 0 else float("nan")
     )
 
     # Percolation view of the same graph: how many disconnected crack
@@ -83,18 +120,21 @@ def compute_row(image_path: Path) -> dict:
     # spur_px_threshold are already gone before this ever runs -- these
     # counts are "components at least that long," not literally every
     # mark in the raw mask), and what share of total crack length belongs
-    # to the single largest one.
+    # to the single largest one. Uses the FULL graph (including
+    # cut-adjacent stub edges) -- they're real topology, only their
+    # reported length is untrustworthy, not their existence.
     G = nx.from_pandas_edgelist(
-        graph_result.summary, source="node_id_src", target="node_id_dst",
+        summary, source="node_id_src", target="node_id_dst",
         edge_attr="branch_distance",
     )
     n_components = nx.number_connected_components(G)
-    if n_components > 0:
+    full_total_length_px = float(summary["branch_distance"].sum())
+    if n_components > 0 and full_total_length_px > 0:
         component_lengths = [
             sum(d["branch_distance"] for _, _, d in G.subgraph(c).edges(data=True))
             for c in nx.connected_components(G)
         ]
-        giant_component_fraction = max(component_lengths) / total_length_px
+        giant_component_fraction = max(component_lengths) / full_total_length_px
     else:
         giant_component_fraction = float("nan")
 
@@ -106,13 +146,13 @@ def compute_row(image_path: Path) -> dict:
         avg_width_um = avg_width_px * UM_PER_PX_MM_TAG
         avg_edge_length_um = avg_edge_length_px * UM_PER_PX_MM_TAG
 
-    return {
+    stats_row = {
         "image_filename": image_path.name,
         "source_folder": image_path.parent.name,
         "image_width_px": full_w,
         "image_height_px": full_h,
         "scale_bar_check": "no blue bar (visually confirmed)",
-        "crack_area_pct": binarize_result.foreground_fraction * 100,
+        "crack_area_pct": 100.0 * crack_area_px2 / (full_w * full_h),
         "crack_area_mm2": crack_area_mm2,
         "avg_width_px": avg_width_px,
         "avg_width_um": avg_width_um,
@@ -120,12 +160,38 @@ def compute_row(image_path: Path) -> dict:
         "avg_edge_length_um": avg_edge_length_um,
         "n_components": n_components,
         "giant_component_fraction": giant_component_fraction,
+        "flaking_excluded_area_pct": flaking_result.excluded_area_pct,
+        "flaking_n_candidates": len(flaking_result.candidates),
+        "flaking_n_edges_excluded_near_cut": len(cut_adjacent),
+        "n_corner_artifacts_pruned": skeleton_result.n_corner_artifacts_pruned,
     }
+
+    if cache_dir is not None:
+        image_stem = image_path.stem
+        save_analysis_cache(
+            cache_dir, image_stem,
+            skeleton_result=skeleton_result, flaking_result=flaking_result, stats_row=stats_row,
+        )
+        render_crack_stats_overlay(
+            rgb, skeleton_result.skeleton, graph_result,
+            flaking_result.excluded_mask, cut_adjacent,
+            cache_dir / image_stem / "overlay.png",
+        )
+
+    return stats_row
 
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--out", type=str, default="outputs/crack_stats.xlsx")
+    p.add_argument(
+        "--cache-dir", type=str, default=None,
+        help=(
+            "Also write the per-image analysis cache (mask/skeleton/excluded-region arrays, "
+            "pruned-branch records, stats.json, overlay.png) here -- see cache_io.py. "
+            "Off by default; existing callers see no behavior change."
+        ),
+    )
     args = p.parse_args()
 
     repo_root = Path(__file__).resolve().parent.parent
@@ -140,10 +206,12 @@ def main():
     for p in skipped:
         print(f"[skip] {p.relative_to(repo_root)} -- confirmed blue scale-bar overlay, excluded")
 
+    cache_dir = repo_root / args.cache_dir if args.cache_dir else None
+
     rows = []
     for i, image_path in enumerate(image_paths, 1):
         print(f"[{i}/{len(image_paths)}] {image_path.relative_to(repo_root)}")
-        rows.append(compute_row(image_path))
+        rows.append(compute_row(image_path, cache_dir=cache_dir))
 
     out_path = repo_root / args.out
     out_path.parent.mkdir(parents=True, exist_ok=True)

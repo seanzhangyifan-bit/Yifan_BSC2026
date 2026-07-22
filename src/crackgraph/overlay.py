@@ -342,6 +342,88 @@ def render_overlay(
     return scale
 
 
+def render_crack_stats_overlay(
+    rgb: np.ndarray,
+    skel: skan.Skeleton,
+    graph_result: GraphResult,
+    excluded_mask: np.ndarray,
+    cut_adjacent_path_indices: set[int],
+    out_path: str | Path,
+    *,
+    max_overlay_dim: int = 2500,
+) -> float:
+    """Save a crack-stats-scoped overlay PNG: the final pruned skeleton,
+    the flaking-exclusion region tinted, and cut-adjacent edges (from
+    flaking.cut_adjacent_path_indices) highlighted -- i.e. exactly the
+    corrections crack_stats numbers already reflect, made visible. No
+    junction/kink/corner-cross-check layer -- this whole effort is scoped
+    to stage 1-3 (see crack_stats_v2_status.md). Same downsampling
+    convention as render_overlay: only the background is resampled
+    (LANCZOS for the photo, NEAREST for the boolean mask so its edges stay
+    sharp rather than blurring into fractional alpha), skeleton/edge
+    coordinates are scaled numerically. Returns the scale factor used.
+    """
+    h, w = rgb.shape[:2]
+    scale = min(1.0, max_overlay_dim / max(h, w))
+
+    if scale < 1.0:
+        new_size = (round(w * scale), round(h * scale))
+        display_rgb = np.asarray(Image.fromarray(rgb).resize(new_size, Image.LANCZOS))
+        display_excluded = np.asarray(
+            Image.fromarray(excluded_mask).resize(new_size, Image.NEAREST)
+        )
+    else:
+        display_rgb = rgb
+        display_excluded = excluded_mask
+
+    disp_h, disp_w = display_rgb.shape[:2]
+    dpi = 150
+    fig, ax = plt.subplots(figsize=(disp_w / dpi, disp_h / dpi), dpi=dpi)
+    ax.imshow(display_rgb)
+
+    if display_excluded.any():
+        excl_overlay = np.zeros((disp_h, disp_w, 4))
+        excl_overlay[display_excluded] = [1.0, 0.0, 0.0, 0.3]
+        ax.imshow(excl_overlay, zorder=1)
+
+    n_edges = len(graph_result.summary)
+    if n_edges > 0:
+        kept_segments = []
+        cut_segments = []
+        for i, path_index in enumerate(graph_result.summary.index):
+            coords = skel.path_coordinates(i) * scale  # (row, col)
+            seg = coords[:, ::-1]  # -> (col, row) == (x, y)
+            if int(path_index) in cut_adjacent_path_indices:
+                cut_segments.append(seg)
+            else:
+                kept_segments.append(seg)
+
+        if kept_segments:
+            ax.add_collection(LineCollection(kept_segments, colors="lime", linewidths=0.6, zorder=2))
+        if cut_segments:
+            ax.plot([], [], color="magenta", linewidth=1.4,
+                     label="cut-adjacent (dropped from length/width stats)")
+            ax.add_collection(
+                LineCollection(cut_segments, colors="magenta", linewidths=1.4, zorder=3)
+            )
+
+    if display_excluded.any():
+        ax.plot([], [], color="red", linewidth=6, alpha=0.3, label="flaking-excluded region")
+
+    ax.set_xlim(0, disp_w)
+    ax.set_ylim(disp_h, 0)
+    ax.axis("off")
+    if display_excluded.any() or cut_adjacent_path_indices:
+        ax.legend(
+            loc="upper center", bbox_to_anchor=(0.5, -0.02), ncol=2,
+            fontsize=7, framealpha=0.9,
+        )
+
+    fig.savefig(out_path, dpi=dpi, bbox_inches="tight")
+    plt.close(fig)
+    return scale
+
+
 PRECEDENCE_MIN_LINEWIDTH_PT = 1.0
 # Floor for the per-edge line width below, so a degenerate/very thin
 # segment (e.g. right at a pruned spur stub) still renders as a visible
