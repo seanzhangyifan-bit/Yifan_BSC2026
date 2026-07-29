@@ -153,9 +153,55 @@ it), not just out of the per-edge stat columns.
   this image -- the giant component's extremal points evidently sit far from any flaked patch
   here, so this particular column happened not to be sensitive to the methodology difference on
   this image; not a general guarantee.
-- [ ] Full-batch run across `data/raw/` not yet performed (single-image spot-check only so
-      far) -- worth doing before treating v3's numbers as final for any reported batch.
+- [x] Batch B/C/D run (19 images) completed -- see section below.
+- [ ] No full run across the entire default 39-image `data/raw/` scope yet -- only the
+      single-image v1-vs-v3 spot-check and the 19-image B/C/D batch below have been run so far.
 - [ ] No cross-image validation of the `n_components` sensitivity noted above -- the existing
       v2 status doc already flagged this same image's `n_components` as sensitive to
       hole-filling (41->35 there); worth keeping in mind that this metric is one of the more
       fragile ones to compare across methodologies, image to image.
+
+## Batch B/C/D run (19 images)
+
+Requested as three named groups; two of the three needed direct reconfirmation with the user
+rather than reusing a same-sounding prior resolution, because the plain-language names don't
+map onto filenames the obvious way (see memory `crack-stats-batch-naming-ambiguity`, and
+`docs/crack_stats_v2_status.md`'s own "19-image batch" section, which hit the identical
+ambiguity once before with a *different* resolution for one of the two groups):
+
+- **Batch B -- T5 gap-height variation, PTFE** (unambiguous): `T5-PTFE_H50/H95/H145/H190`,
+  `v1`/`v2` each, `data/raw/characterization2_ptfe/` -- 8 files.
+- **Batch C -- "T5 rel humidity variation on membrane"**: confirmed to mean the `RH`-named
+  files in `data/raw/humidity_loading/` (`0RH_NR212`, `23RH_NR212`, `75RH_NR212` -- NR212 is
+  the membrane substrate there), not the literally-`T5`-named `T5-M_H190/H95` files in
+  `data/raw/T5/`. Same resolution as the prior batch. `75RH_NR212_v2_mm000001.jpg` excluded
+  (user-flagged "weird" in a prior session, memory `crack-stats-batch-exclusions`) -- 5 files.
+- **Batch D -- "T2, T3, T4 low height on membrane"**: T3/T4 each have an unlabeled membrane
+  file and an `_H95` variant; T2 has no `_H95` variant. The prior batch used the unlabeled file
+  only (called "high gap-height" there). This time the user explicitly chose the **`_H95`
+  variant only** -- the opposite choice, confirmed directly, not an oversight. `T2-A_membran`
+  included as-is (no variant to choose between) -- 6 files: `T2-A_membran_v1/v2`,
+  `T3-M_H95_v1/v2`, `T4-M_H95_v1/v2`.
+
+Run via the new `scripts/export_crack_stats_v3_batch_bcd.py` (hardcodes this exact 19-path
+list, grouped/commented by batch, reusing `export_crack_stats_v3.compute_row()` unmodified) --
+not a general-purpose CLI flag on `export_crack_stats_v3.py`, since this specific grouping is a
+one-off thesis-batch selection. No `--cache-dir` used for this run (xlsx only). Output:
+`outputs/crack_stats_v3_batch_bcd.xlsx`, 19 rows, all 27 columns populated, zero NaNs.
+
+**Sanity check -- Batch B's own internal trend**: `crack_area_pct` rises essentially
+monotonically with gap height across the H50->H190 sweep (0.02% / 0.13% at H50 up to 25-28% at
+H190), and `giant_component_fraction` follows the same pattern (0.16/0.03 at H50's two
+replicates up to 0.97-0.98 at H190) -- consistent with a percolation transition as coating
+thickness (and hence post-drying crack density) increases with Rakelspalt gap. This is a real,
+physically-sensible result the pipeline reproduces, not just "ran without crashing."
+
+**Flaking**: zero candidates on every Batch C (RH_NR212, membrane) image -- consistent with
+`flaking.py`'s own module docstring noting delamination "seen so far on membrane-substrate
+T2/T3/T4", not this humidity series. Batch D shows flaking on `T2-A_membran` (2, 6 candidates)
+and `T3-M_H95_v2` (2 candidates) but not on `T3-M_H95_v1`/either `T4-M_H95` image -- plausible
+sample-to-sample variation, matching that same expectation.
+
+No v1 equivalent run exists for this specific 19-image batch (v1's own batches used different
+scope/selection, per `docs/crack_stats_v2_status.md`), so this section has no direct v1-vs-v3
+comparison table -- see the single-image spot-check above for that comparison instead.
