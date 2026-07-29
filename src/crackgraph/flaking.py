@@ -312,3 +312,40 @@ def cut_adjacent_path_indices(
             flagged.add(int(path_index))
 
     return flagged
+
+
+def flake_touching_path_indices(
+    skeleton,
+    graph_result,
+    excluded_mask: np.ndarray,
+) -> set[int]:
+    """crack_stats_v3's replacement for cut_adjacent_path_indices: path
+    indices of edges with AT LEAST ONE pixel physically inside
+    excluded_mask -- no distance buffer beyond the mask itself. Exists
+    alongside cut_adjacent_path_indices, not instead of it -- v1
+    (scripts/export_crack_stats.py) keeps using the buffer version
+    unchanged; v3 (scripts/export_crack_stats_v3.py) uses this one. See
+    docs/crack_stats_v3_status.md for why v3 needs no buffer at all: it
+    never re-skeletonizes on a corrected mask, so excluded_mask itself (not
+    a margin around it) is the only region whose skeleton pixels are
+    known to be flaking noise rather than real crack.
+
+    Same early-return guard and coordinate clip/round handling as
+    cut_adjacent_path_indices, for parity and to avoid an out-of-bounds
+    index on a path that touches the image border -- direct mask
+    membership is otherwise all that's needed, so no
+    distance_transform_edt/reference_width_px/buffer multiplier here.
+    """
+    if not excluded_mask.any() or len(graph_result.summary) == 0:
+        return set()
+
+    h, w = excluded_mask.shape
+    flagged = set()
+    for path_index in graph_result.summary.index:
+        coords = skeleton.path_coordinates(int(path_index))
+        rr = np.clip(np.round(coords[:, 0]).astype(int), 0, h - 1)
+        cc = np.clip(np.round(coords[:, 1]).astype(int), 0, w - 1)
+        if excluded_mask[rr, cc].any():
+            flagged.add(int(path_index))
+
+    return flagged
