@@ -1,9 +1,11 @@
 """Pipeline-stage walkthrough figures for crack_stats_v3: renders the raw
-crop, the binarized mask, the pre-prune (raw) skeleton, the pruned branches
-(spur/fragment/corner-artifact) called out in color, the cleaned (post-prune)
-skeleton, the delaminated region shaded in (when present), and the final
-graph with excluded edges *and* nodes marked -- for visually verifying the
-pipeline and producing reusable figures.
+crop, the binarized mask, the mask-cleaning step (small objects removed /
+small holes filled, highlighted), the pre-prune (raw) skeleton, the pruned
+branches (spur/fragment/corner-artifact, shown as one undifferentiated
+"pruned" category) called out in color, the cleaned (post-prune) skeleton,
+the delaminated region shaded in (when present), and the final graph with
+excluded edges *and* nodes marked -- for visually verifying the pipeline and
+producing reusable figures.
 
 Reuses scripts/export_crack_stats_v3.py's exact stage functions (binarize,
 skeletonize_and_prune, exclude_flaking_regions, extract_graph,
@@ -64,27 +66,27 @@ FLAKING_TINT_COLOR = (1.0, 0.0, 0.0, 0.3)
 KEPT_NODE_COLOR = "cyan"
 EXCLUDED_NODE_COLOR = "gold"
 
-# Pruning-reason colors -- chosen to not collide with the palette above
-# (lime/magenta/red-tint/cyan/gold already in use in this same figure set),
-# per this project's own "don't reuse hues across unrelated categorical
-# layers" lesson.
-SPUR_COLOR = "deepskyblue"
-FRAGMENT_COLOR = "darkorange"
-CORNER_ARTIFACT_COLOR = "yellow"
-PRUNE_COLOR_BY_REASON = {
-    "spur": SPUR_COLOR,
-    "fragment": FRAGMENT_COLOR,
-    "corner_artifact": CORNER_ARTIFACT_COLOR,
-}
+# Single undifferentiated "pruned" color -- spur/fragment/corner-artifact are
+# deliberately not distinguished here (that would need a 3-color legend for a
+# distinction most viewers of this figure don't need); chosen to not collide
+# with the palette above, per this project's own "don't reuse hues across
+# unrelated categorical layers" lesson.
+PRUNED_COLOR = "orange"
+
+# Mask-cleaning diff color (small objects removed + small holes filled by
+# remove_small_objects/remove_small_holes) -- a blue, distinct from every
+# other color in this figure set (lime/magenta/red-tint/cyan/gold/orange).
+MASK_CLEAN_DIFF_COLOR = "dodgerblue"
 
 STAGE_FILENAMES = {
     "raw": "01_raw_crop.png",
     "binarized": "02_binarized.png",
-    "skeleton_raw": "03_skeleton_raw.png",
-    "pruning": "04_pruning_annotated.png",
-    "skeleton_cleaned": "05_skeleton_cleaned.png",
-    "flaking": "06_flaking_shaded.png",
-    "graph": "07_graph_final.png",
+    "mask_cleaned": "03_mask_cleaned.png",
+    "skeleton_raw": "04_skeleton_raw.png",
+    "pruning": "05_pruning_annotated.png",
+    "skeleton_cleaned": "06_skeleton_cleaned.png",
+    "flaking": "07_flaking_shaded.png",
+    "graph": "08_graph_final.png",
 }
 
 
@@ -132,35 +134,48 @@ def draw_skeleton(ax, mask_crop, skel_crop, title):
     ax.axis("off")
 
 
+def draw_mask_cleaned(ax, mask_clean_crop, diff_crop):
+    """The cleaned mask (post remove_small_objects/remove_small_holes), with
+    every pixel that changed from the raw Otsu mask -- a small object
+    removed, or a small hole filled -- highlighted in one color. Spur/hole
+    sub-types are deliberately not distinguished, same simplification as
+    draw_pruning_annotated below."""
+    ax.imshow(mask_clean_crop, cmap="gray", vmin=0, vmax=1)
+    diff_rgba = np.zeros((*diff_crop.shape, 4))
+    diff_rgba[diff_crop] = matplotlib.colors.to_rgba(MASK_CLEAN_DIFF_COLOR)
+    ax.imshow(diff_rgba)
+    ax.plot([], [], color=MASK_CLEAN_DIFF_COLOR, linewidth=6, label="speck removed/filled")
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.03), ncol=1, fontsize=8, framealpha=0.9)
+    ax.set_title("3. Mask cleaning (small objects removed / small holes filled)", fontsize=11)
+    ax.axis("off")
+
+
 def draw_flaking_shaded(ax, mask_crop, skel_crop, excluded_crop):
-    draw_skeleton(ax, mask_crop, skel_crop, "6. Skeleton + delaminated region shaded")
+    draw_skeleton(ax, mask_crop, skel_crop, "7. Skeleton + delaminated region shaded")
     excl_rgba = np.zeros((*excluded_crop.shape, 4))
     excl_rgba[excluded_crop] = FLAKING_TINT_COLOR
     ax.imshow(excl_rgba)
 
 
 def draw_pruning_annotated(ax, mask_crop, skel_raw_crop, pruned_branches, bbox):
-    """Pre-prune skeleton with every pruned branch drawn in a color keyed to
-    why it was removed -- spur (short dead end), fragment (short isolated
-    piece), or corner_artifact (medial-axis branch tracing into a concave
-    mask corner, per skeleton.py's correlation test). Branches not pruned
-    remain plain skeleton-colored, same as draw_skeleton's other panels."""
+    """Pre-prune skeleton with every pruned branch (spur, fragment, or
+    corner-artifact -- not distinguished from one another) drawn in one
+    color. Branches not pruned remain plain skeleton-colored, same as
+    draw_skeleton's other panels."""
     y0, y1, x0, x1 = bbox
-    draw_skeleton(ax, mask_crop, skel_raw_crop, "4. Pruned branches (spur / fragment / corner-artifact)")
+    draw_skeleton(ax, mask_crop, skel_raw_crop, "5. Pruned branches (spur / fragment / corner-artifact)")
 
-    segments_by_reason = {"spur": [], "fragment": [], "corner_artifact": []}
+    segments = []
     for rec in pruned_branches:
         local = rec.coords - [y0, x0]
         seg = local[:, ::-1]  # (row, col) -> (x, y)
-        segments_by_reason[rec.reason].append(seg)
+        segments.append(seg)
 
-    for reason, segs in segments_by_reason.items():
-        if segs:
-            ax.add_collection(LineCollection(segs, colors=PRUNE_COLOR_BY_REASON[reason], linewidths=1.8, zorder=3))
+    if segments:
+        ax.add_collection(LineCollection(segments, colors=PRUNED_COLOR, linewidths=1.8, zorder=3))
 
-    for reason, color in PRUNE_COLOR_BY_REASON.items():
-        ax.plot([], [], color=color, linewidth=1.8, label=reason.replace("_", " "))
-    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.03), ncol=3, fontsize=8, framealpha=0.9)
+    ax.plot([], [], color=PRUNED_COLOR, linewidth=1.8, label="pruned")
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.03), ncol=1, fontsize=8, framealpha=0.9)
 
     ax.set_xlim(0, x1 - x0)
     ax.set_ylim(y1 - y0, 0)
@@ -218,7 +233,7 @@ def draw_graph_excluded(ax, mask_crop, excluded_crop, skel, graph_result, omitte
 
     ax.set_xlim(0, x1 - x0)
     ax.set_ylim(y1 - y0, 0)
-    ax.set_title("7. Final graph -- excluded edges & nodes marked", fontsize=11)
+    ax.set_title("8. Final graph -- excluded edges & nodes marked", fontsize=11)
     ax.axis("off")
 
 
@@ -253,6 +268,8 @@ def main():
 
     rgb_crop = rgb[y0:y1, x0:x1]
     mask_crop = binarize_result.mask[y0:y1, x0:x1]
+    mask_clean_crop = skeleton_result.mask_clean[y0:y1, x0:x1]
+    mask_clean_diff_crop = mask_crop != mask_clean_crop
     skel_raw_crop = skel_raw_image[y0:y1, x0:x1]
     skel_clean_crop = skeleton_result.skel_image[y0:y1, x0:x1]
     excluded_crop = flaking_result.excluded_mask[y0:y1, x0:x1]
@@ -276,10 +293,16 @@ def main():
     panels.append(("binarized", lambda ax: draw_binarized(ax, mask_crop)))
 
     fig, ax = plt.subplots(figsize=(7, 7))
-    draw_skeleton(ax, mask_crop, skel_raw_crop, "3. Raw skeleton (pre-prune, single pass)")
+    draw_mask_cleaned(ax, mask_clean_crop, mask_clean_diff_crop)
+    fig.savefig(out_dir / STAGE_FILENAMES["mask_cleaned"], dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    panels.append(("mask_cleaned", lambda ax: draw_mask_cleaned(ax, mask_clean_crop, mask_clean_diff_crop)))
+
+    fig, ax = plt.subplots(figsize=(7, 7))
+    draw_skeleton(ax, mask_crop, skel_raw_crop, "4. Raw skeleton (pre-prune, single pass)")
     fig.savefig(out_dir / STAGE_FILENAMES["skeleton_raw"], dpi=150, bbox_inches="tight")
     plt.close(fig)
-    panels.append(("skeleton_raw", lambda ax: draw_skeleton(ax, mask_crop, skel_raw_crop, "3. Raw skeleton (pre-prune, single pass)")))
+    panels.append(("skeleton_raw", lambda ax: draw_skeleton(ax, mask_crop, skel_raw_crop, "4. Raw skeleton (pre-prune, single pass)")))
 
     fig, ax = plt.subplots(figsize=(7, 7))
     draw_pruning_annotated(ax, mask_crop, skel_raw_crop, skeleton_result.pruned_branches, bbox)
@@ -288,10 +311,10 @@ def main():
     panels.append(("pruning", lambda ax: draw_pruning_annotated(ax, mask_crop, skel_raw_crop, skeleton_result.pruned_branches, bbox)))
 
     fig, ax = plt.subplots(figsize=(7, 7))
-    draw_skeleton(ax, mask_crop, skel_clean_crop, "5. Cleaned skeleton (post-prune)")
+    draw_skeleton(ax, mask_crop, skel_clean_crop, "6. Cleaned skeleton (post-prune)")
     fig.savefig(out_dir / STAGE_FILENAMES["skeleton_cleaned"], dpi=150, bbox_inches="tight")
     plt.close(fig)
-    panels.append(("skeleton_cleaned", lambda ax: draw_skeleton(ax, mask_crop, skel_clean_crop, "5. Cleaned skeleton (post-prune)")))
+    panels.append(("skeleton_cleaned", lambda ax: draw_skeleton(ax, mask_crop, skel_clean_crop, "6. Cleaned skeleton (post-prune)")))
 
     if has_flaking_in_crop:
         fig, ax = plt.subplots(figsize=(7, 7))
@@ -330,8 +353,9 @@ def main():
         "|---|---|",
         f"| `{STAGE_FILENAMES['raw']}` | Raw image, cropped |",
         f"| `{STAGE_FILENAMES['binarized']}` | Binarized mask (Otsu) |",
+        f"| `{STAGE_FILENAMES['mask_cleaned']}` | Cleaned mask, with small objects removed / small holes filled highlighted |",
         f"| `{STAGE_FILENAMES['skeleton_raw']}` | Raw skeleton, pre-prune (single thinning pass) |",
-        f"| `{STAGE_FILENAMES['pruning']}` | Pruned branches called out by reason (spur / fragment / corner-artifact) |",
+        f"| `{STAGE_FILENAMES['pruning']}` | Pruned branches (spur / fragment / corner-artifact, not distinguished) |",
         f"| `{STAGE_FILENAMES['skeleton_cleaned']}` | Cleaned skeleton, post-prune |",
     ]
     if has_flaking_in_crop:
