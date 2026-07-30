@@ -30,6 +30,7 @@ Usage:
 """
 
 import argparse
+import time
 from pathlib import Path
 
 import networkx as nx
@@ -63,27 +64,41 @@ def compute_row(image_path: Path, *, cache_dir: Path | None = None) -> dict:
     and omitted (any pixel inside the grown-out flake) instead of
     cut_adjacent (any pixel within a buffer of it) -- applied to the
     connectivity graph as well as the stats, not just the stats."""
+    t_start = time.perf_counter()
     gray, rgb = load_image(image_path)
     full_h, full_w = gray.shape
 
+    t0 = time.perf_counter()
     binarize_result = binarize(gray)
+    t_binarize = time.perf_counter() - t0
 
     # Single pass -- no scout/real split. The flaked region, if any, is
     # skeletonized along with everything else; its interior mesh is
     # dropped below by flake_touching_path_indices, not by a second pass
     # that removes it from the mask beforehand.
+    t0 = time.perf_counter()
     skeleton_result = skeletonize_and_prune(binarize_result.mask, source_image=gray)
+    t_skeletonize = time.perf_counter() - t0
+
+    t0 = time.perf_counter()
     flaking_result = exclude_flaking_regions(
         skeleton_result.mask_clean, skeleton_result.skel_image, skeleton_result.medial_radius,
     )
+    t_flaking = time.perf_counter() - t0
+
+    t0 = time.perf_counter()
     graph_result = extract_graph(skeleton_result.skeleton)
+    t_graph_extract = time.perf_counter() - t0
 
     # Omit-by-membership: any edge with a pixel inside the grown-out flake
     # is dropped entirely -- from stats AND from the connectivity graph.
+    t0 = time.perf_counter()
     omitted = flake_touching_path_indices(
         skeleton_result.skeleton, graph_result, flaking_result.excluded_mask,
     )
+    t_flaking += time.perf_counter() - t0
 
+    t0_stats = time.perf_counter()
     summary = graph_result.summary
     length_ok_mask = ~summary.index.isin(omitted)
 
@@ -176,6 +191,9 @@ def compute_row(image_path: Path, *, cache_dir: Path | None = None) -> dict:
         median_edge_length_gc_um = median_edge_length_gc_px * UM_PER_PX_MM_TAG
         giant_component_span_um = giant_component_span_px_val * UM_PER_PX_MM_TAG
 
+    t_stats = time.perf_counter() - t0_stats
+    t_total = time.perf_counter() - t_start
+
     stats_row = {
         "image_filename": image_path.name,
         "source_folder": image_path.parent.name,
@@ -203,6 +221,15 @@ def compute_row(image_path: Path, *, cache_dir: Path | None = None) -> dict:
         "flaking_n_candidates": len(flaking_result.candidates),
         "flaking_n_edges_omitted": len(omitted),
         "n_corner_artifacts_pruned": skeleton_result.n_corner_artifacts_pruned,
+        "runtime_binarize_s": t_binarize,
+        "runtime_skeletonize_s": t_skeletonize,
+        "runtime_flaking_s": t_flaking,
+        "runtime_graph_extract_s": t_graph_extract,
+        "runtime_stats_s": t_stats,
+        # Measured independently (whole-function wall clock), not summed from
+        # the buckets above -- load_image and dict/DataFrame assembly aren't
+        # separately bucketed, so this can exceed their sum by a small margin.
+        "runtime_total_s": t_total,
     }
 
     if cache_dir is not None:

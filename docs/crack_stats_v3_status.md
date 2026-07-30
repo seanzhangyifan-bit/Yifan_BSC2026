@@ -154,12 +154,53 @@ it), not just out of the per-edge stat columns.
   here, so this particular column happened not to be sensitive to the methodology difference on
   this image; not a general guarantee.
 - [x] Batch B/C/D run (19 images) completed -- see section below.
+- [x] Batch D's T2 source corrected (was wrong -- see "T2 source correction" below) and
+      re-run with per-stage timing instrumentation added to `compute_row()`.
+- [x] v2-vs-v3 comparison on the 13 images the two datasets happen to share -- see "v2-vs-v3
+      comparison" section below.
 - [ ] No full run across the entire default 39-image `data/raw/` scope yet -- only the
       single-image v1-vs-v3 spot-check and the 19-image B/C/D batch below have been run so far.
 - [ ] No cross-image validation of the `n_components` sensitivity noted above -- the existing
       v2 status doc already flagged this same image's `n_components` as sensitive to
       hole-filling (41->35 there); worth keeping in mind that this metric is one of the more
       fragile ones to compare across methodologies, image to image.
+
+## T2 source correction
+
+The first Batch D run (above) used `T2-A_membran_v1/v2` (`data/raw/aquivion_t2_membran/`) as
+T2's "low height" counterpart to T3/T4's `_H95` files. This was wrong: `aquivion_t2_membran/`
+traces back to a different OneDrive source project ("Pt Kat Aquivion T2") than T3/T4's `_H95`
+files ("Pt Kat Characterization 2") -- not a gap-height variant of the same series at all, just
+an unrelated T2 capture. The user caught this and pointed at "Pt Kat Characterization 2" in
+`all_pics`, which does have its own T2 image (`Light Microscopy/T2-M_H90/`) -- the correct,
+consistent counterpart to `T3-M_H95`/`T4-M_H95`.
+
+Copied in (visually confirmed clean of any blue scale bar on both `mm000001` files first):
+`data/raw/characterization2_membran/T2-M_H90_v{1,2}_{lu,mm,ro}000001.jpg`. The `v1` source
+filenames used an inconsistent `T2-A_M_H90_...` prefix (vs. `v2`'s plain `T2-M_H90_...`) --
+normalized to `T2-M_H90_v1_...` on copy, matching `v2` and the sibling `T3-M_H95`/`T4-M_H95`
+convention. `scripts/export_crack_stats_v3_batch_bcd.py`'s `BATCH_D_T2_T3_T4_MEMBRANE_H95`
+updated accordingly and the full 19-image batch re-run (superseding the old T2 rows entirely,
+not just patching them). Notably, `T2-M_H90` has **zero** flaking candidates on both replicates
+(the old, wrong `T2-A_membran` had 2 and 6) -- a real, disclosed change from fixing the source,
+not a pipeline bug.
+
+## Per-stage timing
+
+`compute_row()` now records wall-clock time (`time.perf_counter()`) for five stages plus an
+independently-measured total, added as new `stats_row` columns -- purely additive, no existing
+column or behavior changed:
+
+`runtime_binarize_s`, `runtime_skeletonize_s`, `runtime_flaking_s` (`exclude_flaking_regions` +
+`flake_touching_path_indices` combined), `runtime_graph_extract_s`, `runtime_stats_s`,
+`runtime_total_s` (whole-function wall clock, measured independently -- can exceed the sum of
+the five buckets by a small margin: `load_image` and dict assembly aren't separately bucketed).
+
+On the 19-image batch, `runtime_total_s` ranged 28.3s-86.5s (mean ~46s), consistent with the
+single-image spot-check above (38.7s on a similar-resolution image). `runtime_skeletonize_s`
+dominates every row (typically 70-90% of total) -- matches the earlier profiling note in this
+doc's "Second pass" timing table, where `skeletonize()` itself was already the largest single
+cost before this pipeline existed.
 
 ## Batch B/C/D run (19 images)
 
@@ -179,15 +220,17 @@ ambiguity once before with a *different* resolution for one of the two groups):
 - **Batch D -- "T2, T3, T4 low height on membrane"**: T3/T4 each have an unlabeled membrane
   file and an `_H95` variant; T2 has no `_H95` variant. The prior batch used the unlabeled file
   only (called "high gap-height" there). This time the user explicitly chose the **`_H95`
-  variant only** -- the opposite choice, confirmed directly, not an oversight. `T2-A_membran`
-  included as-is (no variant to choose between) -- 6 files: `T2-A_membran_v1/v2`,
-  `T3-M_H95_v1/v2`, `T4-M_H95_v1/v2`.
+  variant only** -- the opposite choice, confirmed directly, not an oversight. T2's file was
+  initially sourced wrong (`T2-A_membran`, from an unrelated OneDrive project) and corrected to
+  `T2-M_H90` from the same "Pt Kat Characterization 2" source as T3/T4 -- see "T2 source
+  correction" below -- 6 files: `T2-M_H90_v1/v2`, `T3-M_H95_v1/v2`, `T4-M_H95_v1/v2`.
 
 Run via the new `scripts/export_crack_stats_v3_batch_bcd.py` (hardcodes this exact 19-path
 list, grouped/commented by batch, reusing `export_crack_stats_v3.compute_row()` unmodified) --
 not a general-purpose CLI flag on `export_crack_stats_v3.py`, since this specific grouping is a
 one-off thesis-batch selection. No `--cache-dir` used for this run (xlsx only). Output:
-`outputs/crack_stats_v3_batch_bcd.xlsx`, 19 rows, all 27 columns populated, zero NaNs.
+`outputs/crack_stats_v3_batch_bcd.xlsx`, 19 rows, all 33 columns (27 + 6 timing columns, added
+after this batch's first run -- see "Per-stage timing" below) populated, zero NaNs.
 
 **Sanity check -- Batch B's own internal trend**: `crack_area_pct` rises essentially
 monotonically with gap height across the H50->H190 sweep (0.02% / 0.13% at H50 up to 25-28% at
@@ -198,10 +241,40 @@ physically-sensible result the pipeline reproduces, not just "ran without crashi
 
 **Flaking**: zero candidates on every Batch C (RH_NR212, membrane) image -- consistent with
 `flaking.py`'s own module docstring noting delamination "seen so far on membrane-substrate
-T2/T3/T4", not this humidity series. Batch D shows flaking on `T2-A_membran` (2, 6 candidates)
-and `T3-M_H95_v2` (2 candidates) but not on `T3-M_H95_v1`/either `T4-M_H95` image -- plausible
-sample-to-sample variation, matching that same expectation.
+T2/T3/T4", not this humidity series. In Batch D (post-correction), only `T3-M_H95_v2` shows any
+flaking (2 candidates); `T2-M_H90` (both replicates) and the rest of T3/T4 show none -- plausible
+sample-to-sample variation.
+
+**Other notable finding**: `T2-M_H90` (both replicates) has by far the highest `n_components` in
+either batch's dataset -- 14,348 and 12,208, next-highest being T5-PTFE_H95_v1 at 1,994. Flagged
+here as a real, measured number worth being aware of, not investigated further this session --
+could reflect a genuinely more fragmented crack network at this condition, or be worth a visual
+spot-check before relying on it.
 
 No v1 equivalent run exists for this specific 19-image batch (v1's own batches used different
-scope/selection, per `docs/crack_stats_v2_status.md`), so this section has no direct v1-vs-v3
-comparison table -- see the single-image spot-check above for that comparison instead.
+scope/selection, per `docs/crack_stats_v2_status.md`) -- see "v2-vs-v3 comparison" below for a
+comparison against a *different* existing dataset that happens to share 13 of these 19 images.
+
+## v2-vs-v3 comparison
+
+`outputs/crack_stats_v2/crack_stats.xlsx` (a different, already-existing effort -- see that
+doc's own status file) happens to cover the exact same 13 images as this batch's B (8
+`T5-PTFE_H50/95/145/190`) + C (5 `RH_NR212`) groups (batch D has no v2 equivalent -- v2 used the
+unlabeled T2/T3/T4 files, not the `_H95` variant). Joined on `image_filename`, compared across 9
+headline columns (crack area, avg/median width, median segment length overall and in the giant
+component, component count, giant-component fraction and span, flaking-excluded area). Full
+results, dumbbell charts per batch, and the complete numeric table published as an HTML report:
+https://claude.ai/code/artifact/94529aca-a2a9-4d6f-b24d-459f58a7e690
+
+Headline finding: **all 5 batch C (RH_NR212) images match to 0.0% on every one of the 9
+columns** -- these images have zero flaking candidates, so v1/v2's two-pass correction and v3's
+single-pass omission have nothing to disagree about. Differences only appear in batch B
+(T5-PTFE) images that actually have flaking, and track the disclosed methodology difference
+exactly: `crack_area_pct_excl_flakes` and `flaking_excluded_area_pct` still match to
+within 0.01% everywhere (same flaking-identification call in both pipelines), while
+`n_components`/`giant_component_span_um`/width columns show mean absolute differences of
+2-4.5% (max 30-37%, concentrated on `T5-PTFE_H50_v1` and `T5-PTFE_H190_v1/v2` -- the images
+with the most flaking, and in `T5-PTFE_H50_v1`'s case also the sparsest crack network, where a
+handful of edges reclassifying swings the relative percentage further). This is consistent with
+the single-image spot-check above and with the design rationale in this doc's "Why" section --
+the differences are exactly where the methodology says they should be, and nowhere else.

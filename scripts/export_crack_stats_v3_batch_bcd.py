@@ -11,9 +11,13 @@ Batch C -- T5 dew-point/humidity variation, membrane (5 files,
     humidity_loading/): 0RH_NR212, 23RH_NR212 (v1/v2 each), 75RH_NR212_v1
     only -- 75RH_NR212_v2 is excluded, user-flagged "weird" in a prior
     session (see memory crack-stats-batch-exclusions.md).
-Batch D -- T2/T3/T4, membrane, _H95 variant (6 files): T2-A_membran_v1/v2
-    (T2 has no _H95 variant, included as-is), T3-M_H95_v1/v2,
-    T4-M_H95_v1/v2.
+Batch D -- T2/T3/T4, membrane, low-gap-height variant (6 files): T2-M_H90_v1/v2,
+    T3-M_H95_v1/v2, T4-M_H95_v1/v2. T2-M_H90 comes from "Pt Kat Characterization 2"
+    (same OneDrive source project as T3/T4's _H95 files) -- an earlier version of
+    this batch wrongly used T2-A_membran (data/raw/aquivion_t2_membran/), which
+    traces back to a different OneDrive project ("Pt Kat Aquivion T2") entirely,
+    not a low/high-height variant of the same T2 series. Corrected; see
+    docs/crack_stats_v3_status.md.
 
 Usage:
     python3 -m scripts.export_crack_stats_v3_batch_bcd [--out outputs/crack_stats_v3_batch_bcd.xlsx]
@@ -47,8 +51,8 @@ BATCH_C_T5_DEWPOINT_MEMBRANE = [
 ]
 
 BATCH_D_T2_T3_T4_MEMBRANE_H95 = [
-    "data/raw/aquivion_t2_membran/T2-A_membran_v1_mm000001.jpg",
-    "data/raw/aquivion_t2_membran/T2-A_membran_v2_mm000001.jpg",
+    "data/raw/characterization2_membran/T2-M_H90_v1_mm000001.jpg",
+    "data/raw/characterization2_membran/T2-M_H90_v2_mm000001.jpg",
     "data/raw/characterization2_membran/T3-M_H95_v1_mm000001.jpg",
     "data/raw/characterization2_membran/T3-M_H95_v2_mm000001.jpg",
     "data/raw/characterization2_membran/T4-M_H95_v1_mm000001.jpg",
