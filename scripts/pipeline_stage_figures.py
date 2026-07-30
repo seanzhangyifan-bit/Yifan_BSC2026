@@ -33,6 +33,7 @@ Usage:
 """
 
 import argparse
+import shutil
 from pathlib import Path
 
 import matplotlib
@@ -41,6 +42,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.collections import LineCollection
+from scipy.ndimage import binary_dilation
 from skimage.measure import label, regionprops
 from skimage.morphology import skeletonize as skimage_skeletonize
 
@@ -59,6 +61,16 @@ from src.crackgraph.skeleton import skeletonize_and_prune
 # network, not just the bare candidate blob.
 CROP_PADDING_WIDTH_MULTIPLIER = 25.0
 CROP_PADDING_FLOOR_PX = 400
+
+# Display-only skeleton rendering knobs -- neither affects any real
+# measurement, both exist purely so a thin, sparse skeleton line doesn't get
+# visually lost once matplotlib downsamples a multi-thousand-pixel crop for
+# a 7x7in figure. SKELETON_BG_MAX dims the mask's displayed brightness
+# (white foreground reads as mid-gray; true background stays pure black
+# either way, since 0 * anything = 0) so the bright skeleton color contrasts
+# against it; SKELETON_DILATE_PX thickens the 1px-wide skeleton for display.
+SKELETON_BG_MAX = 3.0
+SKELETON_DILATE_PX = 2
 
 SKELETON_COLOR = "lime"
 OMITTED_EDGE_COLOR = "magenta"
@@ -126,9 +138,13 @@ def draw_binarized(ax, mask_crop):
 
 
 def draw_skeleton(ax, mask_crop, skel_crop, title):
-    ax.imshow(mask_crop, cmap="gray", vmin=0, vmax=1)
-    skel_rgba = np.zeros((*skel_crop.shape, 4))
-    skel_rgba[skel_crop] = matplotlib.colors.to_rgba(SKELETON_COLOR)
+    # Dim background + dilate the skeleton for display only -- makes a thin,
+    # sparse skeleton line legible after matplotlib downsamples the crop; see
+    # SKELETON_BG_MAX/SKELETON_DILATE_PX above. Neither changes real data.
+    ax.imshow(mask_crop, cmap="gray", vmin=0, vmax=SKELETON_BG_MAX)
+    skel_display = binary_dilation(skel_crop, iterations=SKELETON_DILATE_PX)
+    skel_rgba = np.zeros((*skel_display.shape, 4))
+    skel_rgba[skel_display] = matplotlib.colors.to_rgba(SKELETON_COLOR)
     ax.imshow(skel_rgba)
     ax.set_title(title, fontsize=11)
     ax.axis("off")
@@ -276,7 +292,11 @@ def main():
     has_flaking_in_crop = bool(excluded_crop.any())
 
     out_dir = Path(args.out_dir) / image_path.stem
-    out_dir.mkdir(parents=True, exist_ok=True)
+    # Wipe and recreate rather than mkdir(exist_ok=True) -- a re-run after any
+    # renumbering/renaming of stage files must never leave stale files behind
+    # from a previous run sitting alongside the current ones.
+    shutil.rmtree(out_dir, ignore_errors=True)
+    out_dir.mkdir(parents=True)
 
     panels = []  # (key, draw_fn) for the combined figure, in order
 
