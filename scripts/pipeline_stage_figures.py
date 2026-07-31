@@ -1,21 +1,22 @@
-"""Pipeline-stage walkthrough figures for crack_stats_v3: renders the raw
-crop, the binarized mask, the mask-cleaning step (small objects removed /
-small holes filled, highlighted), the pre-prune (raw) skeleton, the pruned
-branches (spur/fragment/corner-artifact, shown as one undifferentiated
-"pruned" category) called out in color, the cleaned (post-prune) skeleton,
-the delaminated region shaded in (when present), and the final graph with
-excluded edges *and* nodes marked -- for visually verifying the pipeline and
-producing reusable figures.
+"""Pipeline-stage walkthrough figures for crack_stats_v3.
+
+Two modes:
+
+- **Full** (default): 8 panels -- raw crop, binarized mask, mask cleaning
+  (small objects removed / small holes filled, highlighted), the pre-prune
+  (raw) skeleton, the pruned branches (spur/fragment/corner-artifact, shown
+  as one undifferentiated "pruned" category) called out in color, the
+  cleaned (post-prune) skeleton, the delaminated region shaded in (when
+  present), and the final graph with excluded edges *and* nodes marked.
+- **Compact** (`--compact`): 4 panels for external hand-off -- raw crop,
+  mask cleaning + skeletonize + prune consolidated into one panel, flake
+  identification, and the final graph.
 
 Reuses scripts/export_crack_stats_v3.py's exact stage functions (binarize,
 skeletonize_and_prune, exclude_flaking_regions, extract_graph,
 flake_touching_path_indices) in the same order compute_row() calls them --
 this script only adds a render step after each stage instead of proceeding
-straight to stats. The one extra computation not part of compute_row() is a
-second, display-only call to skimage.morphology.skeletonize() on the same
-mask_clean skeletonize_and_prune already used, to recover the pre-prune
-skeleton for the pruning-annotated panel -- cheap (one pass, no pruning loop)
-and does not affect any real pipeline output.
+straight to stats.
 
 Crop selection: anchors on the largest flaking candidate the same way as
 before when the image has any (flaking_result.excluded_mask non-empty);
@@ -29,7 +30,7 @@ way compute_row()'s own connectivity graph G is: a node is "kept" if it has
 at least one non-omitted edge, "excluded" otherwise.
 
 Usage:
-    python3 -m scripts.pipeline_stage_figures <image_path> [--out-dir outputs/crack_stats_v3/pipeline_walkthrough]
+    python3 -m scripts.pipeline_stage_figures <image_path> [--out-dir outputs/crack_stats_v3/pipeline_walkthrough] [--compact]
 """
 
 import argparse
@@ -62,14 +63,10 @@ from src.crackgraph.skeleton import skeletonize_and_prune
 CROP_PADDING_WIDTH_MULTIPLIER = 25.0
 CROP_PADDING_FLOOR_PX = 400
 
-# Display-only skeleton rendering knobs -- neither affects any real
-# measurement, both exist purely so a thin, sparse skeleton line doesn't get
-# visually lost once matplotlib downsamples a multi-thousand-pixel crop for
-# a 7x7in figure. SKELETON_BG_MAX dims the mask's displayed brightness
-# (white foreground reads as mid-gray; true background stays pure black
-# either way, since 0 * anything = 0) so the bright skeleton color contrasts
-# against it; SKELETON_DILATE_PX thickens the 1px-wide skeleton for display.
-SKELETON_BG_MAX = 3.0
+# Display-only skeleton dilation -- doesn't affect any real measurement,
+# exists purely so a thin, sparse 1px skeleton line doesn't get visually
+# lost once matplotlib downsamples a multi-thousand-pixel crop for a 7x7in
+# figure. (Background is left at full black/white contrast -- no dimming.)
 SKELETON_DILATE_PX = 2
 
 SKELETON_COLOR = "lime"
@@ -101,6 +98,13 @@ STAGE_FILENAMES = {
     "graph": "08_graph_final.png",
 }
 
+COMPACT_STAGE_FILENAMES = {
+    "raw": "01_raw_crop.png",
+    "clean_skeleton_pruned": "02_clean_skeletonize_prune.png",
+    "flaking": "03_flaking.png",
+    "graph": "04_graph_final.png",
+}
+
 
 def compute_crop_bbox(excluded_mask, reference_width_px, image_shape):
     """(y0, y1, x0, x1) around the largest-area flaking candidate, padded and
@@ -125,9 +129,9 @@ def compute_corner_crop_bbox(image_shape):
     return region.row_slice.start, region.row_slice.stop, region.col_slice.start, region.col_slice.stop
 
 
-def draw_raw(ax, rgb_crop):
+def draw_raw(ax, rgb_crop, title="1. Raw image"):
     ax.imshow(rgb_crop)
-    ax.set_title("1. Raw image", fontsize=11)
+    ax.set_title(title, fontsize=11)
     ax.axis("off")
 
 
@@ -138,10 +142,11 @@ def draw_binarized(ax, mask_crop):
 
 
 def draw_skeleton(ax, mask_crop, skel_crop, title):
-    # Dim background + dilate the skeleton for display only -- makes a thin,
-    # sparse skeleton line legible after matplotlib downsamples the crop; see
-    # SKELETON_BG_MAX/SKELETON_DILATE_PX above. Neither changes real data.
-    ax.imshow(mask_crop, cmap="gray", vmin=0, vmax=SKELETON_BG_MAX)
+    # Dilate the skeleton for display only -- makes a thin, sparse skeleton
+    # line legible after matplotlib downsamples the crop; see
+    # SKELETON_DILATE_PX above. Doesn't change any real data. Background
+    # stays plain black/white, full contrast.
+    ax.imshow(mask_crop, cmap="gray", vmin=0, vmax=1)
     skel_display = binary_dilation(skel_crop, iterations=SKELETON_DILATE_PX)
     skel_rgba = np.zeros((*skel_display.shape, 4))
     skel_rgba[skel_display] = matplotlib.colors.to_rgba(SKELETON_COLOR)
@@ -166,8 +171,45 @@ def draw_mask_cleaned(ax, mask_clean_crop, diff_crop):
     ax.axis("off")
 
 
-def draw_flaking_shaded(ax, mask_crop, skel_crop, excluded_crop):
-    draw_skeleton(ax, mask_crop, skel_crop, "7. Skeleton + delaminated region shaded")
+def draw_clean_skeleton_pruned(ax, mask_clean_crop, mask_clean_diff_crop, skel_final_crop, pruned_branches, bbox, title):
+    """Compact-mode panel consolidating mask cleaning + skeletonize + prune
+    into one view: cleaned mask as background (specks highlighted), the
+    final kept skeleton in skeleton color, and every pruned branch in the
+    pruned color -- kept + pruned together reconstruct the pre-prune
+    skeleton implicitly, without a separate raw-skeleton panel."""
+    y0, y1, x0, x1 = bbox
+    ax.imshow(mask_clean_crop, cmap="gray", vmin=0, vmax=1)
+
+    diff_rgba = np.zeros((*mask_clean_diff_crop.shape, 4))
+    diff_rgba[mask_clean_diff_crop] = matplotlib.colors.to_rgba(MASK_CLEAN_DIFF_COLOR)
+    ax.imshow(diff_rgba)
+
+    skel_display = binary_dilation(skel_final_crop, iterations=SKELETON_DILATE_PX)
+    skel_rgba = np.zeros((*skel_display.shape, 4))
+    skel_rgba[skel_display] = matplotlib.colors.to_rgba(SKELETON_COLOR)
+    ax.imshow(skel_rgba)
+
+    segments = []
+    for rec in pruned_branches:
+        local = rec.coords - [y0, x0]
+        seg = local[:, ::-1]  # (row, col) -> (x, y)
+        segments.append(seg)
+    if segments:
+        ax.add_collection(LineCollection(segments, colors=PRUNED_COLOR, linewidths=1.8, zorder=3))
+
+    ax.plot([], [], color=MASK_CLEAN_DIFF_COLOR, linewidth=6, label="speck removed/filled")
+    ax.plot([], [], color=SKELETON_COLOR, linewidth=2.5, label="kept skeleton")
+    ax.plot([], [], color=PRUNED_COLOR, linewidth=1.8, label="pruned")
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.03), ncol=3, fontsize=8, framealpha=0.9)
+
+    ax.set_xlim(0, x1 - x0)
+    ax.set_ylim(y1 - y0, 0)
+    ax.set_title(title, fontsize=11)
+    ax.axis("off")
+
+
+def draw_flaking_shaded(ax, mask_crop, skel_crop, excluded_crop, title):
+    draw_skeleton(ax, mask_crop, skel_crop, title)
     excl_rgba = np.zeros((*excluded_crop.shape, 4))
     excl_rgba[excluded_crop] = FLAKING_TINT_COLOR
     ax.imshow(excl_rgba)
@@ -197,7 +239,7 @@ def draw_pruning_annotated(ax, mask_crop, skel_raw_crop, pruned_branches, bbox):
     ax.set_ylim(y1 - y0, 0)
 
 
-def draw_graph_excluded(ax, mask_crop, excluded_crop, skel, graph_result, omitted, bbox):
+def draw_graph_excluded(ax, mask_crop, excluded_crop, skel, graph_result, omitted, bbox, title):
     y0, y1, x0, x1 = bbox
     summary = graph_result.summary
 
@@ -249,14 +291,30 @@ def draw_graph_excluded(ax, mask_crop, excluded_crop, skel, graph_result, omitte
 
     ax.set_xlim(0, x1 - x0)
     ax.set_ylim(y1 - y0, 0)
-    ax.set_title("8. Final graph -- excluded edges & nodes marked", fontsize=11)
+    ax.set_title(title, fontsize=11)
     ax.axis("off")
+
+
+def _save_combined(panels, out_dir, image_path, crop_mode, n_rows, n_cols):
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(6.5 * n_cols, 6.5 * n_rows))
+    flat_axes = axes.flat
+    for (_, draw_fn), ax in zip(panels, flat_axes):
+        draw_fn(ax)
+    for ax in list(flat_axes)[len(panels):]:
+        ax.axis("off")
+    fig.suptitle(f"{image_path.stem} -- pipeline stage walkthrough (crop_mode={crop_mode})", fontsize=14)
+    fig.tight_layout()
+    fig.savefig(out_dir / "combined.png", dpi=150, bbox_inches="tight")
+    plt.close(fig)
 
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("image_path", type=str)
     p.add_argument("--out-dir", type=str, default="outputs/crack_stats_v3/pipeline_walkthrough")
+    p.add_argument("--compact", action="store_true",
+                    help="4-panel mode (raw / clean+skeletonize+prune / flaking / final graph) "
+                         "for external hand-off, instead of the full 8-panel breakdown")
     args = p.parse_args()
 
     image_path = Path(args.image_path)
@@ -264,7 +322,6 @@ def main():
 
     binarize_result = binarize(gray)
     skeleton_result = skeletonize_and_prune(binarize_result.mask, source_image=gray)
-    skel_raw_image = skimage_skeletonize(skeleton_result.mask_clean)  # display-only, pre-prune
     flaking_result = exclude_flaking_regions(
         skeleton_result.mask_clean, skeleton_result.skel_image, skeleton_result.medial_radius,
     )
@@ -286,7 +343,6 @@ def main():
     mask_crop = binarize_result.mask[y0:y1, x0:x1]
     mask_clean_crop = skeleton_result.mask_clean[y0:y1, x0:x1]
     mask_clean_diff_crop = mask_crop != mask_clean_crop
-    skel_raw_crop = skel_raw_image[y0:y1, x0:x1]
     skel_clean_crop = skeleton_result.skel_image[y0:y1, x0:x1]
     excluded_crop = flaking_result.excluded_mask[y0:y1, x0:x1]
     has_flaking_in_crop = bool(excluded_crop.any())
@@ -299,88 +355,122 @@ def main():
     out_dir.mkdir(parents=True)
 
     panels = []  # (key, draw_fn) for the combined figure, in order
+    readme_lines = [f"# {image_path.stem} -- pipeline stage walkthrough", "",
+                     f"Crop: {crop_mode} mode, rows {y0}:{y1}, cols {x0}:{x1} ({y1-y0}x{x1-x0}px).",
+                     "", "| File | Stage |", "|---|---|"]
 
-    fig, ax = plt.subplots(figsize=(7, 7))
-    draw_raw(ax, rgb_crop)
-    fig.savefig(out_dir / STAGE_FILENAMES["raw"], dpi=150, bbox_inches="tight")
-    plt.close(fig)
-    panels.append(("raw", lambda ax: draw_raw(ax, rgb_crop)))
+    if args.compact:
+        fn = COMPACT_STAGE_FILENAMES
 
-    fig, ax = plt.subplots(figsize=(7, 7))
-    draw_binarized(ax, mask_crop)
-    fig.savefig(out_dir / STAGE_FILENAMES["binarized"], dpi=150, bbox_inches="tight")
-    plt.close(fig)
-    panels.append(("binarized", lambda ax: draw_binarized(ax, mask_crop)))
-
-    fig, ax = plt.subplots(figsize=(7, 7))
-    draw_mask_cleaned(ax, mask_clean_crop, mask_clean_diff_crop)
-    fig.savefig(out_dir / STAGE_FILENAMES["mask_cleaned"], dpi=150, bbox_inches="tight")
-    plt.close(fig)
-    panels.append(("mask_cleaned", lambda ax: draw_mask_cleaned(ax, mask_clean_crop, mask_clean_diff_crop)))
-
-    fig, ax = plt.subplots(figsize=(7, 7))
-    draw_skeleton(ax, mask_crop, skel_raw_crop, "4. Raw skeleton (pre-prune, single pass)")
-    fig.savefig(out_dir / STAGE_FILENAMES["skeleton_raw"], dpi=150, bbox_inches="tight")
-    plt.close(fig)
-    panels.append(("skeleton_raw", lambda ax: draw_skeleton(ax, mask_crop, skel_raw_crop, "4. Raw skeleton (pre-prune, single pass)")))
-
-    fig, ax = plt.subplots(figsize=(7, 7))
-    draw_pruning_annotated(ax, mask_crop, skel_raw_crop, skeleton_result.pruned_branches, bbox)
-    fig.savefig(out_dir / STAGE_FILENAMES["pruning"], dpi=150, bbox_inches="tight")
-    plt.close(fig)
-    panels.append(("pruning", lambda ax: draw_pruning_annotated(ax, mask_crop, skel_raw_crop, skeleton_result.pruned_branches, bbox)))
-
-    fig, ax = plt.subplots(figsize=(7, 7))
-    draw_skeleton(ax, mask_crop, skel_clean_crop, "6. Cleaned skeleton (post-prune)")
-    fig.savefig(out_dir / STAGE_FILENAMES["skeleton_cleaned"], dpi=150, bbox_inches="tight")
-    plt.close(fig)
-    panels.append(("skeleton_cleaned", lambda ax: draw_skeleton(ax, mask_crop, skel_clean_crop, "6. Cleaned skeleton (post-prune)")))
-
-    if has_flaking_in_crop:
         fig, ax = plt.subplots(figsize=(7, 7))
-        draw_flaking_shaded(ax, mask_crop, skel_clean_crop, excluded_crop)
-        fig.savefig(out_dir / STAGE_FILENAMES["flaking"], dpi=150, bbox_inches="tight")
+        draw_raw(ax, rgb_crop)
+        fig.savefig(out_dir / fn["raw"], dpi=150, bbox_inches="tight")
         plt.close(fig)
-        panels.append(("flaking", lambda ax: draw_flaking_shaded(ax, mask_crop, skel_clean_crop, excluded_crop)))
+        panels.append(("raw", lambda ax: draw_raw(ax, rgb_crop)))
+        readme_lines.append(f"| `{fn['raw']}` | Raw image, cropped |")
+
+        fig, ax = plt.subplots(figsize=(7, 7))
+        draw_clean_skeleton_pruned(ax, mask_clean_crop, mask_clean_diff_crop, skel_clean_crop,
+                                    skeleton_result.pruned_branches, bbox,
+                                    "2. Mask cleaning + skeletonize + prune")
+        fig.savefig(out_dir / fn["clean_skeleton_pruned"], dpi=150, bbox_inches="tight")
+        plt.close(fig)
+        panels.append(("clean_skeleton_pruned", lambda ax: draw_clean_skeleton_pruned(
+            ax, mask_clean_crop, mask_clean_diff_crop, skel_clean_crop,
+            skeleton_result.pruned_branches, bbox, "2. Mask cleaning + skeletonize + prune")))
+        readme_lines.append(f"| `{fn['clean_skeleton_pruned']}` | Mask cleaning (specks) + skeletonize + prune, consolidated |")
+
+        if has_flaking_in_crop:
+            fig, ax = plt.subplots(figsize=(7, 7))
+            draw_flaking_shaded(ax, mask_crop, skel_clean_crop, excluded_crop, "3. Flake identification")
+            fig.savefig(out_dir / fn["flaking"], dpi=150, bbox_inches="tight")
+            plt.close(fig)
+            panels.append(("flaking", lambda ax: draw_flaking_shaded(ax, mask_crop, skel_clean_crop, excluded_crop, "3. Flake identification")))
+            readme_lines.append(f"| `{fn['flaking']}` | Skeleton with the delaminated/flaking region shaded |")
+        else:
+            print(f"{image_path.name}: no flaking within the chosen crop -- skipping {fn['flaking']}")
+
+        fig, ax = plt.subplots(figsize=(7, 7))
+        draw_graph_excluded(ax, mask_crop, excluded_crop, skeleton_result.skeleton, graph_result, omitted, bbox,
+                             "4. Final graph -- excluded edges & nodes marked")
+        fig.savefig(out_dir / fn["graph"], dpi=150, bbox_inches="tight")
+        plt.close(fig)
+        panels.append(("graph", lambda ax: draw_graph_excluded(
+            ax, mask_crop, excluded_crop, skeleton_result.skeleton, graph_result, omitted, bbox,
+            "4. Final graph -- excluded edges & nodes marked")))
+        readme_lines.append(f"| `{fn['graph']}` | Final graph: kept/omitted edges and nodes |")
+
+        _save_combined(panels, out_dir, image_path, crop_mode, n_rows=2, n_cols=2)
+
     else:
-        print(f"{image_path.name}: no flaking within the chosen crop -- skipping {STAGE_FILENAMES['flaking']}")
+        fn = STAGE_FILENAMES
+        skel_raw_image = skimage_skeletonize(skeleton_result.mask_clean)  # display-only, pre-prune
+        skel_raw_crop = skel_raw_image[y0:y1, x0:x1]
 
-    fig, ax = plt.subplots(figsize=(7, 7))
-    draw_graph_excluded(ax, mask_crop, excluded_crop, skeleton_result.skeleton, graph_result, omitted, bbox)
-    fig.savefig(out_dir / STAGE_FILENAMES["graph"], dpi=150, bbox_inches="tight")
-    plt.close(fig)
-    panels.append(("graph", lambda ax: draw_graph_excluded(ax, mask_crop, excluded_crop, skeleton_result.skeleton, graph_result, omitted, bbox)))
+        fig, ax = plt.subplots(figsize=(7, 7))
+        draw_raw(ax, rgb_crop)
+        fig.savefig(out_dir / fn["raw"], dpi=150, bbox_inches="tight")
+        plt.close(fig)
+        panels.append(("raw", lambda ax: draw_raw(ax, rgb_crop)))
+        readme_lines.append(f"| `{fn['raw']}` | Raw image, cropped |")
 
-    n_cols = 4
-    n_rows = 2
-    fig, axes = plt.subplots(n_rows, n_cols, figsize=(6.5 * n_cols, 6.5 * n_rows))
-    flat_axes = axes.flat
-    for (_, draw_fn), ax in zip(panels, flat_axes):
-        draw_fn(ax)
-    for ax in list(flat_axes)[len(panels):]:
-        ax.axis("off")
-    fig.suptitle(f"{image_path.stem} -- pipeline stage walkthrough (crop_mode={crop_mode})", fontsize=14)
-    fig.tight_layout()
-    fig.savefig(out_dir / "combined.png", dpi=150, bbox_inches="tight")
-    plt.close(fig)
+        fig, ax = plt.subplots(figsize=(7, 7))
+        draw_binarized(ax, mask_crop)
+        fig.savefig(out_dir / fn["binarized"], dpi=150, bbox_inches="tight")
+        plt.close(fig)
+        panels.append(("binarized", lambda ax: draw_binarized(ax, mask_crop)))
+        readme_lines.append(f"| `{fn['binarized']}` | Binarized mask (Otsu) |")
 
-    readme_lines = [
-        f"# {image_path.stem} -- pipeline stage walkthrough",
-        "",
-        f"Crop: {crop_mode} mode, rows {y0}:{y1}, cols {x0}:{x1} ({y1-y0}x{x1-x0}px).",
-        "",
-        "| File | Stage |",
-        "|---|---|",
-        f"| `{STAGE_FILENAMES['raw']}` | Raw image, cropped |",
-        f"| `{STAGE_FILENAMES['binarized']}` | Binarized mask (Otsu) |",
-        f"| `{STAGE_FILENAMES['mask_cleaned']}` | Cleaned mask, with small objects removed / small holes filled highlighted |",
-        f"| `{STAGE_FILENAMES['skeleton_raw']}` | Raw skeleton, pre-prune (single thinning pass) |",
-        f"| `{STAGE_FILENAMES['pruning']}` | Pruned branches (spur / fragment / corner-artifact, not distinguished) |",
-        f"| `{STAGE_FILENAMES['skeleton_cleaned']}` | Cleaned skeleton, post-prune |",
-    ]
-    if has_flaking_in_crop:
-        readme_lines.append(f"| `{STAGE_FILENAMES['flaking']}` | Skeleton with the delaminated/flaking region shaded |")
-    readme_lines.append(f"| `{STAGE_FILENAMES['graph']}` | Final graph: kept/omitted edges and nodes |")
+        fig, ax = plt.subplots(figsize=(7, 7))
+        draw_mask_cleaned(ax, mask_clean_crop, mask_clean_diff_crop)
+        fig.savefig(out_dir / fn["mask_cleaned"], dpi=150, bbox_inches="tight")
+        plt.close(fig)
+        panels.append(("mask_cleaned", lambda ax: draw_mask_cleaned(ax, mask_clean_crop, mask_clean_diff_crop)))
+        readme_lines.append(f"| `{fn['mask_cleaned']}` | Cleaned mask, with small objects removed / small holes filled highlighted |")
+
+        fig, ax = plt.subplots(figsize=(7, 7))
+        draw_skeleton(ax, mask_crop, skel_raw_crop, "4. Raw skeleton (pre-prune, single pass)")
+        fig.savefig(out_dir / fn["skeleton_raw"], dpi=150, bbox_inches="tight")
+        plt.close(fig)
+        panels.append(("skeleton_raw", lambda ax: draw_skeleton(ax, mask_crop, skel_raw_crop, "4. Raw skeleton (pre-prune, single pass)")))
+        readme_lines.append(f"| `{fn['skeleton_raw']}` | Raw skeleton, pre-prune (single thinning pass) |")
+
+        fig, ax = plt.subplots(figsize=(7, 7))
+        draw_pruning_annotated(ax, mask_crop, skel_raw_crop, skeleton_result.pruned_branches, bbox)
+        fig.savefig(out_dir / fn["pruning"], dpi=150, bbox_inches="tight")
+        plt.close(fig)
+        panels.append(("pruning", lambda ax: draw_pruning_annotated(ax, mask_crop, skel_raw_crop, skeleton_result.pruned_branches, bbox)))
+        readme_lines.append(f"| `{fn['pruning']}` | Pruned branches (spur / fragment / corner-artifact, not distinguished) |")
+
+        fig, ax = plt.subplots(figsize=(7, 7))
+        draw_skeleton(ax, mask_crop, skel_clean_crop, "6. Cleaned skeleton (post-prune)")
+        fig.savefig(out_dir / fn["skeleton_cleaned"], dpi=150, bbox_inches="tight")
+        plt.close(fig)
+        panels.append(("skeleton_cleaned", lambda ax: draw_skeleton(ax, mask_crop, skel_clean_crop, "6. Cleaned skeleton (post-prune)")))
+        readme_lines.append(f"| `{fn['skeleton_cleaned']}` | Cleaned skeleton, post-prune |")
+
+        if has_flaking_in_crop:
+            fig, ax = plt.subplots(figsize=(7, 7))
+            draw_flaking_shaded(ax, mask_crop, skel_clean_crop, excluded_crop, "7. Skeleton + delaminated region shaded")
+            fig.savefig(out_dir / fn["flaking"], dpi=150, bbox_inches="tight")
+            plt.close(fig)
+            panels.append(("flaking", lambda ax: draw_flaking_shaded(ax, mask_crop, skel_clean_crop, excluded_crop, "7. Skeleton + delaminated region shaded")))
+            readme_lines.append(f"| `{fn['flaking']}` | Skeleton with the delaminated/flaking region shaded |")
+        else:
+            print(f"{image_path.name}: no flaking within the chosen crop -- skipping {fn['flaking']}")
+
+        fig, ax = plt.subplots(figsize=(7, 7))
+        draw_graph_excluded(ax, mask_crop, excluded_crop, skeleton_result.skeleton, graph_result, omitted, bbox,
+                             "8. Final graph -- excluded edges & nodes marked")
+        fig.savefig(out_dir / fn["graph"], dpi=150, bbox_inches="tight")
+        plt.close(fig)
+        panels.append(("graph", lambda ax: draw_graph_excluded(
+            ax, mask_crop, excluded_crop, skeleton_result.skeleton, graph_result, omitted, bbox,
+            "8. Final graph -- excluded edges & nodes marked")))
+        readme_lines.append(f"| `{fn['graph']}` | Final graph: kept/omitted edges and nodes |")
+
+        _save_combined(panels, out_dir, image_path, crop_mode, n_rows=2, n_cols=4)
+
     readme_lines.append("| `combined.png` | All panels above, side by side |")
     (out_dir / "README.md").write_text("\n".join(readme_lines) + "\n")
 
