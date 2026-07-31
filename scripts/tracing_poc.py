@@ -139,6 +139,135 @@ def make_l_shape(size, arm_width, arm1_len, arm2_len):
     return mask, seed_rc, direction
 
 
+def _triangle_polygon(base_center_rc, base_half_width, apex_rc):
+    """3 vertices (r_coords, c_coords) for a triangle: a base perpendicular
+    to the base->apex axis, plus the apex point."""
+    direction = _normalize(
+        (apex_rc[0] - base_center_rc[0], apex_rc[1] - base_center_rc[1])
+    )
+    perp = (-direction[1], direction[0])
+    b1 = (
+        base_center_rc[0] + perp[0] * base_half_width,
+        base_center_rc[1] + perp[1] * base_half_width,
+    )
+    b2 = (
+        base_center_rc[0] - perp[0] * base_half_width,
+        base_center_rc[1] - perp[1] * base_half_width,
+    )
+    return [b1[0], b2[0], apex_rc[0]], [b1[1], b2[1], apex_rc[1]]
+
+
+def make_rod_two_triangles(size, rod_half_width, rod_length, triangle_len):
+    """A straight rod (rectangle) with a triangular point at both ends.
+
+    Tests a full pass through a widen-then-narrow profile in one continuous
+    trace: flat body in the middle, tapering tips at both ends. Seed sits
+    inside the left tip, heading right; the trace is expected to cross the
+    whole body and terminate at the right tip's apex.
+    """
+    mask = np.zeros((size, size), dtype=bool)
+    cy = size / 2.0
+    c0 = (size - rod_length) / 2.0
+    c1 = c0 + rod_length
+
+    r = [cy - rod_half_width, cy - rod_half_width, cy + rod_half_width, cy + rod_half_width]
+    c = [c0, c1, c1, c0]
+    rr, cc = polygon(r, c, shape=mask.shape)
+    mask[rr, cc] = True
+
+    left_apex = (cy, c0 - triangle_len)
+    r, c = _triangle_polygon((cy, c0), rod_half_width, left_apex)
+    rr, cc = polygon(r, c, shape=mask.shape)
+    mask[rr, cc] = True
+
+    right_apex = (cy, c1 + triangle_len)
+    r, c = _triangle_polygon((cy, c1), rod_half_width, right_apex)
+    rr, cc = polygon(r, c, shape=mask.shape)
+    mask[rr, cc] = True
+
+    inset = max(SEED_INSET_PX, 0.3 * triangle_len)
+    seed_rc = (cy, left_apex[1] + inset)
+    direction = (0.0, 1.0)
+    return mask, seed_rc, direction
+
+
+def make_rod_one_triangle(size, rod_half_width, rod_length, triangle_len):
+    """A straight rod with a flat end on one side and a triangular point on
+    the other -- a pencil/arrow shape. Seed sits just inside the flat end,
+    heading toward the point.
+    """
+    mask = np.zeros((size, size), dtype=bool)
+    cy = size / 2.0
+    c0 = (size - rod_length - triangle_len) / 2.0
+    c1 = c0 + rod_length
+
+    r = [cy - rod_half_width, cy - rod_half_width, cy + rod_half_width, cy + rod_half_width]
+    c = [c0, c1, c1, c0]
+    rr, cc = polygon(r, c, shape=mask.shape)
+    mask[rr, cc] = True
+
+    apex = (cy, c1 + triangle_len)
+    r, c = _triangle_polygon((cy, c1), rod_half_width, apex)
+    rr, cc = polygon(r, c, shape=mask.shape)
+    mask[rr, cc] = True
+
+    seed_rc = (cy, c0 + SEED_INSET_PX)
+    direction = (0.0, 1.0)
+    return mask, seed_rc, direction
+
+
+def make_curved_rod_two_triangles(
+    size, center_rc, radius, thickness, half_span_deg, triangle_len
+):
+    """A curved rod (a constant-width band along a circular arc, bowing
+    upward like an arch) with a triangular point at both ends -- combines
+    curve-following with tip-convergence in one continuous trace.
+
+    theta is measured from the arc's own "straight up" direction (90 deg in
+    standard math-angle convention over (col, -row)); the arc spans
+    [90-half_span_deg, 90+half_span_deg]. Tangent directions at each end are
+    found numerically (sample a point 1 degree further outward along the
+    same circle and take the difference), rather than derived symbolically,
+    to avoid a sign-convention mistake.
+    """
+    mask = np.zeros((size, size), dtype=bool)
+    rows, cols = np.mgrid[0:size, 0:size]
+    dr = rows - center_rc[0]
+    dc = cols - center_rc[1]
+    rho = np.sqrt(dr**2 + dc**2)
+    theta = np.degrees(np.arctan2(-dr, dc))
+    theta0, theta1 = 90.0 - half_span_deg, 90.0 + half_span_deg
+    band = (np.abs(rho - radius) <= thickness / 2.0) & (theta >= theta0) & (theta <= theta1)
+    mask |= band
+
+    def arc_point(theta_deg):
+        t = math.radians(theta_deg)
+        return (center_rc[0] - radius * math.sin(t), center_rc[1] + radius * math.cos(t))
+
+    p0 = arc_point(theta0)
+    tangent0 = _normalize(
+        (arc_point(theta0 - 1.0)[0] - p0[0], arc_point(theta0 - 1.0)[1] - p0[1])
+    )
+    apex0 = (p0[0] + tangent0[0] * triangle_len, p0[1] + tangent0[1] * triangle_len)
+    r, c = _triangle_polygon(p0, thickness / 2.0, apex0)
+    rr, cc = polygon(r, c, shape=mask.shape)
+    mask[rr, cc] = True
+
+    p1 = arc_point(theta1)
+    tangent1 = _normalize(
+        (arc_point(theta1 + 1.0)[0] - p1[0], arc_point(theta1 + 1.0)[1] - p1[1])
+    )
+    apex1 = (p1[0] + tangent1[0] * triangle_len, p1[1] + tangent1[1] * triangle_len)
+    r, c = _triangle_polygon(p1, thickness / 2.0, apex1)
+    rr, cc = polygon(r, c, shape=mask.shape)
+    mask[rr, cc] = True
+
+    inset = max(SEED_INSET_PX, 0.3 * triangle_len)
+    seed_rc = (apex0[0] - tangent0[0] * inset, apex0[1] - tangent0[1] * inset)
+    direction = (-tangent0[0], -tangent0[1])
+    return mask, seed_rc, direction
+
+
 # ---------------------------------------------------------------------------
 # The tracer.
 # ---------------------------------------------------------------------------
@@ -271,22 +400,45 @@ def _render_panel(ax, mask, skel, path, title):
     ax.legend(fontsize=6, loc="upper right")
 
 
+def _slugify(name):
+    return name.lower().replace(",", "").replace("(", "").replace(")", "").replace(
+        " ", "_").replace("-", "_")
+
+
 def main():
     shapes = [
         ("triangle", *make_triangle(size=150, base_width=80, height=110)),
         ("rectangle", *make_rectangle(size=150, width=30, height=110)),
         ("L-shape (90-deg turn)", *make_l_shape(
             size=150, arm_width=20, arm1_len=90, arm2_len=90)),
+        ("rod, triangles both ends", *make_rod_two_triangles(
+            size=220, rod_half_width=15, rod_length=90, triangle_len=45)),
+        ("curved rod, triangles both ends", *make_curved_rod_two_triangles(
+            size=260, center_rc=(220.0, 130.0), radius=150.0, thickness=25.0,
+            half_span_deg=40.0, triangle_len=35)),
+        ("rod, triangle one end", *make_rod_one_triangle(
+            size=220, rod_half_width=15, rod_length=90, triangle_len=45)),
     ]
 
-    fig, axes = plt.subplots(1, len(shapes), figsize=(15, 5.5))
+    fig, axes = plt.subplots(2, 3, figsize=(15, 11))
+    axes_flat = axes.flatten()
 
-    for ax, (name, mask, seed_rc, direction) in zip(axes, shapes):
+    panels_dir = OUT_PATH.parent / "tracing_poc_panels"
+    panels_dir.mkdir(parents=True, exist_ok=True)
+
+    for ax, (name, mask, seed_rc, direction) in zip(axes_flat, shapes):
         dist = distance_transform_edt(mask)
         skel = skeletonize(mask)
         path, reason = trace(mask, dist, seed_rc, direction)
         print(f"{name}: {len(path)} steps, terminated: {reason}")
         _render_panel(ax, mask, skel, path, f"{name}\n({reason}, {len(path)} steps)")
+
+        single_fig, single_ax = plt.subplots(figsize=(5, 5))
+        _render_panel(single_ax, mask, skel, path, "")
+        single_ax.set_title("")
+        single_fig.tight_layout()
+        single_fig.savefig(panels_dir / f"{_slugify(name)}.png", dpi=150)
+        plt.close(single_fig)
 
     fig.tight_layout()
     OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
