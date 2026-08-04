@@ -5,10 +5,20 @@ Used to validate the stage 1-3 chain end-to-end against cases with a known
 right answer (exact node/edge counts), and stage 4's annulus angle
 measurement against a known ground-truth angle -- rather than just "runs
 without crashing" on real data.
+
+Everything above this point is a single isolated junction (one T, one Y,
+one bent line). generate_grid/generate_wavy_grid/generate_hexagonal_grid/
+generate_grid_with_flakes below instead build small *networks* -- multiple
+junctions sharing lines, the way a real percolating crack pattern actually
+looks, and the shape crack_stats.xlsx's n_edges/giant_component_fraction/
+flaking_excluded_area_pct columns are actually measuring. They exist
+because none of the single-junction cases exercise that at all.
 """
 
+import math
+
 import numpy as np
-from skimage.draw import polygon
+from skimage.draw import disk, polygon
 
 
 def _smooth_jitter_1d(
@@ -443,4 +453,326 @@ def generate_oriented_segment_field(
             rng_seed=rng_seed + i + 1,
         )
 
+    return img
+
+
+# -- Mesh/network generators (crack_stats-scoped: stage 1-3 + flaking only) --
+
+
+def _default_grid_offsets(n_lines: int, spacing: float, margin: float) -> list[float]:
+    return [margin + spacing * (i + 1) for i in range(n_lines)]
+
+
+def generate_grid(
+    size: int = 340,
+    n_lines: int = 3,
+    spacing: float = 70.0,
+    margin: float = 30.0,
+    row_ys: list[float] | None = None,
+    col_xs: list[float] | None = None,
+    thickness: int = 5,
+    fg_value: float = 230.0,
+    bg_value: float = 10.0,
+) -> np.ndarray:
+    """Grayscale image of a rectilinear mesh: `n_lines` horizontal + `n_lines`
+    vertical straight lines, each spanning the full crop (margin to
+    size-margin) so every interior crossing is a degree->=4 junction and
+    every line's two ends are free endpoints -- unlike every generator
+    above, this models a *network*, the shape crack_stats.xlsx's
+    n_edges/giant_component_fraction are actually measuring on a real,
+    densely-cracked image.
+
+    Ground truth (exact, from n_h=len(row_ys)/n_v=len(col_xs) alone, since
+    every line crosses every line of the other family exactly once):
+    interior junctions = n_h*n_v; each horizontal line is cut into
+    (n_v+1) segments by the n_v vertical crossings and vice versa, so
+    edges = n_h*(n_v+1) + n_v*(n_h+1); free endpoints = 2*(n_h+n_v).
+    `row_ys`/`col_xs` default to `n_lines` evenly-spaced offsets at
+    `spacing` px apart -- pass them explicitly (and a matching `size`) to
+    sweep grid width/density without changing this formula.
+    """
+    if row_ys is None:
+        row_ys = _default_grid_offsets(n_lines, spacing, margin)
+    if col_xs is None:
+        col_xs = _default_grid_offsets(n_lines, spacing, margin)
+
+    img = np.full((size, size), bg_value, dtype=np.float64)
+    half_t = thickness // 2
+    for y in row_ys:
+        yi = int(round(y))
+        img[yi - half_t : yi + half_t + 1, int(margin) : size - int(margin)] = fg_value
+    for x in col_xs:
+        xi = int(round(x))
+        img[int(margin) : size - int(margin), xi - half_t : xi + half_t + 1] = fg_value
+    return img
+
+
+def grid_topology(n_h: int, n_v: int) -> dict[str, int]:
+    """Exact node/edge counts for generate_grid's mesh, given only the
+    number of lines per axis (see that function's docstring for the
+    derivation) -- a pure combinatorial fact of the crossing structure,
+    independent of image size/spacing/thickness."""
+    n_junctions = n_h * n_v
+    n_endpoints = 2 * (n_h + n_v)
+    n_edges = n_h * (n_v + 1) + n_v * (n_h + 1)
+    return {
+        "n_junctions_deg_ge4": n_junctions,
+        "n_endpoints": n_endpoints,
+        "n_edges": n_edges,
+    }
+
+
+def generate_wavy_grid(
+    size: int = 340,
+    n_lines: int = 3,
+    spacing: float = 70.0,
+    margin: float = 30.0,
+    row_ys: list[float] | None = None,
+    col_xs: list[float] | None = None,
+    thickness: int = 5,
+    amplitude: float = 10.0,
+    wavelength: float = 110.0,
+    fg_value: float = 230.0,
+    bg_value: float = 10.0,
+) -> np.ndarray:
+    """Same row_ys/col_xs as generate_grid (horizontal lines follow a sine
+    wave in y instead of running straight; vertical lines stay straight),
+    but topology is **not** the same as the straight grid's, and that
+    turned out to be the interesting empirical result, not a bug to chase
+    away: a degree->=4 skeleton crossing is a non-generic, unstable
+    configuration -- verified directly (see tests/test_grid_synthetic.py)
+    that even a small amount of local tilt at a crossing resolves it into
+    a *pair* of degree-3 points instead of one clean degree-4 point, the
+    same "double junction" splitting documented elsewhere in this module
+    (generate_double_t_junction) and in skeleton.py, now showing up
+    unprompted on a mesh instead of being deliberately constructed. Only
+    crossings that happen to land near the wave's own zero-slope points
+    stay as a single clean junction; how many of the n_h*n_v crossings
+    split grows with `amplitude` and saturates once every crossing has
+    enough local tilt (empirically: 3/9 split at amplitude=2px, 6/9 from
+    amplitude=4px up, at the shipped default spacing/wavelength below).
+
+    Exercises the one thing generate_grid can't: whether skeletonization
+    and the length/width columns stay accurate on a curved, not just
+    straight, mesh -- real crack networks are never perfectly rectilinear.
+    Ground-truth *length* of one wavy line is the arc length of
+    y = row_y + amplitude*sin(2*pi*(x-margin)/wavelength) over its run,
+    computable exactly by numerical integration (see
+    wavy_line_arc_length_px below) -- independent of this rasterization.
+    """
+    if row_ys is None:
+        row_ys = _default_grid_offsets(n_lines, spacing, margin)
+    if col_xs is None:
+        col_xs = _default_grid_offsets(n_lines, spacing, margin)
+
+    img = np.full((size, size), bg_value, dtype=np.float64)
+    half_t = thickness // 2
+    x0, x1 = int(margin), size - int(margin)
+    xs = np.arange(x0, x1)
+    for row_y in row_ys:
+        ys = row_y + amplitude * np.sin(2.0 * np.pi * (xs - x0) / wavelength)
+        for x, y in zip(xs, ys):
+            yi = int(round(y))
+            img[yi - half_t : yi + half_t + 1, x] = fg_value
+    for x in col_xs:
+        xi = int(round(x))
+        img[int(margin) : size - int(margin), xi - half_t : xi + half_t + 1] = fg_value
+    return img
+
+
+def wavy_line_arc_length_px(run_px: float, amplitude: float, wavelength: float) -> float:
+    """Exact (numerically-integrated) arc length of
+    y = amplitude*sin(2*pi*x/wavelength) for x in [0, run_px] -- the
+    closed-form ground truth generate_wavy_grid's horizontal lines are
+    checked against, independent of any rasterization/skeletonization."""
+    from scipy.integrate import quad
+
+    def integrand(x: float) -> float:
+        dy_dx = amplitude * (2.0 * np.pi / wavelength) * np.cos(2.0 * np.pi * x / wavelength)
+        return math.sqrt(1.0 + dy_dx * dy_dx)
+
+    length, _ = quad(integrand, 0.0, run_px)
+    return length
+
+
+def _hexagon_corners(center: tuple[float, float], radius: float) -> list[tuple[float, float]]:
+    """Pointy-top hexagon corners (row, col), radius = center-to-corner."""
+    return [
+        (
+            center[0] + radius * math.sin(math.radians(angle)),
+            center[1] + radius * math.cos(math.radians(angle)),
+        )
+        for angle in (30.0, 90.0, 150.0, 210.0, 270.0, 330.0)
+    ]
+
+
+def _hex_flower_centers(center: tuple[float, float], radius: float) -> list[tuple[float, float]]:
+    """1 central hexagon + 6 edge-sharing neighbors (a honeycomb 'flower'),
+    pointy-top layout -- neighbor centers are radius*sqrt(3) away, evenly
+    spaced every 60 deg."""
+    d = radius * math.sqrt(3.0)
+    neighbors = [
+        (
+            center[0] + d * math.sin(math.radians(angle)),
+            center[1] + d * math.cos(math.radians(angle)),
+        )
+        for angle in (0.0, 60.0, 120.0, 180.0, 240.0, 300.0)
+    ]
+    return [center] + neighbors
+
+
+def hex_flower_topology(radius: float = 40.0, round_ndigits: int = 3) -> dict[str, int]:
+    """Exact node/edge counts of a 7-hexagon flower, in skan's own terms
+    (endpoint = degree 1, junction = degree >= 3, a degree-2 vertex is a
+    mid-edge bend absorbed into whichever edge passes through it, not a
+    node) -- computed from the identical corner/center geometry
+    generate_hexagonal_grid rasterizes, not hand-counted.
+
+    The 24 raw hexagon corners (6 per hexagon x 7 hexagons, deduplicated
+    by rounding to `round_ndigits` decimals where shared) split into 12
+    degree-3 vertices (where 3 hexagons meet -- always true junctions) and
+    12 degree-2 vertices (the flower's own outer rim, where only 2 hexagon
+    edges meet at an angle -- a bend, not a junction). Collapsing each
+    degree-2 vertex into its neighbors' edge -- the same reduction skan
+    performs -- leaves 12 junction nodes, 0 endpoints (nothing in this
+    shape ever dead-ends), and 18 edges. This is a pure fact of the
+    flower's combinatorics, independent of `radius` itself, since every
+    hexagon is congruent and shares exactly one edge with each neighbor.
+    """
+    centers = _hex_flower_centers((0.0, 0.0), radius)
+    adjacency: dict[tuple[float, float], set[tuple[float, float]]] = {}
+    for c in centers:
+        corners = [tuple(round(v, round_ndigits) for v in pt) for pt in _hexagon_corners(c, radius)]
+        for i in range(6):
+            a, b = corners[i], corners[(i + 1) % 6]
+            adjacency.setdefault(a, set()).add(b)
+            adjacency.setdefault(b, set()).add(a)
+
+    degree = {v: len(neighbors) for v, neighbors in adjacency.items()}
+    nodes = {v for v, d in degree.items() if d != 2}
+
+    visited_edges: set[frozenset] = set()
+    n_edges = 0
+    for start in nodes:
+        for first_hop in adjacency[start]:
+            edge_key = frozenset((start, first_hop))
+            if edge_key in visited_edges:
+                continue
+            prev, cur = start, first_hop
+            path_edges = [edge_key]
+            while degree[cur] == 2:
+                nxt = next(x for x in adjacency[cur] if x != prev)
+                path_edges.append(frozenset((cur, nxt)))
+                prev, cur = cur, nxt
+            visited_edges.update(path_edges)
+            n_edges += 1
+
+    return {
+        "n_endpoints": sum(1 for v in nodes if degree[v] == 1),
+        "n_junctions_deg3": sum(1 for v in nodes if degree[v] == 3),
+        "n_junctions_deg_ge4": sum(1 for v in nodes if degree[v] >= 4),
+        "n_edges": n_edges,
+    }
+
+
+def generate_hexagonal_grid(
+    size: int = 340,
+    radius: float = 40.0,
+    thickness: int = 5,
+    fg_value: float = 230.0,
+    bg_value: float = 10.0,
+) -> np.ndarray:
+    """Grayscale image of a 7-hexagon honeycomb flower (1 central hexagon +
+    6 edge-sharing neighbors), centered in the image.
+
+    Unlike generate_grid's degree->=4 crossings, every interior vertex here
+    is degree-3 -- the topology CLAUDE.md's own reference spine (Goehring
+    2012) frames real mudcracks as evolving *toward* from an initial
+    rectilinear pattern, and structurally the far more common real-crack
+    junction valence (two cracks essentially never meet at one point
+    simultaneously the way a rectilinear grid assumes). Ideal ground truth
+    is hex_flower_topology(radius), built from the exact same corner/center
+    geometry drawn here, not a separate guess -- each hexagon edge is drawn
+    exactly once even where two hexagons share it (deduplicated the same
+    way hex_flower_topology dedupes it, so the two can't silently drift
+    apart).
+
+    That ideal count (12 junctions, 18 edges) is not quite what real
+    skeletonization measures, and -- as with generate_wavy_grid -- the gap
+    is itself the finding: rasterizing each hexagon edge as its own
+    independent thick rectangle (via _draw_rotated_arm, no mitered join)
+    leaves 2 of the flower's 12 true vertices as a locally *wider* blob
+    where 3 rectangles overlap at a shallow angle, and skeletonizing a
+    wide blob -- exactly as generate_double_t_junction demonstrates on
+    purpose elsewhere -- splits it into two adjacent nodes ~1px apart
+    instead of one point. Verified directly (see
+    tests/test_grid_synthetic.py) at radius 40/60/80px alike: 14 junctions
+    (all degree-3) and 21 edges, stable regardless of radius, i.e. a
+    rendering-geometry effect, not a size-dependent noise artifact.
+    """
+    center_rc = (size / 2.0, size / 2.0)
+    centers = _hex_flower_centers(center_rc, radius)
+    img = np.full((size, size), bg_value, dtype=np.float64)
+    drawn: set[frozenset] = set()
+    for c in centers:
+        corners = _hexagon_corners(c, radius)
+        for i in range(6):
+            a, b = corners[i], corners[(i + 1) % 6]
+            key = frozenset(
+                (tuple(round(v, 3) for v in a), tuple(round(v, 3) for v in b))
+            )
+            if key in drawn:
+                continue
+            drawn.add(key)
+            length = math.hypot(b[0] - a[0], b[1] - a[1])
+            bearing_deg = math.degrees(math.atan2(-(b[0] - a[0]), b[1] - a[1]))
+            _draw_rotated_arm(
+                img, start_rc=a, bearing_deg=bearing_deg, length=length,
+                thickness=thickness, fg_value=fg_value,
+            )
+    return img
+
+
+def generate_grid_with_flakes(
+    size: int = 340,
+    n_lines: int = 3,
+    spacing: float = 70.0,
+    margin: float = 30.0,
+    thickness: int = 5,
+    flake_centers: list[tuple[float, float]] | None = None,
+    flake_radius: float = 26.0,
+    fg_value: float = 230.0,
+    bg_value: float = 10.0,
+) -> np.ndarray:
+    """generate_grid's mesh, with circular filled disks ("flakes") stamped
+    on top at `flake_centers` -- bright under the same threshold as real
+    crack, exactly the delamination case flaking.py exists for (see its
+    module docstring and CLAUDE.md's flaking/delamination section): a 2D
+    area of missing material, not a 1D fracture, wide enough
+    (2*flake_radius) relative to `thickness` to trip flaking.py's
+    width-based candidate identification. Defaults to one flake centered on
+    an interior grid junction (where real delamination is most likely to
+    swallow crack topology) if `flake_centers` isn't given.
+
+    Ground truth for the *true* flaked pixel area is deliberately not
+    returned here -- reconstruct it the same way every other case in this
+    module does, by drawing the disks alone on a blank canvas with
+    skimage.draw.disk at the same `flake_centers`/`flake_radius` and
+    summing the boolean mask, so a caller can compare it against
+    flaking.py's own recovered `excluded_area_px2` without trusting this
+    function's bookkeeping.
+    """
+    if flake_centers is None:
+        row_ys = _default_grid_offsets(n_lines, spacing, margin)
+        col_xs = _default_grid_offsets(n_lines, spacing, margin)
+        mid = n_lines // 2
+        flake_centers = [(row_ys[mid], col_xs[mid])]
+
+    img = generate_grid(
+        size=size, n_lines=n_lines, spacing=spacing, margin=margin,
+        thickness=thickness, fg_value=fg_value, bg_value=bg_value,
+    )
+    for cy, cx in flake_centers:
+        rr, cc = disk((cy, cx), flake_radius, shape=img.shape)
+        img[rr, cc] = fg_value
     return img
