@@ -549,8 +549,17 @@ def generate_wavy_grid(
     crossings that happen to land near the wave's own zero-slope points
     stay as a single clean junction; how many of the n_h*n_v crossings
     split grows with `amplitude` and saturates once every crossing has
-    enough local tilt (empirically: 3/9 split at amplitude=2px, 6/9 from
-    amplitude=4px up, at the shipped default spacing/wavelength below).
+    enough local tilt (empirically, all at this size=340 default: 3/9
+    split at amplitude=2px, 6/9 from amplitude=4px up).
+
+    That saturation point is itself scale-sensitive, not a fixed ratio of
+    this shape: uniformly scaling every linear parameter 2x-3x (bigger
+    size/spacing/margin/amplitude/wavelength, same relative geometry)
+    measured 9/9 crossings splitting instead of 6/9 -- i.e. some of the
+    "clean" survivors at this default size were themselves an artifact of
+    too little pixel resolution to register their true (small) tilt, not
+    a stable exception. Read the 6/9 figure as true only at this specific
+    size, not as this wave's asymptotic behavior.
 
     Exercises the one thing generate_grid can't: whether skeletonization
     and the length/width columns stay accurate on a curved, not just
@@ -707,8 +716,15 @@ def generate_hexagonal_grid(
     purpose elsewhere -- splits it into two adjacent nodes ~1px apart
     instead of one point. Verified directly (see
     tests/test_grid_synthetic.py) at radius 40/60/80px alike: 14 junctions
-    (all degree-3) and 21 edges, stable regardless of radius, i.e. a
-    rendering-geometry effect, not a size-dependent noise artifact.
+    (all degree-3) and 21 edges, stable regardless of radius across that
+    specific range, at thickness=5.
+
+    Do not extrapolate this "stable" claim past radius 80: an exploratory
+    check at radius=120 (still thickness=5) resolved cleanly to the ideal
+    12/18 instead, so this is a real but resolution-sensitive rendering
+    effect, not a fixed property of the honeycomb shape -- the 14/21 value
+    is only locked in (by the pytest suite) over the 40-80px range it was
+    actually tested at.
     """
     center_rc = (size / 2.0, size / 2.0)
     centers = _hex_flower_centers(center_rc, radius)
