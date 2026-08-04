@@ -807,93 +807,84 @@ def generate_grid_with_flakes(
 # docs/crack_stats_schema.md) rather than picked arbitrarily. --
 
 
-def _draw_tapered_arm(
-    img: np.ndarray,
-    start_rc: tuple[float, float],
-    bearing_deg: float,
-    length: float,
-    thickness_start: float,
-    thickness_end: float,
-    fg_value: float,
-) -> None:
-    """Fill a trapezoid from start_rc extending `length` px in direction
-    `bearing_deg`, with cross-sectional thickness linearly interpolated
-    from `thickness_start` (at the start) to `thickness_end` (at the end)
-    -- the tapered-arm analogue of _draw_rotated_arm's constant-thickness
-    rectangle, using the same skimage.draw.polygon exact fill and bearing
-    convention (0 deg = +col, ccw in array-index space). No jitter support
-    here on purpose: this generator's only source of measurement
-    uncertainty should be the tip's thinning itself, not added wobble.
-    """
-    theta = np.radians(bearing_deg)
-    direction = np.array([-np.sin(theta), np.cos(theta)])
-    normal = np.array([direction[1], -direction[0]])
-    start = np.array(start_rc, dtype=np.float64)
-    end = start + direction * length
-    half_start = thickness_start / 2.0
-    half_end = thickness_end / 2.0
-    corners = np.array(
-        [
-            start + normal * half_start,
-            end + normal * half_end,
-            end - normal * half_end,
-            start - normal * half_start,
-        ]
-    )
-    rr, cc = polygon(corners[:, 0], corners[:, 1], shape=img.shape)
-    img[rr, cc] = fg_value
-
-
 def generate_tapered_line(
     size: int = 300,
     length: float = 200.0,
-    thickness_start: float = 16.0,
-    thickness_end: float = 2.0,
-    bearing_deg: float = 0.0,
+    max_thickness: float = 16.0,
+    min_thickness: float = 2.0,
     fg_value: float = 230.0,
+    tip_value: float = 60.0,
     bg_value: float = 10.0,
+    bearing_deg: float = 0.0,
 ) -> np.ndarray:
-    """Grayscale image of a single straight arm whose width narrows
-    linearly from `thickness_start` px down to `thickness_end` px -- the
-    tip-truncation fixture: a real crack tapers to a genuine physical tip,
-    and whether binarization/skeletonization keep tracking that tip all the
-    way down (rather than dropping the last few, faint-in-area-terms
-    pixels) directly affects endpoint counts and edge-length stats on real
-    images. No junction, matching generate_straight_line's "nothing to
-    compete with" role -- one skeleton path, one seed. `thickness_start`
-    defaults to this project's real-dataset median avg_width_px (~16px, see
-    docs/crack_stats_schema.md); `thickness_end` to a thin-but-still->=1px
-    tip, so the taper spans a realistic thickness range.
+    """Grayscale image of a single crack that tapers to a thin, DIM tip at
+    BOTH ends -- fat and bright (`max_thickness` px, `fg_value`) at the
+    midpoint, narrowing in WIDTH and fading in BRIGHTNESS toward
+    `tip_value` at each end (`min_thickness` px) -- modelling the partial-
+    volume/PSF-blur effect a real crack tip shows under SEM imaging: a
+    sub-resolution-width feature integrates less bright signal per pixel,
+    so it reads DIMMER, not just narrower. The point is to test Otsu
+    thresholding directly: since `binarize()` picks one global brightness
+    cutoff, a tip whose pixels fade below that cutoff gets classified as
+    background -- truncating the tip even though the geometric taper
+    continues further. Width and brightness taper together (same
+    symmetric triangular profile: 0 at both tips, 1 at the midpoint)
+    since both represent the same real-world "how much genuine crack
+    material occupies this pixel," not two independent knobs. No
+    junction, matching generate_straight_line's "nothing to compete
+    with" role -- one skeleton path, one seed.
 
-    Ground truth (exact, from the trapezoid the polygon fill draws --
-    independent of rasterization): see tapered_line_ground_truth.
+    `max_thickness` defaults to this project's real-dataset median
+    avg_width_px (~16px, see docs/crack_stats_schema.md); `min_thickness`
+    to a thin-but-still->=1px tip.
+
+    Rasterized directly via a rotated-frame mgrid (t = distance along the
+    line, s = perpendicular distance), not skimage.draw.polygon -- a
+    polygon fill can only paint one flat value, and this generator needs a
+    smoothly-varying value per pixel.
+
+    Ground truth for the WIDTH profile alone (exact, independent of the
+    brightness fade or rasterization): see tapered_line_ground_truth.
+    There is no separate closed-form ground truth for the brightness
+    profile beyond its own stated construction parameters (fg_value,
+    tip_value) -- reported as parameters, not asserted, same as this
+    module's other cases with no measurable ground truth.
     """
     img = np.full((size, size), bg_value, dtype=np.float64)
     theta = np.radians(bearing_deg)
     direction = np.array([-np.sin(theta), np.cos(theta)])
-    center = np.array([size / 2.0, size / 2.0])
-    start = center - direction * (length / 2.0)
-    _draw_tapered_arm(
-        img,
-        start_rc=(float(start[0]), float(start[1])),
-        bearing_deg=bearing_deg,
-        length=length,
-        thickness_start=thickness_start,
-        thickness_end=thickness_end,
-        fg_value=fg_value,
-    )
+    normal = np.array([direction[1], -direction[0]])
+    start = np.array([size / 2.0, size / 2.0]) - direction * (length / 2.0)
+
+    rr, cc = np.mgrid[0:size, 0:size]
+    delta_r, delta_c = rr - start[0], cc - start[1]
+    t_coord = delta_r * direction[0] + delta_c * direction[1]
+    s_coord = delta_r * normal[0] + delta_c * normal[1]
+
+    mid = length / 2.0
+    profile = np.clip(1.0 - np.abs(t_coord - mid) / mid, 0.0, 1.0)
+    half_thickness = (min_thickness + (max_thickness - min_thickness) * profile) / 2.0
+    value = tip_value + (fg_value - tip_value) * profile
+
+    band = (t_coord >= 0.0) & (t_coord <= length) & (np.abs(s_coord) <= half_thickness)
+    img[band] = value[band]
     return img
 
 
 def tapered_line_ground_truth(
-    length: float, thickness_start: float, thickness_end: float
+    length: float, max_thickness: float, min_thickness: float
 ) -> dict[str, float]:
-    """Exact trapezoid area / mean width for generate_tapered_line, from
-    its own construction parameters alone -- no rasterization/pipeline
-    dependence."""
+    """Exact area / mean width of generate_tapered_line's WIDTH profile
+    alone (the brightness fade has no separate closed form -- see that
+    function's docstring), from construction parameters alone -- no
+    rasterization/pipeline dependence. A symmetric triangular taper's
+    average height is exactly half its peak, same as a single one-sided
+    linear ramp's average of its two endpoints -- both give the same
+    `length*(min+max)/2` formula.
+    """
     return {
-        "area_px2": length * (thickness_start + thickness_end) / 2.0,
-        "mean_width_px": (thickness_start + thickness_end) / 2.0,
+        "area_px2": length * (max_thickness + min_thickness) / 2.0,
+        "mean_width_px": (max_thickness + min_thickness) / 2.0,
     }
 
 
@@ -1158,10 +1149,15 @@ def density_gradient_ground_truth(
     thickness: int,
 ) -> dict[str, tuple]:
     """Exact per-zone segment count (an input, not a measurement) and a
-    per-zone foreground-pixel *upper bound* (n_segments * mean_length *
-    thickness, ignoring overlap) -- the same overlap-permitting honesty
-    caveat generate_oriented_segment_field's own docstring already states,
-    since segments here are placed independently and may cross."""
+    per-zone foreground-pixel area *estimate* (n_segments * mean_length *
+    thickness). generate_density_gradient_field places segments via
+    rejection sampling so none overlap, so -- unlike
+    generate_oriented_segment_field's own overlap-permitting honesty
+    caveat -- this is no longer an upper bound diluted by double-counted
+    overlap pixels; it's the expected value of the actual total, subject
+    only to each segment's own random length draw (an individual segment's
+    exact length isn't known from n_segments/length_range_px alone, only
+    its distribution)."""
     mean_length = sum(length_range_px) / 2.0
     return {
         "n_segments_per_zone": tuple(n_segments_per_zone),
@@ -1181,6 +1177,7 @@ def generate_density_gradient_field(
     fg_value: float = 230.0,
     bg_value: float = 10.0,
     rng_seed: int = 0,
+    max_placement_attempts: int = 200,
 ) -> np.ndarray:
     """Grayscale image with independent random line segments (same per-
     segment draw as generate_oriented_segment_field: random bearing,
@@ -1190,6 +1187,15 @@ def generate_density_gradient_field(
     `n_segments_per_zone`) with an explicit, different segment count per
     zone -- a dense-vs-sparse field in one image, instead of one uniform
     global density.
+
+    Each candidate segment is rasterized on a scratch canvas and checked
+    for any pixel overlap against every already-placed segment before
+    being accepted -- rejected (and re-drawn with new random bearing/
+    length/position) up to `max_placement_attempts` times per segment, so
+    no two segments in the final image ever touch or cross. Raises
+    RuntimeError rather than silently placing fewer segments than
+    requested if a zone is too crowded for these parameters to succeed --
+    surfacing that gap instead of quietly under-filling the zone.
 
     Exists to check whether binarize()'s single global Otsu threshold (and
     its sanity_band foreground-fraction check) holds up under strong local
@@ -1203,12 +1209,24 @@ def generate_density_gradient_field(
             "zone_bounds_frac must have exactly one more entry than n_segments_per_zone"
         )
     img = np.full((size, size), bg_value, dtype=np.float64)
+    occupied = np.zeros((size, size), dtype=bool)
     rng = np.random.default_rng(rng_seed)
     seg_i = 0
     for zi, n_segments in enumerate(n_segments_per_zone):
         col_lo = max(zone_bounds_frac[zi] * size, margin_px)
         col_hi = min(zone_bounds_frac[zi + 1] * size, size - margin_px)
-        for _ in range(n_segments):
+        placed = 0
+        attempts = 0
+        while placed < n_segments:
+            attempts += 1
+            if attempts > max_placement_attempts:
+                raise RuntimeError(
+                    f"generate_density_gradient_field: could not place segment "
+                    f"{placed + 1}/{n_segments} in zone {zi} without overlap after "
+                    f"{max_placement_attempts} attempts -- this zone is too crowded "
+                    f"for these parameters (reduce n_segments_per_zone[{zi}], "
+                    f"length_range_px, or thickness, or widen the zone)."
+                )
             bearing = float(rng.uniform(0.0, 180.0))
             length = float(rng.uniform(*length_range_px))
             row = float(rng.uniform(margin_px, size - margin_px))
@@ -1217,14 +1235,25 @@ def generate_density_gradient_field(
             theta = np.radians(bearing)
             direction = np.array([-np.sin(theta), np.cos(theta)])
             start = center - direction * (length / 2.0)
+
+            candidate = np.zeros((size, size), dtype=np.float64)
             _draw_rotated_arm(
-                img,
+                candidate,
                 start_rc=(float(start[0]), float(start[1])),
                 bearing_deg=bearing,
                 length=length,
                 thickness=thickness,
-                fg_value=fg_value,
+                fg_value=1.0,
                 rng_seed=rng_seed + seg_i + 1,
             )
+            candidate_mask = candidate > 0.0
+            if np.any(candidate_mask & occupied):
+                seg_i += 1
+                continue
+
+            img[candidate_mask] = fg_value
+            occupied |= candidate_mask
+            placed += 1
             seg_i += 1
+            attempts = 0
     return img

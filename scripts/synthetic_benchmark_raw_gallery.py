@@ -63,23 +63,30 @@ def _render_image(gray, out_path: Path) -> None:
 
 
 def case_tapered_line(out_dir: Path) -> dict:
-    length, t_start, t_end = 200.0, 16.0, 2.0
-    gray = generate_tapered_line(length=length, thickness_start=t_start, thickness_end=t_end)
-    gt = tapered_line_ground_truth(length, t_start, t_end)
+    length, max_t, min_t = 200.0, 16.0, 2.0
+    fg_value, tip_value = 230.0, 60.0
+    gray = generate_tapered_line(
+        length=length, max_thickness=max_t, min_thickness=min_t, fg_value=fg_value, tip_value=tip_value,
+    )
+    gt = tapered_line_ground_truth(length, max_t, min_t)
     out_path = out_dir / "01_tapered_line.png"
     _render_image(gray, out_path)
     return {
         "name": "tapered_line",
         "title": "1. Tapered line (tip truncation)",
         "image": out_path.name,
-        "desc": "A single crack tapering linearly from 16px (this dataset's real median "
-                "avg_width_px) down to a 2px tip -- tests whether the pipeline keeps tracking a "
-                "genuine physical tip all the way down, rather than dropping the last few, "
-                "faint-in-area-terms pixels. No junction, one skeleton path.",
+        "desc": "A single crack that tapers to a thin, DIM tip at both ends -- fat and bright "
+                "(16px, this dataset's real median avg_width_px) at the midpoint, narrowing in "
+                "width AND fading in brightness toward each tip (2px, dim), modelling the "
+                "partial-volume/PSF-blur effect a real crack tip shows under SEM imaging. Tests "
+                "whether a realistic global brightness threshold would truncate the dim tips even "
+                "though the geometric taper continues further -- the actual Otsu run is a later, "
+                "pipeline-integration step, but the raw pixel values already show the effect.",
         "rows": [
-            _row("thickness_start / thickness_end (px)", f"{t_start:.0f} / {t_end:.0f}"),
+            _row("max_thickness / min_thickness (px)", f"{max_t:.0f} / {min_t:.0f}"),
+            _row("fg_value (midpoint) / tip_value (both ends)", f"{fg_value:.0f} / {tip_value:.0f}"),
             _row("length (px)", f"{length:.0f}"),
-            _row("trapezoid area (px^2, exact)", f"{gt['area_px2']:.1f}"),
+            _row("width-taper area (px^2, exact)", f"{gt['area_px2']:.1f}"),
             _row("mean width (px, exact)", f"{gt['mean_width_px']:.1f}"),
         ],
     }
