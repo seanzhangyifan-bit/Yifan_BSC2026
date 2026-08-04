@@ -796,3 +796,415 @@ def generate_grid_with_flakes(
         rr, cc = disk((cy, cx), flake_radius, shape=img.shape)
         img[rr, cc] = fg_value
     return img
+
+
+# -- Synthetic benchmark matrix, step 1: 5 new geometries + closed-form
+# ground truth only (no pipeline run -- see docs on this project's
+# synthetic-benchmark plan). Canvas sizes stay in the same few-hundred-to-
+# ~1500px range as every generator above; feature-size *ratios* (line
+# width, spacing) are kept proportional to this project's own real-dataset
+# medians (avg_width_px~=16px, avg_edge_length_px~=67-138px, per
+# docs/crack_stats_schema.md) rather than picked arbitrarily. --
+
+
+def _draw_tapered_arm(
+    img: np.ndarray,
+    start_rc: tuple[float, float],
+    bearing_deg: float,
+    length: float,
+    thickness_start: float,
+    thickness_end: float,
+    fg_value: float,
+) -> None:
+    """Fill a trapezoid from start_rc extending `length` px in direction
+    `bearing_deg`, with cross-sectional thickness linearly interpolated
+    from `thickness_start` (at the start) to `thickness_end` (at the end)
+    -- the tapered-arm analogue of _draw_rotated_arm's constant-thickness
+    rectangle, using the same skimage.draw.polygon exact fill and bearing
+    convention (0 deg = +col, ccw in array-index space). No jitter support
+    here on purpose: this generator's only source of measurement
+    uncertainty should be the tip's thinning itself, not added wobble.
+    """
+    theta = np.radians(bearing_deg)
+    direction = np.array([-np.sin(theta), np.cos(theta)])
+    normal = np.array([direction[1], -direction[0]])
+    start = np.array(start_rc, dtype=np.float64)
+    end = start + direction * length
+    half_start = thickness_start / 2.0
+    half_end = thickness_end / 2.0
+    corners = np.array(
+        [
+            start + normal * half_start,
+            end + normal * half_end,
+            end - normal * half_end,
+            start - normal * half_start,
+        ]
+    )
+    rr, cc = polygon(corners[:, 0], corners[:, 1], shape=img.shape)
+    img[rr, cc] = fg_value
+
+
+def generate_tapered_line(
+    size: int = 300,
+    length: float = 200.0,
+    thickness_start: float = 16.0,
+    thickness_end: float = 2.0,
+    bearing_deg: float = 0.0,
+    fg_value: float = 230.0,
+    bg_value: float = 10.0,
+) -> np.ndarray:
+    """Grayscale image of a single straight arm whose width narrows
+    linearly from `thickness_start` px down to `thickness_end` px -- the
+    tip-truncation fixture: a real crack tapers to a genuine physical tip,
+    and whether binarization/skeletonization keep tracking that tip all the
+    way down (rather than dropping the last few, faint-in-area-terms
+    pixels) directly affects endpoint counts and edge-length stats on real
+    images. No junction, matching generate_straight_line's "nothing to
+    compete with" role -- one skeleton path, one seed. `thickness_start`
+    defaults to this project's real-dataset median avg_width_px (~16px, see
+    docs/crack_stats_schema.md); `thickness_end` to a thin-but-still->=1px
+    tip, so the taper spans a realistic thickness range.
+
+    Ground truth (exact, from the trapezoid the polygon fill draws --
+    independent of rasterization): see tapered_line_ground_truth.
+    """
+    img = np.full((size, size), bg_value, dtype=np.float64)
+    theta = np.radians(bearing_deg)
+    direction = np.array([-np.sin(theta), np.cos(theta)])
+    center = np.array([size / 2.0, size / 2.0])
+    start = center - direction * (length / 2.0)
+    _draw_tapered_arm(
+        img,
+        start_rc=(float(start[0]), float(start[1])),
+        bearing_deg=bearing_deg,
+        length=length,
+        thickness_start=thickness_start,
+        thickness_end=thickness_end,
+        fg_value=fg_value,
+    )
+    return img
+
+
+def tapered_line_ground_truth(
+    length: float, thickness_start: float, thickness_end: float
+) -> dict[str, float]:
+    """Exact trapezoid area / mean width for generate_tapered_line, from
+    its own construction parameters alone -- no rasterization/pipeline
+    dependence."""
+    return {
+        "area_px2": length * (thickness_start + thickness_end) / 2.0,
+        "mean_width_px": (thickness_start + thickness_end) / 2.0,
+    }
+
+
+def generate_converging_lines(
+    size: int = 300,
+    run_px: float = 250.0,
+    thickness: int = 12,
+    gap_start_px: float = 60.0,
+    gap_end_px: float = 0.0,
+    margin: float = 25.0,
+    fg_value: float = 230.0,
+    bg_value: float = 10.0,
+) -> np.ndarray:
+    """Grayscale image of two horizontal bands, symmetric about the image's
+    vertical center, whose center-to-center gap narrows linearly from
+    `gap_start_px` to `gap_end_px` over `run_px` -- the minimum-resolvable-
+    gap fixture: at some point along the run the two bands' own boundaries
+    touch and the shape becomes a single wedge instead of two lines, and
+    nothing in this project's existing generators tests where that
+    crossover actually falls. `thickness`/`gap_start_px` default to this
+    project's real-dataset scale (median avg_width_px~=16px, rounded here
+    to 12px so gap_start_px=60px keeps a comfortably-resolved separation at
+    the run's start).
+
+    Ground truth (exact, solving gap(x) == thickness for x -- independent
+    of rasterization): see converging_lines_ground_truth.
+    """
+    img = np.full((size, size), bg_value, dtype=np.float64)
+    half_t = thickness / 2.0
+    x0 = margin
+    x1 = margin + run_px
+    center_y = size / 2.0
+    xs = np.arange(int(round(x0)), int(round(x1)))
+    for x in xs:
+        t = (x - x0) / run_px
+        gap = gap_start_px - (gap_start_px - gap_end_px) * t
+        gap = max(gap, 0.0)
+        y_top = center_y - gap / 2.0
+        y_bot = center_y + gap / 2.0
+        row_lo_top = max(int(round(y_top - half_t)), 0)
+        row_hi_top = int(round(y_top + half_t))
+        row_lo_bot = int(round(y_bot - half_t))
+        row_hi_bot = min(int(round(y_bot + half_t)), size - 1)
+        img[row_lo_top : row_hi_top + 1, x] = fg_value
+        img[row_lo_bot : row_hi_bot + 1, x] = fg_value
+    return img
+
+
+def converging_lines_ground_truth(
+    run_px: float,
+    thickness: int,
+    gap_start_px: float,
+    gap_end_px: float,
+    margin: float,
+) -> dict[str, float]:
+    """Exact x-position where the two bands' boundaries first touch (gap(x)
+    == thickness, gap(x) linear in x) -- the point past which the shape is
+    one connected wedge instead of two separate lines. Only meaningful
+    (and only returned) when gap_start_px > thickness > gap_end_px, i.e.
+    the run genuinely starts resolved and ends merged."""
+    if not (gap_start_px > thickness > gap_end_px):
+        raise ValueError(
+            "converging_lines_ground_truth expects gap_start_px > thickness > gap_end_px"
+        )
+    frac = (gap_start_px - thickness) / (gap_start_px - gap_end_px)
+    return {"x_touch_px": margin + run_px * frac}
+
+
+def hierarchical_network_topology(
+    n_primary_lines: int, sub_branches_per_primary: int
+) -> dict[str, int]:
+    """Exact PRE-PRUNING node/edge counts for generate_hierarchical_network,
+    from grid_topology(n_primary_lines, n_primary_lines) (the primary mesh
+    alone) plus one T-junction per sub-branch: each sub-branch splits the
+    primary edge it attaches to (+1 edge) and adds its own stub edge and
+    tip endpoint (+1 edge, +1 endpoint, +1 degree-3 junction). This is a
+    pure combinatorial fact of the construction, not a claim about what
+    skeletonize_and_prune actually keeps -- whether these short stubs
+    survive its SPUR_PX_PLACEHOLDER length threshold (CALIBRATION.md) is a
+    separate, pipeline-dependent question for a later step, not answered
+    here.
+    """
+    base = grid_topology(n_primary_lines, n_primary_lines)
+    n_sub = n_primary_lines * sub_branches_per_primary
+    return {
+        "n_junctions_deg_ge4": base["n_junctions_deg_ge4"],
+        "n_junctions_deg3": n_sub,
+        "n_endpoints": base["n_endpoints"] + n_sub,
+        "n_edges": base["n_edges"] + 2 * n_sub,
+    }
+
+
+def generate_hierarchical_network(
+    size: int = 500,
+    n_primary_lines: int = 2,
+    primary_spacing: float = 160.0,
+    primary_thickness: int = 12,
+    margin: float = 40.0,
+    sub_branch_thickness: int = 3,
+    sub_branch_length: float = 25.0,
+    sub_branches_per_primary: int = 3,
+    fg_value: float = 230.0,
+    bg_value: float = 10.0,
+) -> np.ndarray:
+    """generate_grid's rectilinear mesh (the "primary" cracks, thick), with
+    `sub_branches_per_primary` short perpendicular stubs (the "sub-branch"
+    cracks, thin) attached to each horizontal primary line at evenly-spaced
+    positions along its span -- a bimodal-width network, unlike every mesh
+    generator above which uses one uniform thickness throughout.
+
+    Exists to test whether one global measurement pipeline, implicitly
+    tuned against the coarse primary features, loses the fine sub-branches
+    -- and, having checked the actual mechanism (see
+    hierarchical_network_topology's docstring and CALIBRATION.md), the
+    genuine risk here is skeleton.py's fixed SPUR_PX_PLACEHOLDER=15 length
+    threshold, not binarize.py's Otsu step (which is intensity-based, not
+    width-based, and every generator in this module uses one uniform
+    fg_value regardless of thickness). `sub_branch_length` defaults to 25px
+    (above the 15px threshold, expected to survive pruning); pass 12px
+    (below it) to generate the paired "expected to be pruned away" case.
+    """
+    row_ys = _default_grid_offsets(n_primary_lines, primary_spacing, margin)
+    col_xs = _default_grid_offsets(n_primary_lines, primary_spacing, margin)
+    img = generate_grid(
+        size=size,
+        n_lines=n_primary_lines,
+        spacing=primary_spacing,
+        margin=margin,
+        row_ys=row_ys,
+        col_xs=col_xs,
+        thickness=primary_thickness,
+        fg_value=fg_value,
+        bg_value=bg_value,
+    )
+
+    x0, x1 = margin, size - margin
+    span = x1 - x0
+    fracs = [(k + 0.5) / sub_branches_per_primary for k in range(sub_branches_per_primary)]
+    for row_y in row_ys:
+        for frac in fracs:
+            x = x0 + frac * span
+            _draw_rotated_arm(
+                img,
+                start_rc=(row_y, x),
+                bearing_deg=90.0,
+                length=sub_branch_length,
+                thickness=sub_branch_thickness,
+                fg_value=fg_value,
+            )
+    return img
+
+
+def _draw_arc_band(
+    img: np.ndarray,
+    center_rc: tuple[float, float],
+    radius: float,
+    arc_half_angle_deg: float,
+    thickness: int,
+    fg_value: float,
+) -> None:
+    """Fill a circular-arc band of the given radius/half-angle/thickness
+    centered at center_rc -- the same band-masking construction
+    generate_curved_t_junction uses for its single host arc (distance
+    transform `d`, angle `phi = atan2(cc-col_c, rr-row_c)`, band = ring
+    intersected with the angular sector), factored out here so a network of
+    several arcs (generate_crescent_mesh) can reuse it without duplicating
+    the trig.
+    """
+    row_c, col_c = center_rc
+    rr, cc = np.mgrid[0 : img.shape[0], 0 : img.shape[1]]
+    d = np.hypot(rr - row_c, cc - col_c)
+    phi = np.degrees(np.arctan2(cc - col_c, rr - row_c))
+    band = (np.abs(d - radius) <= thickness / 2.0) & (np.abs(phi) <= arc_half_angle_deg)
+    img[band] = fg_value
+
+
+def arc_tortuosity_ground_truth(arc_half_angle_deg: float) -> float:
+    """Exact tortuosity (arc length / chord length) of a FULL circular arc
+    spanning +/- arc_half_angle_deg (total angular span
+    2*arc_half_angle_deg): phi/(2*sin(phi/2)) with phi = the full span in
+    radians. Deliberately distinct from tests/test_curvature.py's
+    _arc_tortuosity_true(arc_half_angle_deg), which computes the same
+    formula for a HALF-arc (one T-junction arm, phi = arc_half_angle_deg
+    alone) -- generate_curved_t_junction's host arc is split in half by its
+    T-junction at phi=0, but generate_crescent_mesh's arcs are not split at
+    their own midpoint, so the whole span is the relevant "edge" here.
+    Whether a crossbar happens to split a given arc into shorter graph
+    edges once run through the real pipeline is a pipeline-integration
+    question for a later step, not answered by this closed-form value.
+    """
+    phi = math.radians(2.0 * arc_half_angle_deg)
+    return phi / (2.0 * math.sin(phi / 2.0))
+
+
+def generate_crescent_mesh(
+    size: int = 500,
+    n_arcs: int = 3,
+    radius: float = 250.0,
+    arc_spacing: float = 60.0,
+    arc_half_angle_deg: float = 40.0,
+    n_crossbars: int = 2,
+    thickness: int = 12,
+    margin: float = 30.0,
+    fg_value: float = 230.0,
+    bg_value: float = 10.0,
+) -> np.ndarray:
+    """Grayscale image of `n_arcs` circular-arc bands (same radius, centers
+    offset vertically by `arc_spacing` so the visible bands stack like
+    layered crescents/lenses), crossed by `n_crossbars` straight vertical
+    bars so the arcs form a real network with junctions rather than sitting
+    as disconnected shapes -- the network-scale generalization of
+    generate_curved_t_junction's single arc, needed because the curvature/
+    tortuosity chronometer has only ever been checked on one isolated
+    junction so far.
+
+    Ground truth for a full arc's own tortuosity is
+    arc_tortuosity_ground_truth(arc_half_angle_deg) -- see that function's
+    docstring for why it deliberately does not reuse
+    tests/test_curvature.py's half-arc formula unchanged.
+    """
+    img = np.full((size, size), bg_value, dtype=np.float64)
+    row_c_base = size * 0.15
+    col_c = size / 2.0
+    centers = [(row_c_base + k * arc_spacing, col_c) for k in range(n_arcs)]
+    for center_rc in centers:
+        _draw_arc_band(img, center_rc, radius, arc_half_angle_deg, thickness, fg_value)
+
+    x0, x1 = margin, size - margin
+    bar_spacing = (x1 - x0) / (n_crossbars + 1)
+    bar_xs = _default_grid_offsets(n_crossbars, bar_spacing, x0)
+    half_t = thickness // 2
+    y0, y1 = int(margin), size - int(margin)
+    for x in bar_xs:
+        xi = int(round(x))
+        img[y0:y1, xi - half_t : xi + half_t + 1] = fg_value
+    return img
+
+
+def density_gradient_ground_truth(
+    n_segments_per_zone: tuple[int, ...],
+    length_range_px: tuple[float, float],
+    thickness: int,
+) -> dict[str, tuple]:
+    """Exact per-zone segment count (an input, not a measurement) and a
+    per-zone foreground-pixel *upper bound* (n_segments * mean_length *
+    thickness, ignoring overlap) -- the same overlap-permitting honesty
+    caveat generate_oriented_segment_field's own docstring already states,
+    since segments here are placed independently and may cross."""
+    mean_length = sum(length_range_px) / 2.0
+    return {
+        "n_segments_per_zone": tuple(n_segments_per_zone),
+        "upper_bound_area_px2_per_zone": tuple(
+            n * mean_length * thickness for n in n_segments_per_zone
+        ),
+    }
+
+
+def generate_density_gradient_field(
+    size: int = 500,
+    zone_bounds_frac: tuple[float, ...] = (0.0, 0.33, 0.67, 1.0),
+    n_segments_per_zone: tuple[int, ...] = (60, 20, 5),
+    thickness: int = 8,
+    length_range_px: tuple[float, float] = (30.0, 60.0),
+    margin_px: float = 20.0,
+    fg_value: float = 230.0,
+    bg_value: float = 10.0,
+    rng_seed: int = 0,
+) -> np.ndarray:
+    """Grayscale image with independent random line segments (same per-
+    segment draw as generate_oriented_segment_field: random bearing,
+    random length in `length_range_px`, random position), but placed into
+    `len(n_segments_per_zone)` vertical column zones (bounds given as
+    fractions of `size` in `zone_bounds_frac`, one more entry than
+    `n_segments_per_zone`) with an explicit, different segment count per
+    zone -- a dense-vs-sparse field in one image, instead of one uniform
+    global density.
+
+    Exists to check whether binarize()'s single global Otsu threshold (and
+    its sanity_band foreground-fraction check) holds up under strong local
+    density variation within one image -- the defensible version of
+    "global vs. local threshold bias" for this pipeline, since Otsu being
+    global-only is this project's deliberate design choice (binarize.py's
+    own docstring), not a bug to discover.
+    """
+    if len(zone_bounds_frac) != len(n_segments_per_zone) + 1:
+        raise ValueError(
+            "zone_bounds_frac must have exactly one more entry than n_segments_per_zone"
+        )
+    img = np.full((size, size), bg_value, dtype=np.float64)
+    rng = np.random.default_rng(rng_seed)
+    seg_i = 0
+    for zi, n_segments in enumerate(n_segments_per_zone):
+        col_lo = max(zone_bounds_frac[zi] * size, margin_px)
+        col_hi = min(zone_bounds_frac[zi + 1] * size, size - margin_px)
+        for _ in range(n_segments):
+            bearing = float(rng.uniform(0.0, 180.0))
+            length = float(rng.uniform(*length_range_px))
+            row = float(rng.uniform(margin_px, size - margin_px))
+            col = float(rng.uniform(col_lo, col_hi))
+            center = np.array([row, col])
+            theta = np.radians(bearing)
+            direction = np.array([-np.sin(theta), np.cos(theta)])
+            start = center - direction * (length / 2.0)
+            _draw_rotated_arm(
+                img,
+                start_rc=(float(start[0]), float(start[1])),
+                bearing_deg=bearing,
+                length=length,
+                thickness=thickness,
+                fg_value=fg_value,
+                rng_seed=rng_seed + seg_i + 1,
+            )
+            seg_i += 1
+    return img
