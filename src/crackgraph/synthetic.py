@@ -600,7 +600,11 @@ def wavy_line_arc_length_px(run_px: float, amplitude: float, wavelength: float) 
         dy_dx = amplitude * (2.0 * np.pi / wavelength) * np.cos(2.0 * np.pi * x / wavelength)
         return math.sqrt(1.0 + dy_dx * dy_dx)
 
-    length, _ = quad(integrand, 0.0, run_px)
+    # Default limit=50 subdivisions is occasionally too few over a long,
+    # many-period run (e.g. a full ~7500px micrograph-scale image) --
+    # confirmed the two answers agree to ~2e-10% where both converge, so
+    # this only silences a spurious warning, it doesn't change the result.
+    length, _ = quad(integrand, 0.0, run_px, limit=200)
     return length
 
 
