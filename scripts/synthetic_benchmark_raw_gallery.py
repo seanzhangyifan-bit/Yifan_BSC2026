@@ -63,7 +63,7 @@ def _render_image(gray, out_path: Path) -> None:
 
 
 def case_tapered_line(out_dir: Path) -> dict:
-    length, max_t, min_t = 200.0, 16.0, 2.0
+    length, max_t, min_t = 200.0, 16.0, 0.0
     fg_value, tip_value = 230.0, 60.0
     gray = generate_tapered_line(
         length=length, max_thickness=max_t, min_thickness=min_t, fg_value=fg_value, tip_value=tip_value,
@@ -295,11 +295,14 @@ def case_debris(out_dir: Path) -> dict:
         "title": "9. Surface debris / charging [speculated]",
         "image": out_path_a.name,
         "image_b": out_path_b.name,
-        "desc": "40 small bright specks (1-4px radius, well under skeleton.py's "
-                "SPUR_PX_PLACEHOLDER=15px) stamped onto case 4's clean image -- shown clean (left) "
-                "vs. degraded (right). [speculated]: no evidence of this in the real dataset "
-                "either. No fabricated ground truth for the degraded image -- whether pruning "
-                "actually removes these specks (the falsifiable claim this case sets up) is a "
+        "desc": "40 small DARK specks (1-4px radius, well under skeleton.py's "
+                "SPUR_PX_PLACEHOLDER=15px) punched into the middle of case 4's already-bright "
+                "crack channels -- shown clean (left) vs. degraded (right). Models debris/charging "
+                "that interrupts a channel, not new bright material elsewhere -- the "
+                "'Channel Fragmentation' failure mode. [speculated]: no evidence of this in the "
+                "real dataset either. No fabricated ground truth for the degraded image -- whether "
+                "thinning/pruning actually bridges these small interruptions rather than "
+                "fragmenting the channel (the falsifiable claim this case sets up) is a "
                 "pipeline-integration question for a later step.",
         "rows": [
             _row("n_specks", str(n_specks)),

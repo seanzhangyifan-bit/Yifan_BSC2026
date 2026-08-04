@@ -54,7 +54,7 @@ GEOM_THRESHOLD = 10.5
 
 
 def test_tapered_line_area_matches_trapezoid_formula():
-    length, max_t, min_t = 200.0, 16.0, 2.0
+    length, max_t, min_t = 200.0, 16.0, 0.0
     img = generate_tapered_line(length=length, max_thickness=max_t, min_thickness=min_t)
     mask = img > GEOM_THRESHOLD
     gt = tapered_line_ground_truth(length, max_t, min_t)
@@ -65,7 +65,7 @@ def test_tapered_line_area_matches_trapezoid_formula():
 
 
 def test_tapered_line_width_narrows_toward_both_tips():
-    img = generate_tapered_line(length=200.0, max_thickness=16.0, min_thickness=2.0, bearing_deg=0.0)
+    img = generate_tapered_line(length=200.0, max_thickness=16.0, min_thickness=0.0, bearing_deg=0.0)
     mask = img > GEOM_THRESHOLD
     cols_with_fg = np.where(mask.any(axis=0))[0]
     x_lo, x_hi = int(cols_with_fg.min()), int(cols_with_fg.max())
@@ -82,7 +82,7 @@ def test_tapered_line_width_narrows_toward_both_tips():
 
 def test_tapered_line_brightness_fades_toward_both_tips():
     img = generate_tapered_line(
-        length=200.0, max_thickness=16.0, min_thickness=2.0, bearing_deg=0.0,
+        length=200.0, max_thickness=16.0, min_thickness=0.0, bearing_deg=0.0,
         fg_value=230.0, tip_value=60.0, bg_value=10.0,
     )
     mid_row = img.shape[0] // 2
@@ -109,7 +109,7 @@ def test_tapered_line_dim_tips_would_be_clipped_by_a_realistic_threshold():
     # here at the raw-pixel level; whether the real binarize() (Otsu, not
     # a fixed threshold) reproduces this is a later pipeline-integration
     # step, not asserted here.
-    img = generate_tapered_line(length=200.0, max_thickness=16.0, min_thickness=2.0)
+    img = generate_tapered_line(length=200.0, max_thickness=16.0, min_thickness=0.0)
     geom_mask = img > GEOM_THRESHOLD
     bright_mask = img > FG_THRESHOLD
     geom_cols = np.where(geom_mask.any(axis=0))[0]
@@ -323,17 +323,22 @@ def test_density_gradient_field_rejects_mismatched_zone_bounds():
 def test_density_gradient_field_segments_never_overlap():
     # Fixed (zero-variance) length isolates the no-overlap claim from
     # random-length sampling noise: with true non-overlap, measured area
-    # must closely match n_segments*length*thickness exactly (small
+    # must closely match each segment's own exact area (small
     # rasterization rounding only) -- if segments were allowed to overlap,
     # shared pixels would be counted once instead of twice, and measured
-    # area would fall meaningfully short of this exact value.
-    n_segments, length, thickness = 15, 40.0, 6
+    # area would fall meaningfully short of this exact value. Each segment
+    # is a spindle (tapered to a point at both ends, see
+    # generate_density_gradient_field's own docstring for the derivation),
+    # not a flat rectangle, so its true area is length*thickness*
+    # (1 - tip_taper_frac/2), not the naive length*thickness.
+    n_segments, length, thickness, tip_taper_frac = 15, 40.0, 6, 0.4
     img = generate_density_gradient_field(
         size=300, zone_bounds_frac=(0.0, 1.0), n_segments_per_zone=(n_segments,),
         thickness=thickness, length_range_px=(length, length), rng_seed=1,
+        tip_taper_frac=tip_taper_frac,
     )
     mask = img > FG_THRESHOLD
-    expected_area = n_segments * length * thickness
+    expected_area = n_segments * length * thickness * (1.0 - tip_taper_frac / 2.0)
     assert mask.sum() == pytest.approx(expected_area, rel=0.05)
 
 
@@ -372,11 +377,28 @@ def test_jpeg_blocking_runs_and_preserves_shape_and_range():
     assert not np.array_equal(out, base), "a real lossy round-trip should change at least some pixels"
 
 
-def test_debris_adds_specks_without_removing_existing_foreground():
+def test_debris_punches_dark_specks_inside_existing_channels():
+    # apply_debris models debris/charging that INTERRUPTS a crack channel
+    # (dark specks punched into already-bright pixels), not new bright
+    # material added elsewhere -- the opposite direction from the earlier
+    # design, corrected to match "Channel Fragmentation" (splitting a
+    # continuous crack into fragments), the actual failure mode this case
+    # is meant to test.
     base = generate_hierarchical_network(sub_branch_length=25.0)
     out = apply_debris(base, n_specks=40, speck_radius_range_px=(1.0, 4.0), rng_seed=0)
     assert out.shape == base.shape
     base_mask = base > FG_THRESHOLD
     out_mask = out > FG_THRESHOLD
-    assert np.all(out_mask[base_mask]), "debris should only add foreground, never remove existing cracks"
-    assert out_mask.sum() > base_mask.sum(), "specks should actually add some new foreground"
+    # every pixel that changed must have STARTED as foreground (specks
+    # only land inside existing channels, never on background) ...
+    changed = out_mask != base_mask
+    assert np.all(base_mask[changed]), "every darkened pixel should have been foreground in the clean base"
+    # ...and the net effect is a REDUCTION in foreground area (holes
+    # punched in), not an addition.
+    assert out_mask.sum() < base_mask.sum(), "debris should remove foreground area, not add it"
+
+
+def test_debris_raises_when_base_image_has_no_foreground():
+    blank = np.full((50, 50), 10.0)
+    with pytest.raises(ValueError):
+        apply_debris(blank, n_specks=5)

@@ -61,6 +61,7 @@ def _draw_rotated_arm(
     fg_value: float,
     jitter_px: float = 0.0,
     rng_seed: int = 0,
+    tip_taper_frac: float = 0.0,
 ) -> None:
     """Fill a thickness-wide rectangle from start_rc extending `length` px
     in direction `bearing_deg` (0 deg = +col, measured counterclockwise in
@@ -77,6 +78,19 @@ def _draw_rotated_arm(
     jitter can be measured (see scripts/window_sweep.py) instead of
     asserted. The start point (t=0) is always exact/unperturbed, so
     `bearing_deg` remains the nominal ground-truth direction at the vertex.
+
+    `tip_taper_frac > 0` narrows the FAR end (t=length, the free tip --
+    `start_rc` is conventionally the junction/anchor end, never tapered)
+    linearly to a point over the last `tip_taper_frac` fraction of the
+    arm's length, instead of ending in a flat rectangular cut -- real
+    crack tips taper, they don't stop abruptly. Default 0.0 preserves the
+    exact original flat-rectangle-tip geometry unchanged, since many
+    existing callers' locked-in ground truth (exact endpoint positions,
+    junction sector-gap angles) assumes it -- opt in per call site, don't
+    flip the default. Not supported together with jitter (raises
+    NotImplementedError) -- no current caller needs both, and combining a
+    tapered boundary with lateral wobble would need a different
+    construction than either alone.
     """
     theta = np.radians(bearing_deg)
     direction = np.array([-np.sin(theta), np.cos(theta)])  # (drow, dcol)
@@ -84,13 +98,35 @@ def _draw_rotated_arm(
     start = np.array(start_rc, dtype=np.float64)
     half_t = thickness / 2.0
 
-    if jitter_px <= 0.0:
+    if tip_taper_frac > 0.0 and jitter_px > 0.0:
+        raise NotImplementedError(
+            "_draw_rotated_arm: tip_taper_frac and jitter_px are not supported together"
+        )
+
+    if jitter_px <= 0.0 and tip_taper_frac <= 0.0:
         end = start + direction * length
         corners = np.array(
             [
                 start + normal * half_t,
                 end + normal * half_t,
                 end - normal * half_t,
+                start - normal * half_t,
+            ]
+        )
+        rr, cc = polygon(corners[:, 0], corners[:, 1], shape=img.shape)
+        img[rr, cc] = fg_value
+        return
+
+    if tip_taper_frac > 0.0:
+        end = start + direction * length
+        taper_start_len = length * (1.0 - min(tip_taper_frac, 1.0))
+        taper_pt = start + direction * taper_start_len
+        corners = np.array(
+            [
+                start + normal * half_t,
+                taper_pt + normal * half_t,
+                end,  # the tapered tip -- a single point, zero width
+                taper_pt - normal * half_t,
                 start - normal * half_t,
             ]
         )
@@ -811,7 +847,7 @@ def generate_tapered_line(
     size: int = 300,
     length: float = 200.0,
     max_thickness: float = 16.0,
-    min_thickness: float = 2.0,
+    min_thickness: float = 0.0,
     fg_value: float = 230.0,
     tip_value: float = 60.0,
     bg_value: float = 10.0,
@@ -897,6 +933,7 @@ def generate_converging_lines(
     margin: float = 25.0,
     fg_value: float = 230.0,
     bg_value: float = 10.0,
+    back_taper_px: float = 25.0,
 ) -> np.ndarray:
     """Grayscale image of two horizontal bands, symmetric about the image's
     vertical center, whose center-to-center gap narrows linearly from
@@ -908,6 +945,14 @@ def generate_converging_lines(
     project's real-dataset scale (median avg_width_px~=16px, rounded here
     to 12px so gap_start_px=60px keeps a comfortably-resolved separation at
     the run's start).
+
+    `back_taper_px` linearly tapers each line's half-width from 0 at the
+    back (x0, the non-merging) end up to the full `thickness` over that
+    many px, so the two free tips come to a point instead of ending in a
+    flat rectangular cut -- the merging (front, x1) end is never tapered,
+    since it isn't a free tip, it continues on as a single wedge. Kept far
+    from the default `x_touch_px`(~225px, see converging_lines_ground_truth)
+    so it never interferes with the merge-point ground truth.
 
     Ground truth (exact, solving gap(x) == thickness for x -- independent
     of rasterization): see converging_lines_ground_truth.
@@ -922,12 +967,14 @@ def generate_converging_lines(
         t = (x - x0) / run_px
         gap = gap_start_px - (gap_start_px - gap_end_px) * t
         gap = max(gap, 0.0)
+        taper_scale = min(1.0, (x - x0) / back_taper_px) if back_taper_px > 0 else 1.0
+        eff_half_t = half_t * taper_scale
         y_top = center_y - gap / 2.0
         y_bot = center_y + gap / 2.0
-        row_lo_top = max(int(round(y_top - half_t)), 0)
-        row_hi_top = int(round(y_top + half_t))
-        row_lo_bot = int(round(y_bot - half_t))
-        row_hi_bot = min(int(round(y_bot + half_t)), size - 1)
+        row_lo_top = max(int(round(y_top - eff_half_t)), 0)
+        row_hi_top = int(round(y_top + eff_half_t))
+        row_lo_bot = int(round(y_bot - eff_half_t))
+        row_hi_bot = min(int(round(y_bot + eff_half_t)), size - 1)
         img[row_lo_top : row_hi_top + 1, x] = fg_value
         img[row_lo_bot : row_hi_bot + 1, x] = fg_value
     return img
@@ -1033,6 +1080,7 @@ def generate_hierarchical_network(
                 length=sub_branch_length,
                 thickness=sub_branch_thickness,
                 fg_value=fg_value,
+                tip_taper_frac=0.35,
             )
     return img
 
@@ -1178,6 +1226,7 @@ def generate_density_gradient_field(
     bg_value: float = 10.0,
     rng_seed: int = 0,
     max_placement_attempts: int = 200,
+    tip_taper_frac: float = 0.4,
 ) -> np.ndarray:
     """Grayscale image with independent random line segments (same per-
     segment draw as generate_oriented_segment_field: random bearing,
@@ -1187,6 +1236,19 @@ def generate_density_gradient_field(
     `n_segments_per_zone`) with an explicit, different segment count per
     zone -- a dense-vs-sparse field in one image, instead of one uniform
     global density.
+
+    Each segment is standalone (unlike a junction arm, BOTH ends are free
+    tips), so it's drawn as two half-arms from its own center, each
+    tapering to a point at its outer end via `_draw_rotated_arm`'s
+    `tip_taper_frac` (applied per half, i.e. over that fraction of
+    `length/2`) -- a spindle shape, not a flat-ended rectangle. This
+    reduces each segment's true area below the naive `length*thickness`
+    rectangle: exactly `length*thickness*(1 - tip_taper_frac/2)` (a
+    rectangular core plus two linearly-tapered triangular tips) --
+    density_gradient_ground_truth's own estimate does not include this
+    correction (it's independent of any single generator's rendering
+    choice), so compare against that adjusted value directly when an
+    exact check is needed, not the raw upper-bound estimate.
 
     Each candidate segment is rasterized on a scratch canvas and checked
     for any pixel overlap against every already-placed segment before
@@ -1232,20 +1294,24 @@ def generate_density_gradient_field(
             row = float(rng.uniform(margin_px, size - margin_px))
             col = float(rng.uniform(col_lo, col_hi))
             center = np.array([row, col])
-            theta = np.radians(bearing)
-            direction = np.array([-np.sin(theta), np.cos(theta)])
-            start = center - direction * (length / 2.0)
+            half_length = length / 2.0
 
+            # Each segment is standalone (unlike a junction arm, BOTH ends
+            # are free tips), so draw it as two half-arms from the center,
+            # each tapering to a point at its own outer end -- a spindle
+            # shape, not a flat-ended rectangle.
             candidate = np.zeros((size, size), dtype=np.float64)
-            _draw_rotated_arm(
-                candidate,
-                start_rc=(float(start[0]), float(start[1])),
-                bearing_deg=bearing,
-                length=length,
-                thickness=thickness,
-                fg_value=1.0,
-                rng_seed=rng_seed + seg_i + 1,
-            )
+            for half_bearing in (bearing, bearing + 180.0):
+                _draw_rotated_arm(
+                    candidate,
+                    start_rc=(float(center[0]), float(center[1])),
+                    bearing_deg=half_bearing,
+                    length=half_length,
+                    thickness=thickness,
+                    fg_value=1.0,
+                    rng_seed=rng_seed + seg_i + 1,
+                    tip_taper_frac=tip_taper_frac,
+                )
             candidate_mask = candidate > 0.0
             if np.any(candidate_mask & occupied):
                 seg_i += 1

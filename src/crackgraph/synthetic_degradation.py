@@ -66,24 +66,34 @@ def apply_debris(
     gray: np.ndarray,
     n_specks: int = 40,
     speck_radius_range_px: tuple[float, float] = (1.0, 4.0),
-    fg_value: float = 230.0,
+    bg_value: float = 10.0,
+    fg_threshold: float = 100.0,
     rng_seed: int = 0,
 ) -> np.ndarray:
-    """Stamp `n_specks` small bright filled disks (radius drawn uniformly
-    from `speck_radius_range_px`) at random positions -- a stand-in for
-    surface debris/charging artifacts. `[speculated]`: no evidence of this
-    in the real dataset either (see synthetic-benchmark plan). Kept small
-    by default (diameter well under skeleton.py's SPUR_PX_PLACEHOLDER=15)
-    so a downstream pipeline-integration test can check whether pruning
-    actually removes these specks, rather than asserting it here where no
-    pipeline runs.
+    """Stamp `n_specks` small DARK filled disks (radius drawn uniformly
+    from `speck_radius_range_px`) into the middle of already-bright crack
+    channels -- a stand-in for debris/charging artifacts that INTERRUPT a
+    channel, not new bright material added elsewhere. Candidate centers
+    are drawn only from pixels already brighter than `fg_threshold` in
+    `gray`, so every speck lands inside a crack, never on background.
+    `[speculated]`: no evidence of this in the real dataset either (see
+    synthetic-benchmark plan). Kept small by default (diameter well under
+    skeleton.py's SPUR_PX_PLACEHOLDER=15) so a downstream pipeline-
+    integration test can check whether thinning/pruning actually bridges
+    over these small interruptions rather than fragmenting the channel
+    into two separate edges -- the actual "Channel Fragmentation" failure
+    mode this case is meant to test -- rather than asserting it here where
+    no pipeline runs.
     """
     out = gray.copy()
     rng = np.random.default_rng(rng_seed)
+    fg_rows, fg_cols = np.where(gray > fg_threshold)
+    if fg_rows.size == 0:
+        raise ValueError("apply_debris: no foreground pixels above fg_threshold to place specks into")
     for _ in range(n_specks):
-        row = float(rng.uniform(0, gray.shape[0]))
-        col = float(rng.uniform(0, gray.shape[1]))
+        idx = int(rng.integers(0, fg_rows.size))
+        row, col = float(fg_rows[idx]), float(fg_cols[idx])
         radius = float(rng.uniform(*speck_radius_range_px))
         rr, cc = disk((row, col), radius, shape=gray.shape)
-        out[rr, cc] = fg_value
+        out[rr, cc] = bg_value
     return out
