@@ -1,16 +1,21 @@
-"""Synthetic-benchmark matrix, step 1: raw geometry + ground truth only.
+"""Synthetic-benchmark matrix, step 1: all 9 raw cases + ground truth.
 
-Renders the 5 new generators added in src/crackgraph/synthetic.py
-(generate_tapered_line, generate_converging_lines,
-generate_hierarchical_network, generate_crescent_mesh,
-generate_density_gradient_field) as plain grayscale images, next to each
-one's own closed-form ground truth -- computed directly from the
-generator's construction parameters, not measured. Deliberately no
-binarize/skeletonize_and_prune/extract_graph call anywhere in this script:
-wiring these through the real pipeline and comparing measured-vs-expected
-is a later, separate step, not this one. The point of this step is purely
-to eyeball whether the geometry and proportions look right before anything
-is wired into the real pipeline -- see the synthetic-benchmark plan.
+Renders the user's original 9-case matrix (canonical geometries /
+structural networks / degradation resilience) as plain grayscale images,
+next to each one's own closed-form ground truth where one exists --
+computed directly from the generator's construction parameters, not
+measured. Deliberately no binarize/skeletonize_and_prune/extract_graph
+call anywhere in this script: wiring these through the real pipeline and
+comparing measured-vs-expected is a later, separate step, not this one.
+The point of this step is purely to eyeball whether the geometry and
+proportions look right before anything is wired into the real pipeline --
+see the synthetic-benchmark plan.
+
+Cases 7-9 (illumination gradient, JPEG blocking, debris) apply a
+composable post-processing pass (src/crackgraph/synthetic_degradation.py)
+to a clean base case and show both, with no fabricated ground truth for
+the degraded output -- they're lossy/randomized/speculative by
+construction (see that module's docstring).
 
 Usage:
     python3 -m scripts.synthetic_benchmark_raw_gallery [--out-dir outputs/synthetic_benchmark_raw]
@@ -24,16 +29,23 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 from src.crackgraph.synthetic import (
-    arc_tortuosity_ground_truth,
     converging_lines_ground_truth,
+    crescent_ground_truth,
     density_gradient_ground_truth,
     generate_converging_lines,
-    generate_crescent_mesh,
+    generate_crescent_scale_pattern,
     generate_density_gradient_field,
     generate_hierarchical_network,
+    generate_t_junction,
     generate_tapered_line,
+    generate_y_junction,
     hierarchical_network_topology,
     tapered_line_ground_truth,
+)
+from src.crackgraph.synthetic_degradation import (
+    apply_debris,
+    apply_illumination_gradient,
+    apply_jpeg_blocking,
 )
 
 
@@ -54,11 +66,11 @@ def case_tapered_line(out_dir: Path) -> dict:
     length, t_start, t_end = 200.0, 16.0, 2.0
     gray = generate_tapered_line(length=length, thickness_start=t_start, thickness_end=t_end)
     gt = tapered_line_ground_truth(length, t_start, t_end)
-    out_path = out_dir / "tapered_line.png"
+    out_path = out_dir / "01_tapered_line.png"
     _render_image(gray, out_path)
     return {
         "name": "tapered_line",
-        "title": "Tapered line (tip truncation)",
+        "title": "1. Tapered line (tip truncation)",
         "image": out_path.name,
         "desc": "A single crack tapering linearly from 16px (this dataset's real median "
                 "avg_width_px) down to a 2px tip -- tests whether the pipeline keeps tracking a "
@@ -73,17 +85,41 @@ def case_tapered_line(out_dir: Path) -> dict:
     }
 
 
+def case_t_y_junction(out_dir: Path) -> dict:
+    t_img = generate_t_junction()
+    y_img = generate_y_junction()
+    out_path_a = out_dir / "02a_t_junction.png"
+    out_path_b = out_dir / "02b_y_junction.png"
+    _render_image(t_img, out_path_a)
+    _render_image(y_img, out_path_b)
+    return {
+        "name": "t_y_junction",
+        "title": "2. T / Y-junction",
+        "image": out_path_a.name,
+        "image_b": out_path_b.name,
+        "desc": "Already covered by existing generators (generate_t_junction, generate_y_junction) "
+                "and their own tests/validation_gallery.py -- shown "
+                "here for completeness against the original 9-case matrix, not as new coverage. "
+                "No new generator code and no new ground truth on this page; see "
+                "scripts/validation_gallery.py for the actual angle-recovery ground truth these "
+                "already carry.",
+        "rows": [
+            _row("status", "reused from existing generators, not new this step"),
+        ],
+    }
+
+
 def case_converging_lines(out_dir: Path) -> dict:
     run_px, thickness, gap_start, gap_end, margin = 250.0, 12, 60.0, 0.0, 25.0
     gray = generate_converging_lines(
         run_px=run_px, thickness=thickness, gap_start_px=gap_start, gap_end_px=gap_end, margin=margin,
     )
     gt = converging_lines_ground_truth(run_px, thickness, gap_start, gap_end, margin)
-    out_path = out_dir / "converging_lines.png"
+    out_path = out_dir / "03_converging_lines.png"
     _render_image(gray, out_path)
     return {
         "name": "converging_lines",
-        "title": "Converging parallel lines (minimum resolvable gap)",
+        "title": "3. Converging parallel lines (minimum resolvable gap)",
         "image": out_path.name,
         "desc": "Two 12px-thick lines whose gap narrows from 60px to 0px -- the minimum-"
                 "resolvable-gap fixture. Nothing in this project's existing generators tests where "
@@ -102,13 +138,13 @@ def case_hierarchical_network(out_dir: Path) -> dict:
     survives = generate_hierarchical_network(sub_branch_length=25.0, sub_branch_thickness=3)
     pruned = generate_hierarchical_network(sub_branch_length=12.0, sub_branch_thickness=3)
     topo = hierarchical_network_topology(n_primary_lines, sub_branches_per_primary)
-    out_path_a = out_dir / "hierarchical_network_survives.png"
-    out_path_b = out_dir / "hierarchical_network_pruned.png"
+    out_path_a = out_dir / "04a_hierarchical_network_survives.png"
+    out_path_b = out_dir / "04b_hierarchical_network_pruned.png"
     _render_image(survives, out_path_a)
     _render_image(pruned, out_path_b)
     return {
         "name": "hierarchical_network",
-        "title": "Hierarchical bimodal-width network (primary + sub-branch cracks)",
+        "title": "4. Hierarchical bimodal-width network (primary + sub-branch cracks)",
         "image": out_path_a.name,
         "image_b": out_path_b.name,
         "desc": "A 2x2 primary grid (12px thick) with 3 short 3px-thick sub-branch stubs per "
@@ -128,24 +164,28 @@ def case_hierarchical_network(out_dir: Path) -> dict:
     }
 
 
-def case_crescent_mesh(out_dir: Path) -> dict:
-    arc_half_angle_deg = 40.0
-    gray = generate_crescent_mesh(arc_half_angle_deg=arc_half_angle_deg)
-    tortuosity = arc_tortuosity_ground_truth(arc_half_angle_deg)
-    out_path = out_dir / "crescent_mesh.png"
+def case_crescent_scale_pattern(out_dir: Path) -> dict:
+    radius, offset = 70.0, 45.0
+    gray = generate_crescent_scale_pattern(radius=radius, offset=offset)
+    gt = crescent_ground_truth(radius, offset)
+    out_path = out_dir / "05_crescent_scale_pattern.png"
     _render_image(gray, out_path)
     return {
-        "name": "crescent_mesh",
-        "title": "Crescent/arc mesh at network scale",
+        "name": "crescent_scale_pattern",
+        "title": "5. Crescent/lens mesh (fish-scale tiling)",
         "image": out_path.name,
-        "desc": "3 stacked circular-arc bands (radius=250px, +/-40deg half-angle) crossed by 2 "
-                "straight crossbars -- the network-scale generalization of "
-                "generate_curved_t_junction's single arc, needed because the curvature/tortuosity "
-                "chronometer has only ever been checked on one isolated junction so far.",
+        "desc": "Filled crescent-moon tiles (disk A minus disk B, both radius 70px, centers 45px "
+                "apart) tiled on a staggered grid so each crescent's sharp cusps nestle against "
+                "neighboring crescents' rounded outer sides -- a fish-scale/roofing-shingle "
+                "pattern, filled solid rather than a thin-line outline like every other case here. "
+                "That's deliberate: this case tests Otsu's boundary/edge fidelity on a curved 2D "
+                "region (perimeter-to-area accuracy), not a 1D crack-line network.",
         "rows": [
-            _row("radius (px)", "250"),
-            _row("arc_half_angle_deg", f"{arc_half_angle_deg:.0f}"),
-            _row("full-arc tortuosity = arc/chord (exact)", f"{tortuosity:.4f}"),
+            _row("radius (px)", f"{radius:.0f}"),
+            _row("offset between disk centers (px)", f"{offset:.0f}"),
+            _row("perimeter (px, exact -- always 2*pi*radius, independent of offset)", f"{gt['perimeter_px']:.1f}"),
+            _row("area (px^2, exact)", f"{gt['area_px2']:.1f}"),
+            _row("cusp-to-cusp chord (px, exact)", f"{gt['cusp_chord_px']:.1f}"),
         ],
     }
 
@@ -158,11 +198,11 @@ def case_density_gradient_field(out_dir: Path) -> dict:
         n_segments_per_zone=n_segments_per_zone, length_range_px=length_range_px, thickness=thickness,
     )
     gt = density_gradient_ground_truth(n_segments_per_zone, length_range_px, thickness)
-    out_path = out_dir / "density_gradient_field.png"
+    out_path = out_dir / "06_density_gradient_field.png"
     _render_image(gray, out_path)
     return {
         "name": "density_gradient_field",
-        "title": "Non-uniform density field (dense vs. sparse zones)",
+        "title": "6. Non-uniform density field (dense vs. sparse zones)",
         "image": out_path.name,
         "desc": "Independent random line segments placed into 3 column zones at explicit, "
                 "different densities (60/20/5 segments) -- tests whether binarize()'s single "
@@ -177,6 +217,87 @@ def case_density_gradient_field(out_dir: Path) -> dict:
                 "upper-bound area px^2 per zone (no-overlap, exact)",
                 " / ".join(f"{a:.0f}" for a in gt["upper_bound_area_px2_per_zone"]),
             ),
+        ],
+    }
+
+
+def case_illumination_gradient(out_dir: Path) -> dict:
+    base = generate_converging_lines()
+    amplitude, direction_deg = 60.0, 0.0
+    degraded = apply_illumination_gradient(base, direction_deg=direction_deg, amplitude=amplitude)
+    out_path_a = out_dir / "07a_illumination_gradient_clean.png"
+    out_path_b = out_dir / "07b_illumination_gradient_degraded.png"
+    _render_image(base, out_path_a)
+    _render_image(degraded, out_path_b)
+    return {
+        "name": "illumination_gradient",
+        "title": "7. Illumination gradient [speculated]",
+        "image": out_path_a.name,
+        "image_b": out_path_b.name,
+        "desc": "A smooth left-to-right brightness ramp (60 gray levels peak-to-peak) added to "
+                "case 3's clean image before binarization would see it -- shown clean (left) vs. "
+                "degraded (right). [speculated]: binarize.py's own docstring states these images "
+                "have no illumination gradient to compensate for, so this is a worst-case/"
+                "precautionary check, not a response to an observed problem. No fabricated ground "
+                "truth for the degraded pixel values -- pipeline behavior under this degradation "
+                "is a later step.",
+        "rows": [
+            _row("amplitude (gray levels, peak-to-peak)", f"{amplitude:.0f}"),
+            _row("direction_deg", f"{direction_deg:.0f}"),
+            _row("base case", "case 3 (converging lines)"),
+        ],
+    }
+
+
+def case_jpeg_blocking(out_dir: Path) -> dict:
+    base = generate_hierarchical_network(sub_branch_length=25.0)
+    quality = 15
+    degraded = apply_jpeg_blocking(base, quality=quality)
+    out_path_a = out_dir / "08a_jpeg_blocking_clean.png"
+    out_path_b = out_dir / "08b_jpeg_blocking_degraded.png"
+    _render_image(base, out_path_a)
+    _render_image(degraded, out_path_b)
+    return {
+        "name": "jpeg_blocking",
+        "title": "8. Sensor noise (JPEG blocking)",
+        "image": out_path_a.name,
+        "image_b": out_path_b.name,
+        "desc": "A REAL JPEG encode/decode round-trip (Pillow, quality=15) applied to case 4's "
+                "clean 'survives pruning' image -- shown clean (left) vs. degraded (right). Closes "
+                "a named, already-acknowledged gap: scripts/skeleton_loop_sweep.py:25 states no "
+                "synthetic case reproduces JPEG-compression boundary noise. No fabricated ground "
+                "truth for the degraded pixel values (lossy by construction) -- pipeline behavior "
+                "under this degradation is a later step.",
+        "rows": [
+            _row("JPEG quality", str(quality)),
+            _row("base case", "case 4 (hierarchical network, sub_branch_length=25)"),
+        ],
+    }
+
+
+def case_debris(out_dir: Path) -> dict:
+    base = generate_hierarchical_network(sub_branch_length=25.0)
+    n_specks, radius_range = 40, (1.0, 4.0)
+    degraded = apply_debris(base, n_specks=n_specks, speck_radius_range_px=radius_range, rng_seed=0)
+    out_path_a = out_dir / "09a_debris_clean.png"
+    out_path_b = out_dir / "09b_debris_degraded.png"
+    _render_image(base, out_path_a)
+    _render_image(degraded, out_path_b)
+    return {
+        "name": "debris",
+        "title": "9. Surface debris / charging [speculated]",
+        "image": out_path_a.name,
+        "image_b": out_path_b.name,
+        "desc": "40 small bright specks (1-4px radius, well under skeleton.py's "
+                "SPUR_PX_PLACEHOLDER=15px) stamped onto case 4's clean image -- shown clean (left) "
+                "vs. degraded (right). [speculated]: no evidence of this in the real dataset "
+                "either. No fabricated ground truth for the degraded image -- whether pruning "
+                "actually removes these specks (the falsifiable claim this case sets up) is a "
+                "pipeline-integration question for a later step.",
+        "rows": [
+            _row("n_specks", str(n_specks)),
+            _row("speck_radius_range_px", f"{radius_range[0]:.0f}-{radius_range[1]:.0f}"),
+            _row("base case", "case 4 (hierarchical network, sub_branch_length=25)"),
         ],
     }
 
@@ -197,7 +318,7 @@ def render_case_html(case: dict) -> str:
     rows_html = "".join(f"<tr><td>{m}</td><td>{v}</td></tr>" for m, v in case["rows"])
     images_html = f'<img src="{case["image"]}" alt="{case["title"]}">'
     if "image_b" in case:
-        images_html += f'<img src="{case["image_b"]}" alt="{case["title"]} (pruned variant)">'
+        images_html += f'<img src="{case["image_b"]}" alt="{case["title"]} (second variant)">'
     return f"""
 <div class="case">
   <h3>{case['title']}</h3>
@@ -211,7 +332,7 @@ def render_case_html(case: dict) -> str:
 
 
 def parse_args():
-    p = argparse.ArgumentParser(description="Render step-1 raw geometry + ground truth for the synthetic benchmark matrix.")
+    p = argparse.ArgumentParser(description="Render step-1 raw geometry + ground truth for all 9 synthetic benchmark cases.")
     p.add_argument("--out-dir", type=str, default="outputs/synthetic_benchmark_raw")
     return p.parse_args()
 
@@ -223,20 +344,25 @@ def main():
 
     cases = [
         case_tapered_line(out_dir),
+        case_t_y_junction(out_dir),
         case_converging_lines(out_dir),
         case_hierarchical_network(out_dir),
-        case_crescent_mesh(out_dir),
+        case_crescent_scale_pattern(out_dir),
         case_density_gradient_field(out_dir),
+        case_illumination_gradient(out_dir),
+        case_jpeg_blocking(out_dir),
+        case_debris(out_dir),
     ]
 
     body = f"""<!doctype html>
-<html><head><meta charset="utf-8"><title>Synthetic benchmark matrix -- step 1: raw geometry + ground truth</title>
+<html><head><meta charset="utf-8"><title>Synthetic benchmark matrix -- step 1: all 9 raw cases + ground truth</title>
 <style>{CSS}</style></head><body>
-<h1>Synthetic benchmark matrix -- step 1: raw geometry + ground truth</h1>
+<h1>Synthetic benchmark matrix -- step 1: all 9 raw cases + ground truth</h1>
 <p class="note">No binarize/skeletonize/graph run anywhere on this page -- these are the raw
-rasterized generators next to their own closed-form ground truth, for a sanity check on geometry
-and proportions before anything is wired into the real pipeline. That wiring (measured-vs-expected
-via binarize -> skeletonize_and_prune -> extract_graph) is a later, separate step.</p>
+rasterized generators (cases 7-9 shown clean vs. degraded) next to their own closed-form ground
+truth where one exists, for a sanity check on geometry and proportions before anything is wired
+into the real pipeline. That wiring (measured-vs-expected via binarize -> skeletonize_and_prune ->
+extract_graph) is a later, separate step.</p>
 {''.join(render_case_html(c) for c in cases)}
 </body></html>
 """

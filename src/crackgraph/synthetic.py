@@ -1046,89 +1046,109 @@ def generate_hierarchical_network(
     return img
 
 
-def _draw_arc_band(
-    img: np.ndarray,
-    center_rc: tuple[float, float],
-    radius: float,
-    arc_half_angle_deg: float,
-    thickness: int,
-    fg_value: float,
-) -> None:
-    """Fill a circular-arc band of the given radius/half-angle/thickness
-    centered at center_rc -- the same band-masking construction
-    generate_curved_t_junction uses for its single host arc (distance
-    transform `d`, angle `phi = atan2(cc-col_c, rr-row_c)`, band = ring
-    intersected with the angular sector), factored out here so a network of
-    several arcs (generate_crescent_mesh) can reuse it without duplicating
-    the trig.
+def crescent_ground_truth(radius: float, offset: float) -> dict[str, float]:
+    """Exact perimeter/area/cusp-chord for one crescent tile: disk A (the
+    given `radius`) minus disk B (same radius, center shifted `offset` px
+    along the column axis) -- matching _crescent_mask's own construction
+    exactly, so this is never checked against a different shape than what
+    actually gets rasterized.
+
+    Derivation: let alpha = arccos(offset / (2*radius)), the half-angle at
+    each disk's own center subtended by the two intersection (cusp)
+    points. The crescent's boundary is disk A's "far" arc (angle
+    2*pi - 2*alpha, the outer convex boundary) plus disk B's "near" arc
+    (angle 2*alpha, the inner concave cut) -- these two angles always sum
+    to 2*pi regardless of alpha, so **perimeter is exactly 2*pi*radius,
+    independent of offset** (a clean, always-true closed form, not an
+    approximation -- verified algebraically and by direct pixel-perimeter
+    measurement at several offsets in tests/test_synthetic_benchmark.py).
+    Area is disk A's area minus the standard circular-lens intersection
+    area; the cusp-to-cusp chord is the standard two-circle-intersection
+    chord length. Only meaningful for a genuine partial-overlap crescent
+    (0 < offset < 2*radius), not a degenerate full circle or empty shape.
+    """
+    if not (0.0 < offset < 2.0 * radius):
+        raise ValueError("crescent_ground_truth expects 0 < offset < 2*radius")
+    alpha = math.acos(offset / (2.0 * radius))
+    area = (
+        math.pi * radius**2
+        - 2.0 * radius**2 * alpha
+        + (offset / 2.0) * math.sqrt(4.0 * radius**2 - offset**2)
+    )
+    chord = 2.0 * math.sqrt(radius**2 - (offset / 2.0) ** 2)
+    return {
+        "perimeter_px": 2.0 * math.pi * radius,
+        "area_px2": area,
+        "cusp_chord_px": chord,
+    }
+
+
+def _crescent_mask(
+    shape: tuple[int, int], center_rc: tuple[float, float], radius: float, offset: float
+) -> np.ndarray:
+    """Boolean mask of one crescent: disk A at center_rc, minus disk B at
+    center_rc shifted `offset` px along the column axis (both radius
+    `radius`) -- the same disk-minus-disk construction
+    crescent_ground_truth's formulas describe, so a caller comparing a
+    measured mask against that ground truth is comparing the same shape,
+    not a reimplementation that could silently drift from it.
     """
     row_c, col_c = center_rc
-    rr, cc = np.mgrid[0 : img.shape[0], 0 : img.shape[1]]
-    d = np.hypot(rr - row_c, cc - col_c)
-    phi = np.degrees(np.arctan2(cc - col_c, rr - row_c))
-    band = (np.abs(d - radius) <= thickness / 2.0) & (np.abs(phi) <= arc_half_angle_deg)
-    img[band] = fg_value
+    rr, cc = np.mgrid[0 : shape[0], 0 : shape[1]]
+    d_a = np.hypot(rr - row_c, cc - col_c)
+    d_b = np.hypot(rr - row_c, cc - (col_c + offset))
+    return (d_a <= radius) & (d_b > radius)
 
 
-def arc_tortuosity_ground_truth(arc_half_angle_deg: float) -> float:
-    """Exact tortuosity (arc length / chord length) of a FULL circular arc
-    spanning +/- arc_half_angle_deg (total angular span
-    2*arc_half_angle_deg): phi/(2*sin(phi/2)) with phi = the full span in
-    radians. Deliberately distinct from tests/test_curvature.py's
-    _arc_tortuosity_true(arc_half_angle_deg), which computes the same
-    formula for a HALF-arc (one T-junction arm, phi = arc_half_angle_deg
-    alone) -- generate_curved_t_junction's host arc is split in half by its
-    T-junction at phi=0, but generate_crescent_mesh's arcs are not split at
-    their own midpoint, so the whole span is the relevant "edge" here.
-    Whether a crossbar happens to split a given arc into shorter graph
-    edges once run through the real pipeline is a pipeline-integration
-    question for a later step, not answered by this closed-form value.
-    """
-    phi = math.radians(2.0 * arc_half_angle_deg)
-    return phi / (2.0 * math.sin(phi / 2.0))
-
-
-def generate_crescent_mesh(
-    size: int = 500,
-    n_arcs: int = 3,
-    radius: float = 250.0,
-    arc_spacing: float = 60.0,
-    arc_half_angle_deg: float = 40.0,
-    n_crossbars: int = 2,
-    thickness: int = 12,
-    margin: float = 30.0,
+def generate_crescent_scale_pattern(
+    size: int = 600,
+    n_rows: int = 4,
+    n_cols: int = 4,
+    radius: float = 70.0,
+    offset: float = 45.0,
+    row_spacing_frac: float = 0.85,
     fg_value: float = 230.0,
     bg_value: float = 10.0,
 ) -> np.ndarray:
-    """Grayscale image of `n_arcs` circular-arc bands (same radius, centers
-    offset vertically by `arc_spacing` so the visible bands stack like
-    layered crescents/lenses), crossed by `n_crossbars` straight vertical
-    bars so the arcs form a real network with junctions rather than sitting
-    as disconnected shapes -- the network-scale generalization of
-    generate_curved_t_junction's single arc, needed because the curvature/
-    tortuosity chronometer has only ever been checked on one isolated
-    junction so far.
+    """Grayscale image of filled crescent-moon tiles (see
+    crescent_ground_truth/_crescent_mask), tiled on a staggered grid so
+    each crescent's sharp cusps nestle against neighboring crescents'
+    rounded outer sides -- a fish-scale/roofing-shingle pattern, filled
+    solid rather than drawn as a thin line like every other generator in
+    this module. That's a deliberate, requested difference (matching a
+    reference image directly, a filled crescent-moon silhouette) -- see
+    the synthetic-benchmark plan for why this one case tests Otsu's
+    boundary/edge fidelity on a curved 2D region instead of a 1D crack
+    network, unlike every other case here.
 
-    Ground truth for a full arc's own tortuosity is
-    arc_tortuosity_ground_truth(arc_half_angle_deg) -- see that function's
-    docstring for why it deliberately does not reuse
-    tests/test_curvature.py's half-arc formula unchanged.
+    Tiling geometry (derived from the single-crescent geometry, then tuned
+    visually against the reference image -- not an exact tangency solve):
+    a crescent's two cusps sit at (center_row +/- h, center_col +
+    offset/2) where h = sqrt(radius**2 - (offset/2)**2); its belly
+    (widest, leftmost point) sits at (center_row, center_col - radius).
+    Column spacing is `radius + offset/2` so a crescent's belly lands
+    close to the previous column's cusps. Row spacing is
+    `row_spacing_frac * 2*h` -- slightly less than the full cusp-to-cusp
+    span so consecutive rows overlap into each other rather than leaving a
+    gap. Alternate rows are shifted right by half the column spacing (the
+    standard brick/shingle stagger) so each crescent's cusps sit between
+    two crescents in the row below, touching both -- the fish-scale look.
     """
     img = np.full((size, size), bg_value, dtype=np.float64)
-    row_c_base = size * 0.15
-    col_c = size / 2.0
-    centers = [(row_c_base + k * arc_spacing, col_c) for k in range(n_arcs)]
-    for center_rc in centers:
-        _draw_arc_band(img, center_rc, radius, arc_half_angle_deg, thickness, fg_value)
+    h = math.sqrt(radius**2 - (offset / 2.0) ** 2)
+    col_spacing = radius + offset / 2.0
+    row_spacing = row_spacing_frac * 2.0 * h
 
-    x0, x1 = margin, size - margin
-    bar_spacing = (x1 - x0) / (n_crossbars + 1)
-    bar_xs = _default_grid_offsets(n_crossbars, bar_spacing, x0)
-    half_t = thickness // 2
-    y0, y1 = int(margin), size - int(margin)
-    for x in bar_xs:
-        xi = int(round(x))
-        img[y0:y1, xi - half_t : xi + half_t + 1] = fg_value
+    row0 = size / 2.0 - (n_rows - 1) * row_spacing / 2.0
+    col0 = size / 2.0 - (n_cols - 1) * col_spacing / 2.0
+
+    for r in range(n_rows):
+        row_c = row0 + r * row_spacing
+        stagger = col_spacing / 2.0 if (r % 2 == 1) else 0.0
+        for c in range(n_cols):
+            col_c = col0 + c * col_spacing + stagger
+            mask = _crescent_mask(img.shape, (row_c, col_c), radius, offset)
+            img[mask] = fg_value
     return img
 
 
