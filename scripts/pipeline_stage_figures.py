@@ -51,6 +51,18 @@ from src.crackgraph.binarize import binarize
 from src.crackgraph.flaking import exclude_flaking_regions, flake_touching_path_indices
 from src.crackgraph.graph import extract_graph
 from src.crackgraph.io_utils import load_image
+from src.crackgraph.pipeline_figures import (
+    EXCLUDED_NODE_COLOR,
+    FLAKING_TINT_COLOR,
+    KEPT_NODE_COLOR,
+    OMITTED_EDGE_COLOR,
+    SKELETON_COLOR,
+    SKELETON_DILATE_PX,
+    draw_binarized,
+    draw_graph_excluded,
+    draw_raw,
+    draw_skeleton,
+)
 from src.crackgraph.region import default_corner_crop
 from src.crackgraph.skeleton import skeletonize_and_prune
 
@@ -63,17 +75,9 @@ from src.crackgraph.skeleton import skeletonize_and_prune
 CROP_PADDING_WIDTH_MULTIPLIER = 25.0
 CROP_PADDING_FLOOR_PX = 400
 
-# Display-only skeleton dilation -- doesn't affect any real measurement,
-# exists purely so a thin, sparse 1px skeleton line doesn't get visually
-# lost once matplotlib downsamples a multi-thousand-pixel crop for a 7x7in
-# figure. (Background is left at full black/white contrast -- no dimming.)
-SKELETON_DILATE_PX = 2
-
-SKELETON_COLOR = "lime"
-OMITTED_EDGE_COLOR = "magenta"
-FLAKING_TINT_COLOR = (1.0, 0.0, 0.0, 0.3)
-KEPT_NODE_COLOR = "cyan"
-EXCLUDED_NODE_COLOR = "gold"
+# SKELETON_DILATE_PX / SKELETON_COLOR / OMITTED_EDGE_COLOR / FLAKING_TINT_COLOR /
+# KEPT_NODE_COLOR / EXCLUDED_NODE_COLOR now live in src/crackgraph/pipeline_figures.py
+# (imported above), shared with scripts/synthetic_benchmark_report.py.
 
 # Single undifferentiated "pruned" color -- spur/fragment/corner-artifact are
 # deliberately not distinguished here (that would need a 3-color legend for a
@@ -129,30 +133,8 @@ def compute_corner_crop_bbox(image_shape):
     return region.row_slice.start, region.row_slice.stop, region.col_slice.start, region.col_slice.stop
 
 
-def draw_raw(ax, rgb_crop, title="1. Raw image"):
-    ax.imshow(rgb_crop)
-    ax.set_title(title, fontsize=11)
-    ax.axis("off")
-
-
-def draw_binarized(ax, mask_crop):
-    ax.imshow(mask_crop, cmap="gray", vmin=0, vmax=1)
-    ax.set_title("2. Binarized mask (Otsu)", fontsize=11)
-    ax.axis("off")
-
-
-def draw_skeleton(ax, mask_crop, skel_crop, title):
-    # Dilate the skeleton for display only -- makes a thin, sparse skeleton
-    # line legible after matplotlib downsamples the crop; see
-    # SKELETON_DILATE_PX above. Doesn't change any real data. Background
-    # stays plain black/white, full contrast.
-    ax.imshow(mask_crop, cmap="gray", vmin=0, vmax=1)
-    skel_display = binary_dilation(skel_crop, iterations=SKELETON_DILATE_PX)
-    skel_rgba = np.zeros((*skel_display.shape, 4))
-    skel_rgba[skel_display] = matplotlib.colors.to_rgba(SKELETON_COLOR)
-    ax.imshow(skel_rgba)
-    ax.set_title(title, fontsize=11)
-    ax.axis("off")
+# draw_raw / draw_binarized / draw_skeleton now live in
+# src/crackgraph/pipeline_figures.py (imported above).
 
 
 def draw_mask_cleaned(ax, mask_clean_crop, diff_crop):
@@ -239,60 +221,7 @@ def draw_pruning_annotated(ax, mask_crop, skel_raw_crop, pruned_branches, bbox):
     ax.set_ylim(y1 - y0, 0)
 
 
-def draw_graph_excluded(ax, mask_crop, excluded_crop, skel, graph_result, omitted, bbox, title):
-    y0, y1, x0, x1 = bbox
-    summary = graph_result.summary
-
-    ax.imshow(mask_crop, cmap="gray", vmin=0, vmax=1)
-    excl_rgba = np.zeros((*excluded_crop.shape, 4))
-    excl_rgba[excluded_crop] = FLAKING_TINT_COLOR
-    ax.imshow(excl_rgba)
-
-    kept_segments, omitted_segments = [], []
-    for path_index in summary.index:
-        coords = skel.path_coordinates(int(path_index))
-        local = coords - [y0, x0]
-        seg = local[:, ::-1]  # (row, col) -> (x, y)
-        (omitted_segments if int(path_index) in omitted else kept_segments).append(seg)
-    if kept_segments:
-        ax.add_collection(LineCollection(kept_segments, colors=SKELETON_COLOR, linewidths=1.0, zorder=2))
-    if omitted_segments:
-        ax.add_collection(LineCollection(omitted_segments, colors=OMITTED_EDGE_COLOR, linewidths=1.6, zorder=3))
-
-    # Node kept/excluded status: kept iff it has >=1 non-omitted edge, i.e.
-    # it survives into compute_row()'s own connectivity graph G -- computed
-    # the same way, not a separate/different criterion.
-    kept_summary = summary.loc[~summary.index.isin(omitted)]
-    kept_node_ids = set(kept_summary["node_id_src"]).union(kept_summary["node_id_dst"])
-
-    node_coords = graph_result.node_coords  # (row, col)
-    node_ids = graph_result.node_ids
-    in_crop = (
-        (node_coords[:, 0] >= y0) & (node_coords[:, 0] < y1)
-        & (node_coords[:, 1] >= x0) & (node_coords[:, 1] < x1)
-    )
-    coords_local = node_coords[in_crop] - [y0, x0]
-    is_kept = np.array([int(nid) in kept_node_ids for nid in node_ids[in_crop]])
-
-    if is_kept.any():
-        pts = coords_local[is_kept]
-        ax.scatter(pts[:, 1], pts[:, 0], s=20, c=KEPT_NODE_COLOR, edgecolors="black",
-                   linewidths=0.4, zorder=4)
-    if (~is_kept).any():
-        pts = coords_local[~is_kept]
-        ax.scatter(pts[:, 1], pts[:, 0], s=26, c=EXCLUDED_NODE_COLOR, edgecolors="black",
-                   linewidths=0.4, zorder=5)
-
-    ax.plot([], [], color=SKELETON_COLOR, linewidth=1.6, label="kept edge")
-    ax.plot([], [], color=OMITTED_EDGE_COLOR, linewidth=1.6, label="omitted edge")
-    ax.scatter([], [], c=KEPT_NODE_COLOR, edgecolors="black", linewidths=0.4, s=20, label="kept node")
-    ax.scatter([], [], c=EXCLUDED_NODE_COLOR, edgecolors="black", linewidths=0.4, s=26, label="excluded node")
-    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.03), ncol=4, fontsize=7.5, framealpha=0.9)
-
-    ax.set_xlim(0, x1 - x0)
-    ax.set_ylim(y1 - y0, 0)
-    ax.set_title(title, fontsize=11)
-    ax.axis("off")
+# draw_graph_excluded now lives in src/crackgraph/pipeline_figures.py (imported above).
 
 
 def _save_combined(panels, out_dir, image_path, crop_mode, n_rows, n_cols):
