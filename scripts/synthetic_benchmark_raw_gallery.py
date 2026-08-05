@@ -141,10 +141,10 @@ def case_converging_lines(out_dir: Path) -> dict:
 
 
 def case_hierarchical_network(out_dir: Path) -> dict:
-    n_primary_lines, sub_branches_per_primary = 2, 3
+    n_courses, n_bricks_per_course, sub_branches_per_primary = 3, 3, 3
     survives = generate_hierarchical_network(sub_branch_length=25.0, sub_branch_thickness=3)
     pruned = generate_hierarchical_network(sub_branch_length=12.0, sub_branch_thickness=3)
-    topo = hierarchical_network_topology(n_primary_lines, sub_branches_per_primary)
+    topo = hierarchical_network_topology(n_courses, n_bricks_per_course, sub_branches_per_primary)
     out_path_a = out_dir / "04a_hierarchical_network_survives.png"
     out_path_b = out_dir / "04b_hierarchical_network_pruned.png"
     _render_image(survives, out_path_a)
@@ -154,16 +154,19 @@ def case_hierarchical_network(out_dir: Path) -> dict:
         "title": "4. Hierarchical bimodal-width network (primary + sub-branch cracks)",
         "image": out_path_a.name,
         "image_b": out_path_b.name,
-        "desc": "A 2x2 primary grid (12px thick) with 3 short 3px-thick sub-branch stubs per "
-                "primary line, at two stub lengths straddling skeleton.py's "
-                "SPUR_PX_PLACEHOLDER=15px pruning threshold (25px, left -- expected to survive "
-                "pruning; 12px, right -- expected to be pruned away). Pre-pruning topology (the "
-                "combinatorial ground truth below) is identical for both; whether the stubs "
-                "actually survive skeletonize_and_prune is a pipeline-integration question for a "
-                "later step.",
+        "desc": "A running-bond BRICK pattern for the primary (12px thick) layer -- 3 full-width "
+                "courses joined by short vertical joints, offset row to row, so every primary "
+                "junction is a T, never a 4-way crossing (real crack networks favor T-junctions "
+                "over crossings too). Course ends taper to a point, like every free tip in this "
+                "matrix. 3 short 3px-thick sub-branch stubs per course, at two stub lengths "
+                "straddling skeleton.py's SPUR_PX_PLACEHOLDER=15px pruning threshold (25px, left "
+                "-- expected to survive pruning; 12px, right -- expected to be pruned away). "
+                "Pre-pruning topology (the combinatorial ground truth below) is identical for "
+                "both; whether the stubs actually survive skeletonize_and_prune is a "
+                "pipeline-integration question for a later step.",
         "rows": [
-            _row("n_junctions_deg>=4 (primary crossings)", topo["n_junctions_deg_ge4"]),
-            _row("n_junctions_deg3 (sub-branch T's, pre-pruning)", topo["n_junctions_deg3"]),
+            _row("n_junctions_deg>=4 (must be 0 -- brick bond has no crossings)", topo["n_junctions_deg_ge4"]),
+            _row("n_junctions_deg3 (brick joints + sub-branch T's, pre-pruning)", topo["n_junctions_deg3"]),
             _row("n_endpoints (pre-pruning)", topo["n_endpoints"]),
             _row("n_edges (pre-pruning)", topo["n_edges"]),
             _row("sub_branch_length: left / right (px)", "25 (expected to survive) / 12 (expected pruned)"),
@@ -172,7 +175,7 @@ def case_hierarchical_network(out_dir: Path) -> dict:
 
 
 def case_crescent_scale_pattern(out_dir: Path) -> dict:
-    radius, offset = 70.0, 45.0
+    radius, offset = 70.0, 30.0
     gray = generate_crescent_scale_pattern(radius=radius, offset=offset)
     gt = crescent_ground_truth(radius, offset)
     out_path = out_dir / "05_crescent_scale_pattern.png"

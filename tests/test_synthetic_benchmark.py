@@ -26,10 +26,8 @@ from src.crackgraph.synthetic import (
     generate_converging_lines,
     generate_crescent_scale_pattern,
     generate_density_gradient_field,
-    generate_grid,
     generate_hierarchical_network,
     generate_tapered_line,
-    grid_topology,
     hierarchical_network_topology,
     tapered_line_ground_truth,
 )
@@ -149,6 +147,27 @@ def test_converging_lines_merge_transition_matches_closed_form():
     assert _column_is_merged(mask[:, x_after]), "expected one merged wedge well after x_touch"
 
 
+def test_converging_lines_both_free_ends_taper_to_a_point():
+    # Both free ends -- the back (non-merging) ends AND the joined
+    # wedge's own far end -- should narrow to a point instead of ending
+    # in a flat rectangular cut, at both the low-threshold geometric
+    # extent (GEOM_THRESHOLD, matching case 1's convention) and using
+    # width itself as the falsifiable signal.
+    run_px, thickness, margin = 250.0, 12, 25.0
+    img = generate_converging_lines(run_px=run_px, thickness=thickness, margin=margin, back_taper_px=25.0, front_taper_px=15.0)
+    mask = img > GEOM_THRESHOLD
+    x0 = int(margin)
+    x1 = int(margin + run_px) - 1
+
+    back_width = int(mask[:, x0 + 2].sum())
+    back_width_full = int(mask[:, x0 + 30].sum())  # past the back taper zone
+    assert 0 < back_width < back_width_full, "back ends should taper, not start at full width"
+
+    front_width = int(mask[:, x1 - 1].sum())
+    front_width_full = int(mask[:, x1 - 20].sum())  # just before the front taper zone
+    assert 0 < front_width < front_width_full, "the joined wedge's far end should taper too, not cut off flat"
+
+
 def test_converging_lines_ground_truth_rejects_non_crossing_params():
     with pytest.raises(ValueError):
         converging_lines_ground_truth(run_px=100.0, thickness=12, gap_start_px=5.0, gap_end_px=0.0, margin=10.0)
@@ -157,72 +176,87 @@ def test_converging_lines_ground_truth_rejects_non_crossing_params():
 # -- hierarchical bimodal network -----------------------------------------
 
 
-def test_hierarchical_network_adds_subbranches_without_disturbing_primary_grid():
-    n_primary_lines, spacing, margin, primary_thickness = 2, 160.0, 40.0, 12
+def test_hierarchical_network_adds_subbranches_without_disturbing_primary_layer():
+    n_courses, spacing, margin, primary_thickness = 3, 140.0, 40.0, 12
+    n_bricks_per_course = 3
     sub_branches_per_primary, sub_branch_length, sub_branch_thickness = 3, 25.0, 3
     size = 500
 
-    base = generate_grid(
-        size=size, n_lines=n_primary_lines, spacing=spacing, margin=margin, thickness=primary_thickness,
+    # sub_branches_per_primary=0 isolates the primary brick-bond layer
+    # alone (the stub loop's range() is empty, no division-by-zero risk),
+    # replacing the old generate_grid-based comparison now that the
+    # primary layer is brick-bond, not a rectilinear grid.
+    base = generate_hierarchical_network(
+        size=size, n_courses=n_courses, primary_spacing=spacing, margin=margin,
+        primary_thickness=primary_thickness, n_bricks_per_course=n_bricks_per_course,
+        sub_branches_per_primary=0,
     )
     full = generate_hierarchical_network(
-        size=size, n_primary_lines=n_primary_lines, primary_spacing=spacing, margin=margin,
-        primary_thickness=primary_thickness, sub_branch_thickness=sub_branch_thickness,
-        sub_branch_length=sub_branch_length, sub_branches_per_primary=sub_branches_per_primary,
+        size=size, n_courses=n_courses, primary_spacing=spacing, margin=margin,
+        primary_thickness=primary_thickness, n_bricks_per_course=n_bricks_per_course,
+        sub_branch_thickness=sub_branch_thickness, sub_branch_length=sub_branch_length,
+        sub_branches_per_primary=sub_branches_per_primary,
     )
     base_mask = base > FG_THRESHOLD
     full_mask = full > FG_THRESHOLD
 
     # sub-branches only add foreground pixels, never remove any of the
-    # primary grid's own already-lit pixels.
+    # primary layer's own already-lit pixels.
     assert np.all(full_mask[base_mask])
 
-    n_sub = n_primary_lines * sub_branches_per_primary
+    n_sub = n_courses * sub_branches_per_primary
     added_px = int(full_mask.sum()) - int(base_mask.sum())
-    # each sub-branch starts AT the host line's own centerline (same
+    # each sub-branch starts AT the host course's own centerline (same
     # convention generate_t_junction/generate_double_t_junction already
     # use for their abutters), so part of its rectangle overlaps pixels
-    # the primary grid already lit -- added_px is strictly less than the
+    # the primary layer already lit -- added_px is strictly less than the
     # naive non-overlapping n_sub*length*thickness upper bound, not equal
     # to it.
     upper_bound = n_sub * sub_branch_length * sub_branch_thickness
     assert 0 < added_px < upper_bound
 
     # each sub-branch's tip (near its far end, well past the primary
-    # line's own thickness band) should be newly foreground in `full` and
-    # background in `base` -- confirms the stubs actually reach their
+    # course's own thickness band) should be newly foreground in `full`
+    # and background in `base` -- confirms the stubs actually reach their
     # expected far end, not just contribute overlap area near the host.
-    row_ys = [margin + spacing * (i + 1) for i in range(n_primary_lines)]
+    row_ys = [margin + spacing * (i + 1) for i in range(n_courses)]
     x0, x1 = margin, size - margin
     span = x1 - x0
-    fracs = [(k + 0.5) / sub_branches_per_primary for k in range(sub_branches_per_primary)]
+    # matches generate_hierarchical_network's own offset divisor (see its
+    # comment) -- an unoffset divisor coincides with a staggered-row brick
+    # joint at these defaults.
+    fracs = [(k + 0.5) / (sub_branches_per_primary + 0.5) for k in range(sub_branches_per_primary)]
     for row_y in row_ys:
         for frac in fracs:
             x = x0 + frac * span
             tip_row = int(round(row_y - sub_branch_length + 2))
             xi = int(round(x))
             assert full_mask[tip_row, xi], "expected sub-branch tip to be foreground"
-            assert not base_mask[tip_row, xi], "primary grid alone should not reach the tip"
+            assert not base_mask[tip_row, xi], "primary layer alone should not reach the tip"
 
 
-def test_hierarchical_network_topology_formula_straddles_spur_threshold():
+def test_hierarchical_network_topology_is_brick_bond_t_junctions_only():
     # SPUR_PX_PLACEHOLDER = 15 (src/crackgraph/skeleton.py) is the actual
-    # threshold this case is designed to straddle -- this test only checks
-    # the PRE-PRUNING combinatorial formula (no pipeline run), which does
-    # not itself depend on sub_branch_length at all (it's still one T-
-    # junction per sub-branch either way, before any pruning is applied).
-    n_primary_lines, sub_branches_per_primary = 2, 3
-    base_grid = grid_topology(n_primary_lines, n_primary_lines)
-    n_sub = n_primary_lines * sub_branches_per_primary
+    # threshold sub-branch length is designed to straddle -- this test
+    # only checks the PRE-PRUNING combinatorial formula (no pipeline
+    # run), which does not itself depend on sub_branch_length at all
+    # (it's still one T-junction per sub-branch either way, before any
+    # pruning is applied). The real point of this test: a running-bond
+    # brick pattern must produce ONLY T-junctions, never a 4-way crossing.
+    n_courses, n_bricks_per_course, sub_branches_per_primary = 3, 3, 3
 
-    expected = hierarchical_network_topology(n_primary_lines, sub_branches_per_primary)
-    assert expected["n_junctions_deg_ge4"] == base_grid["n_junctions_deg_ge4"]
-    assert expected["n_junctions_deg3"] == n_sub
-    assert expected["n_endpoints"] == base_grid["n_endpoints"] + n_sub
-    assert expected["n_edges"] == base_grid["n_edges"] + 2 * n_sub
-    # concrete numbers for this default (2x2 primary grid, 3 subs/line):
-    # 4 deg>=4 junctions, 6 deg-3 junctions, 14 endpoints, 24 edges.
-    assert (expected["n_junctions_deg_ge4"], expected["n_junctions_deg3"], expected["n_endpoints"], expected["n_edges"]) == (4, 6, 14, 24)
+    # independent re-derivation, not calling hierarchical_network_topology's
+    # own formula, to catch a copy-paste error in the brick-joint counting.
+    n_v = (n_courses - 1) * (n_bricks_per_course - 1)
+    n_sub = n_courses * sub_branches_per_primary
+    expected = hierarchical_network_topology(n_courses, n_bricks_per_course, sub_branches_per_primary)
+    assert expected["n_junctions_deg_ge4"] == 0, "brick bond must never produce a 4-way crossing"
+    assert expected["n_junctions_deg3"] == 2 * n_v + n_sub
+    assert expected["n_endpoints"] == 2 * n_courses + n_sub
+    assert expected["n_edges"] == n_courses + 3 * n_v + 2 * n_sub
+    # concrete numbers for this default (3 courses, 3 bricks/course, 3 subs/course):
+    # n_v=4, n_sub=9 -> 0 deg>=4, 17 deg-3, 15 endpoints, 33 edges.
+    assert (expected["n_junctions_deg_ge4"], expected["n_junctions_deg3"], expected["n_endpoints"], expected["n_edges"]) == (0, 17, 15, 33)
 
 
 # -- crescent-scale pattern (filled disk-minus-disk geometry) -------------

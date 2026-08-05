@@ -934,6 +934,7 @@ def generate_converging_lines(
     fg_value: float = 230.0,
     bg_value: float = 10.0,
     back_taper_px: float = 25.0,
+    front_taper_px: float = 15.0,
 ) -> np.ndarray:
     """Grayscale image of two horizontal bands, symmetric about the image's
     vertical center, whose center-to-center gap narrows linearly from
@@ -949,10 +950,13 @@ def generate_converging_lines(
     `back_taper_px` linearly tapers each line's half-width from 0 at the
     back (x0, the non-merging) end up to the full `thickness` over that
     many px, so the two free tips come to a point instead of ending in a
-    flat rectangular cut -- the merging (front, x1) end is never tapered,
-    since it isn't a free tip, it continues on as a single wedge. Kept far
-    from the default `x_touch_px`(~225px, see converging_lines_ground_truth)
-    so it never interferes with the merge-point ground truth.
+    flat rectangular cut. `front_taper_px` does the same at the far
+    (x1) end of the now-joined single wedge, so it too ends in a point
+    instead of a flat cut, rather than being left untapered just because
+    it isn't a free tip in the two-line sense -- both taper zones are
+    kept well clear of `x_touch_px` (~225px by default, see
+    converging_lines_ground_truth) so neither interferes with the
+    merge-point ground truth.
 
     Ground truth (exact, solving gap(x) == thickness for x -- independent
     of rasterization): see converging_lines_ground_truth.
@@ -967,8 +971,9 @@ def generate_converging_lines(
         t = (x - x0) / run_px
         gap = gap_start_px - (gap_start_px - gap_end_px) * t
         gap = max(gap, 0.0)
-        taper_scale = min(1.0, (x - x0) / back_taper_px) if back_taper_px > 0 else 1.0
-        eff_half_t = half_t * taper_scale
+        back_scale = min(1.0, (x - x0) / back_taper_px) if back_taper_px > 0 else 1.0
+        front_scale = min(1.0, (x1 - x) / front_taper_px) if front_taper_px > 0 else 1.0
+        eff_half_t = half_t * min(back_scale, front_scale)
         y_top = center_y - gap / 2.0
         y_bot = center_y + gap / 2.0
         row_lo_top = max(int(round(y_top - eff_half_t)), 0)
@@ -1001,75 +1006,120 @@ def converging_lines_ground_truth(
 
 
 def hierarchical_network_topology(
-    n_primary_lines: int, sub_branches_per_primary: int
+    n_courses: int, n_bricks_per_course: int, sub_branches_per_primary: int
 ) -> dict[str, int]:
-    """Exact PRE-PRUNING node/edge counts for generate_hierarchical_network,
-    from grid_topology(n_primary_lines, n_primary_lines) (the primary mesh
-    alone) plus one T-junction per sub-branch: each sub-branch splits the
-    primary edge it attaches to (+1 edge) and adds its own stub edge and
-    tip endpoint (+1 edge, +1 endpoint, +1 degree-3 junction). This is a
-    pure combinatorial fact of the construction, not a claim about what
-    skeletonize_and_prune actually keeps -- whether these short stubs
-    survive its SPUR_PX_PLACEHOLDER length threshold (CALIBRATION.md) is a
-    separate, pipeline-dependent question for a later step, not answered
-    here.
+    """Exact PRE-PRUNING node/edge counts for generate_hierarchical_network's
+    brick-bond primary layer, plus one T-junction per sub-branch stub.
+
+    The primary layer is `n_courses` full-width horizontal lines with
+    short vertical "joints" between each pair of adjacent courses --
+    `n_v = (n_courses-1)*(n_bricks_per_course-1)` joints total. Each
+    joint touches exactly 2 courses (the one above, the one below),
+    contributing exactly 2 degree-3 T-junctions and splitting each of
+    those 2 courses into one more edge -- a running-bond brick pattern
+    has ONLY T-junctions, never a 4-way crossing (n_junctions_deg_ge4 is
+    always 0 here, unlike grid_topology's rectilinear mesh). Each
+    sub-branch adds its own T-junction the same way (+1 edge from
+    splitting its host course, +1 stub edge, +1 endpoint, +1 degree-3
+    junction) -- a pure combinatorial fact of the construction, not a
+    claim about what skeletonize_and_prune actually keeps (whether short
+    features survive its SPUR_PX_PLACEHOLDER length threshold is a
+    separate, pipeline-dependent question for a later step).
     """
-    base = grid_topology(n_primary_lines, n_primary_lines)
-    n_sub = n_primary_lines * sub_branches_per_primary
+    n_v = (n_courses - 1) * (n_bricks_per_course - 1)
+    n_sub = n_courses * sub_branches_per_primary
     return {
-        "n_junctions_deg_ge4": base["n_junctions_deg_ge4"],
-        "n_junctions_deg3": n_sub,
-        "n_endpoints": base["n_endpoints"] + n_sub,
-        "n_edges": base["n_edges"] + 2 * n_sub,
+        "n_junctions_deg_ge4": 0,
+        "n_junctions_deg3": 2 * n_v + n_sub,
+        "n_endpoints": 2 * n_courses + n_sub,
+        "n_edges": n_courses + 3 * n_v + 2 * n_sub,
     }
 
 
 def generate_hierarchical_network(
     size: int = 500,
-    n_primary_lines: int = 2,
-    primary_spacing: float = 160.0,
+    n_courses: int = 3,
+    primary_spacing: float = 140.0,
     primary_thickness: int = 12,
     margin: float = 40.0,
+    n_bricks_per_course: int = 3,
     sub_branch_thickness: int = 3,
     sub_branch_length: float = 25.0,
     sub_branches_per_primary: int = 3,
     fg_value: float = 230.0,
     bg_value: float = 10.0,
 ) -> np.ndarray:
-    """generate_grid's rectilinear mesh (the "primary" cracks, thick), with
-    `sub_branches_per_primary` short perpendicular stubs (the "sub-branch"
-    cracks, thin) attached to each horizontal primary line at evenly-spaced
-    positions along its span -- a bimodal-width network, unlike every mesh
-    generator above which uses one uniform thickness throughout.
+    """A running-bond BRICK pattern for the "primary" (thick) layer --
+    `n_courses` full-width horizontal lines ("courses"), joined by short
+    vertical "joints" positioned at `n_bricks_per_course-1` points per
+    gap between adjacent courses, with alternating rows offset by half a
+    brick width (standard running bond) -- so every junction in the
+    primary layer is a T (one course continuing through, one joint
+    abutting it), NEVER a 4-way crossing. Deliberately replaces an
+    earlier rectilinear-grid design (generate_grid's X-crossings) with
+    this brick-bond layout instead, since real crack networks favor
+    T-junctions over 4-way crossings anyway (see CLAUDE.md's Goehring
+    2012 reference). Course ends (both left and right) taper to a point
+    -- every free tip in this generator does, courses and sub-branches
+    alike; joints never taper, since both their ends land inside a T, not
+    a free tip.
 
-    Exists to test whether one global measurement pipeline, implicitly
-    tuned against the coarse primary features, loses the fine sub-branches
-    -- and, having checked the actual mechanism (see
-    hierarchical_network_topology's docstring and CALIBRATION.md), the
-    genuine risk here is skeleton.py's fixed SPUR_PX_PLACEHOLDER=15 length
-    threshold, not binarize.py's Otsu step (which is intensity-based, not
-    width-based, and every generator in this module uses one uniform
-    fg_value regardless of thickness). `sub_branch_length` defaults to 25px
-    (above the 15px threshold, expected to survive pruning); pass 12px
-    (below it) to generate the paired "expected to be pruned away" case.
+    `sub_branches_per_primary` short, thin (`sub_branch_thickness`) stubs
+    per course, tapered to a needle point, test whether one global
+    measurement pipeline, implicitly tuned against the coarse primary
+    features, loses the fine sub-branches -- and, having checked the
+    actual mechanism (see hierarchical_network_topology's docstring and
+    CALIBRATION.md), the genuine risk is skeleton.py's fixed
+    SPUR_PX_PLACEHOLDER=15 length threshold, not binarize.py's Otsu step
+    (intensity-based, not width-based, and every generator in this module
+    uses one uniform fg_value regardless of thickness). `sub_branch_length`
+    defaults to 25px (above the 15px threshold, expected to survive
+    pruning); pass 12px (below it) for the paired "expected to be pruned
+    away" case.
     """
-    row_ys = _default_grid_offsets(n_primary_lines, primary_spacing, margin)
-    col_xs = _default_grid_offsets(n_primary_lines, primary_spacing, margin)
-    img = generate_grid(
-        size=size,
-        n_lines=n_primary_lines,
-        spacing=primary_spacing,
-        margin=margin,
-        row_ys=row_ys,
-        col_xs=col_xs,
-        thickness=primary_thickness,
-        fg_value=fg_value,
-        bg_value=bg_value,
-    )
-
+    img = np.full((size, size), bg_value, dtype=np.float64)
+    row_ys = _default_grid_offsets(n_courses, primary_spacing, margin)
     x0, x1 = margin, size - margin
     span = x1 - x0
-    fracs = [(k + 0.5) / sub_branches_per_primary for k in range(sub_branches_per_primary)]
+    course_mid_x = (x0 + x1) / 2.0
+
+    for row_y in row_ys:
+        for half_bearing in (0.0, 180.0):
+            _draw_rotated_arm(
+                img,
+                start_rc=(row_y, course_mid_x),
+                bearing_deg=half_bearing,
+                length=span / 2.0,
+                thickness=primary_thickness,
+                fg_value=fg_value,
+                tip_taper_frac=0.12,
+            )
+
+    brick_width = span / n_bricks_per_course
+    joint_xs_base = [x0 + k * brick_width for k in range(1, n_bricks_per_course)]
+    for gap_i in range(n_courses - 1):
+        stagger = (brick_width / 2.0) if (gap_i % 2 == 1) else 0.0
+        for jx in joint_xs_base:
+            x = jx + stagger
+            if x <= x0 or x >= x1:
+                continue
+            _draw_rotated_arm(
+                img,
+                start_rc=(row_ys[gap_i], x),
+                bearing_deg=-90.0,  # points down (+row) to the next course
+                length=primary_spacing,
+                thickness=primary_thickness,
+                fg_value=fg_value,
+            )
+
+    # Divisor deliberately offset by 0.5 (not just sub_branches_per_primary)
+    # so these fractions land off the brick joints' own x positions (which
+    # fall on multiples of 1/n_bricks_per_course, offset by half a brick on
+    # staggered rows) -- at the defaults (3 bricks/course, 3 subs/course) an
+    # unoffset divisor lands exactly on two staggered-row joint columns,
+    # making a sub-branch invisibly coincide with an existing joint instead
+    # of adding new, independent topology.
+    fracs = [(k + 0.5) / (sub_branches_per_primary + 0.5) for k in range(sub_branches_per_primary)]
     for row_y in row_ys:
         for frac in fracs:
             x = x0 + frac * span
@@ -1144,7 +1194,7 @@ def generate_crescent_scale_pattern(
     n_rows: int = 4,
     n_cols: int = 4,
     radius: float = 70.0,
-    offset: float = 45.0,
+    offset: float = 30.0,
     row_spacing_frac: float = 0.85,
     fg_value: float = 230.0,
     bg_value: float = 10.0,
