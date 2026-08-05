@@ -156,6 +156,7 @@ def generate_t_junction(
     bg_value: float = 10.0,
     jitter_px: float = 0.0,
     rng_seed: int = 0,
+    tip_taper_frac: float = 0.0,
 ) -> np.ndarray:
     """Grayscale image with exactly one T-junction.
 
@@ -165,15 +166,39 @@ def generate_t_junction(
     and stops there (does not cross through) -- forming exactly one 3-way
     junction, with three endpoints (both host ends and the abutter's free
     end). `angle_deg=90.0` (the default) reproduces a plain right-angle T.
+
+    `tip_taper_frac > 0.0` (default 0.0, exactly the original flat-
+    rectangle-tip geometry, since stage-4's angle/corner/curvature tests
+    and validation_cases.py's own ground truth are calibrated against
+    that exact shape) tapers the host's two free ends AND the abutter's
+    free end to a point, via `_draw_rotated_arm`'s own `tip_taper_frac`
+    (see that function). Only supported when `jitter_px <= 0.0` -- the
+    host's jitter path uses its own bespoke per-column loop, not
+    `_draw_rotated_arm`, so it has no taper implementation to opt into.
     """
     img = np.full((size, size), bg_value, dtype=np.float64)
     mid = size // 2
     half_t = thickness // 2
 
-    if jitter_px <= 0.0:
+    if jitter_px <= 0.0 and tip_taper_frac <= 0.0:
         # unchanged from the original construction so the existing topology
         # test's assumptions are untouched.
         img[mid - half_t : mid + half_t + 1, margin : size - margin] = fg_value
+    elif jitter_px <= 0.0:
+        # tapered host: two half-arms from the midpoint, each tapering to
+        # a point at its own free end -- same construction as
+        # generate_density_gradient_field's spindle segments.
+        half_length = (size / 2.0) - margin
+        for half_bearing in (0.0, 180.0):
+            _draw_rotated_arm(
+                img,
+                start_rc=(float(mid), float(mid)),
+                bearing_deg=half_bearing,
+                length=half_length,
+                thickness=thickness,
+                fg_value=fg_value,
+                tip_taper_frac=tip_taper_frac,
+            )
     else:
         # Host jitter model: smooth (spatially-correlated) lateral wobble
         # of the row-band, anchored at the midpoint (the future junction
@@ -210,6 +235,7 @@ def generate_t_junction(
         fg_value=fg_value,
         jitter_px=jitter_px,
         rng_seed=rng_seed + 1,  # decorrelate abutter noise from host noise
+        tip_taper_frac=tip_taper_frac,
     )
 
     return img
@@ -390,6 +416,7 @@ def generate_y_junction(
     bg_value: float = 10.0,
     jitter_px: float = 0.0,
     rng_seed: int = 0,
+    tip_taper_frac: float = 0.0,
 ) -> np.ndarray:
     """Grayscale image with exactly one 3-way junction at arbitrary bearings.
 
@@ -397,6 +424,12 @@ def generate_y_junction(
     (default: 120 deg apart, a canonical Y). No host/abutter distinction --
     used both for a genuine Y check and, with non-120-deg-apart bearings,
     to exercise the "ambiguous" (neither T nor Y) classification path.
+
+    `tip_taper_frac > 0.0` (default 0.0, exactly the original flat-
+    rectangle-tip geometry, since stage-4's angle/corner/curvature tests
+    and validation_cases.py's own ground truth are calibrated against
+    that exact shape) tapers each arm's free end to a point, via
+    `_draw_rotated_arm`'s own `tip_taper_frac`.
     """
     img = np.full((size, size), bg_value, dtype=np.float64)
     if center is None:
@@ -412,6 +445,7 @@ def generate_y_junction(
             fg_value=fg_value,
             jitter_px=jitter_px,
             rng_seed=rng_seed + k,  # decorrelate noise across the 3 arms
+            tip_taper_frac=tip_taper_frac,
         )
 
     return img

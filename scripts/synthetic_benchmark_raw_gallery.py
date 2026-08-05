@@ -93,8 +93,13 @@ def case_tapered_line(out_dir: Path) -> dict:
 
 
 def case_t_y_junction(out_dir: Path) -> dict:
-    t_img = generate_t_junction()
-    y_img = generate_y_junction()
+    # tip_taper_frac is opt-in (default 0.0 elsewhere preserves the exact
+    # flat-tip geometry stage-4's angle/corner/curvature tests and
+    # validation_cases.py are calibrated against -- confirmed by the full
+    # suite still passing with this parameter added) -- only this page's
+    # own rendering opts into tapered tips, matching every other case here.
+    t_img = generate_t_junction(tip_taper_frac=0.15)
+    y_img = generate_y_junction(tip_taper_frac=0.15)
     out_path_a = out_dir / "02a_t_junction.png"
     out_path_b = out_dir / "02b_y_junction.png"
     _render_image(t_img, out_path_a)
@@ -107,9 +112,10 @@ def case_t_y_junction(out_dir: Path) -> dict:
         "desc": "Already covered by existing generators (generate_t_junction, generate_y_junction) "
                 "and their own tests/validation_gallery.py -- shown "
                 "here for completeness against the original 9-case matrix, not as new coverage. "
-                "No new generator code and no new ground truth on this page; see "
-                "scripts/validation_gallery.py for the actual angle-recovery ground truth these "
-                "already carry.",
+                "Rendered with the same opt-in tapered-tip parameter as every other case on this "
+                "page (default off elsewhere, so stage-4's own calibrated tests are unaffected). "
+                "No new ground truth on this page; see scripts/validation_gallery.py for the "
+                "actual angle-recovery ground truth these already carry.",
         "rows": [
             _row("status", "reused from existing generators, not new this step"),
         ],
