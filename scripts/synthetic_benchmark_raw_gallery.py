@@ -31,14 +31,14 @@ import matplotlib.pyplot as plt
 from src.crackgraph.synthetic import (
     converging_lines_ground_truth,
     crescent_ground_truth,
-    density_gradient_ground_truth,
     generate_converging_lines,
     generate_crescent_scale_pattern,
-    generate_density_gradient_field,
+    generate_hexagonal_grid,
     generate_hierarchical_network,
     generate_t_junction,
     generate_tapered_line,
     generate_y_junction,
+    hex_flower_topology,
     hierarchical_network_topology,
     tapered_line_ground_truth,
 )
@@ -206,39 +206,34 @@ def case_crescent_scale_pattern(out_dir: Path) -> dict:
     }
 
 
-def case_density_gradient_field(out_dir: Path) -> dict:
-    n_segments_per_zone = (60, 20, 5)
-    length_range_px = (30.0, 60.0)
-    thickness = 8
-    gray = generate_density_gradient_field(
-        n_segments_per_zone=n_segments_per_zone, length_range_px=length_range_px, thickness=thickness,
-    )
-    gt = density_gradient_ground_truth(n_segments_per_zone, length_range_px, thickness)
-    out_path = out_dir / "06_density_gradient_field.png"
+def case_hexagonal_network(out_dir: Path) -> dict:
+    radius, thickness = 40.0, 5
+    gray = generate_hexagonal_grid(radius=radius, thickness=thickness)
+    gt = hex_flower_topology(radius=radius)
+    out_path = out_dir / "06_hexagonal_network.png"
     _render_image(gray, out_path)
     return {
-        "name": "density_gradient_field",
-        "title": "6. Non-uniform density field (dense vs. sparse zones)",
+        "name": "hexagonal_network",
+        "title": "6. Hexagonal honeycomb network",
         "image": out_path.name,
-        "desc": "Independent random line segments placed into 3 column zones at explicit, "
-                "different densities (60/20/5 segments) -- tests whether binarize()'s single "
-                "global Otsu threshold (and its sanity_band foreground-fraction check) holds up "
-                "under strong local density variation within one image. Otsu being global-only is "
-                "this pipeline's deliberate design choice, not a bug to discover.",
+        "desc": "A 7-hexagon honeycomb flower (1 center + 6 neighbors) -- the junction valence real "
+                "crack networks actually favor (Goehring 2012's rectilinear-to-hexagonal "
+                "evolution), unlike a rectilinear grid's degree-4 crossings. Rasterizing each "
+                "hexagon edge as its own independent thick rectangle (no mitered join) is already "
+                "documented to leave 2 of the 12 true vertices as a locally wider blob that splits "
+                "into adjacent node pairs under skeletonization at this 5px thickness -- a real, "
+                "resolution-sensitive rendering effect (resolves cleanly at this project's actual "
+                "median crack width, ~16px), not a fixed property of the shape.",
         "rows": [
-            _row("n_segments per zone (left/mid/right)", " / ".join(str(n) for n in n_segments_per_zone)),
-            _row("length_range_px", f"{length_range_px[0]:.0f}-{length_range_px[1]:.0f}"),
+            _row("radius (px)", f"{radius:.0f}"),
             _row("thickness (px)", thickness),
-            _row(
-                "upper-bound area px^2 per zone (no-overlap, exact)",
-                " / ".join(f"{a:.0f}" for a in gt["upper_bound_area_px2_per_zone"]),
-            ),
+            _row("ideal junctions (deg3) / edges", f"{gt['n_junctions_deg3']} / {gt['n_edges']}"),
         ],
     }
 
 
 def case_illumination_gradient(out_dir: Path) -> dict:
-    base = generate_converging_lines()
+    base = generate_t_junction(tip_taper_frac=0.15)
     amplitude, direction_deg = 60.0, 0.0
     degraded = apply_illumination_gradient(base, direction_deg=direction_deg, amplitude=amplitude)
     out_path_a = out_dir / "07a_illumination_gradient_clean.png"
@@ -250,8 +245,8 @@ def case_illumination_gradient(out_dir: Path) -> dict:
         "title": "7. Illumination gradient [speculated]",
         "image": out_path_a.name,
         "image_b": out_path_b.name,
-        "desc": "A smooth left-to-right brightness ramp (60 gray levels peak-to-peak) added to "
-                "case 3's clean image before binarization would see it -- shown clean (left) vs. "
+        "desc": "A smooth left-to-right brightness ramp (60 gray levels peak-to-peak) added to a "
+                "T-junction before binarization would see it -- shown clean (left) vs. "
                 "degraded (right). [speculated]: binarize.py's own docstring states these images "
                 "have no illumination gradient to compensate for, so this is a worst-case/"
                 "precautionary check, not a response to an observed problem. No fabricated ground "
@@ -260,7 +255,7 @@ def case_illumination_gradient(out_dir: Path) -> dict:
         "rows": [
             _row("amplitude (gray levels, peak-to-peak)", f"{amplitude:.0f}"),
             _row("direction_deg", f"{direction_deg:.0f}"),
-            _row("base case", "case 3 (converging lines)"),
+            _row("base case", "T-junction (same generator as case 2)"),
         ],
     }
 
@@ -367,7 +362,7 @@ def main():
         case_converging_lines(out_dir),
         case_hierarchical_network(out_dir),
         case_crescent_scale_pattern(out_dir),
-        case_density_gradient_field(out_dir),
+        case_hexagonal_network(out_dir),
         case_illumination_gradient(out_dir),
         case_jpeg_blocking(out_dir),
         case_debris(out_dir),

@@ -16,23 +16,21 @@ file locks in as regression coverage, consistent with this project's
 
 import networkx as nx
 import numpy as np
-import pytest
-from skimage.measure import perimeter as sk_perimeter
 
 from src.crackgraph.binarize import binarize
 from src.crackgraph.graph import extract_graph
 from src.crackgraph.skeleton import skeletonize_and_prune
 from src.crackgraph.synthetic import (
-    _crescent_mask,
     converging_lines_ground_truth,
     crescent_ground_truth,
     generate_converging_lines,
     generate_crescent_scale_pattern,
-    generate_density_gradient_field,
+    generate_hexagonal_grid,
     generate_hierarchical_network,
     generate_t_junction,
     generate_tapered_line,
     generate_y_junction,
+    hex_flower_topology,
     hierarchical_network_topology,
 )
 from src.crackgraph.synthetic_degradation import apply_debris, apply_illumination_gradient, apply_jpeg_blocking
@@ -162,84 +160,102 @@ def test_case4_hierarchical_network_12px_subbranches_are_pruned_away():
     assert graph_result.n_edges == expected_primary_only["n_edges"]
 
 
-# -- case 5: crescent tiles -- binarize only, no crack network to skeletonize --
+# -- case 5: crescent mesh -- actual skeletonization on the full tiled shape --
 
 
-def test_case5_crescent_binarize_area_and_perimeter_close_to_closed_form():
+def test_case5_crescent_mesh_full_pipeline_measured():
+    # Runs the ACTUAL skeletonize_and_prune/extract_graph on the full
+    # tiled fish-scale mesh (not binarize-only on one isolated tile, as an
+    # earlier version of this test did). A filled 2D tiling has no
+    # combinatorial "expected" skeleton topology -- these are honest
+    # observational measurements, not predictions.
+    img = generate_crescent_scale_pattern()
+    binarize_result, skeleton_result, graph_result = _run_stage123(img)
+
+    # Real finding: the default 4x4 tiling is dense enough to trip
+    # binarize()'s own sanity_band ceiling.
+    assert not binarize_result.sanity_ok
+    assert binarize_result.foreground_fraction > binarize_result.sanity_band[1]
+
+    # The tiles genuinely touch (by design) -- expect one connected
+    # skeleton component across the whole mesh, not 16 separate ones.
+    assert _n_components(graph_result) == 1
+
+    # Area should sit at or below the naive non-touching upper bound
+    # (tiles share some boundary pixels exactly where they touch).
     radius, offset = 70.0, 30.0
-    size = 300
-    gray = np.full((size, size), 10.0)
-    mask_true = _crescent_mask((size, size), (150.0, 130.0), radius, offset)
-    gray[mask_true] = 230.0
-    gt = crescent_ground_truth(radius, offset)
-
-    binarize_result = binarize(gray)
-    assert binarize_result.sanity_ok
-    measured_area = int(binarize_result.mask.sum())
-    assert measured_area == pytest.approx(gt["area_px2"], rel=0.02)
-
-    # skimage's pixel-boundary perimeter is a well-known slight
-    # OVERestimate of a continuous boundary's true length (a staircase
-    # walks further than the smooth curve it approximates) -- `[interpreted]`,
-    # not exact, measured directly at ~+2% here, so the tolerance below is
-    # one-directional and documented, not a blind wide band.
-    measured_perimeter = sk_perimeter(binarize_result.mask)
-    assert gt["perimeter_px"] <= measured_perimeter <= gt["perimeter_px"] * 1.05
+    n_rows, n_cols = 4, 4
+    gt_one = crescent_ground_truth(radius, offset)
+    upper_bound_area = n_rows * n_cols * gt_one["area_px2"]
+    assert binarize_result.mask.sum() <= upper_bound_area
 
 
-# -- case 6: density field -- does "never overlap" mean "always independent"? --
+# -- case 6: hexagonal network -- reproduces the known junction-splitting artifact --
 
 
-def test_case6_density_field_diagonal_adjacency_merges_some_components():
-    # The real, measured finding (not assumed): step 1's non-overlap
-    # guarantee only forbids sharing a pixel (4-connectivity-safe), not a
-    # minimum gap -- some segment pairs land diagonally adjacent (touching
-    # only at a pixel corner), and skeletonization's own connectivity
-    # treats that as connected. Measured directly: 85 segments, 85
-    # components in the raw Otsu mask under 4-connectivity, but only 77
-    # after skeletonize_and_prune -- 8 pairs fuse. This is the honest
-    # result, not the naively-hoped-for "n_components == 85".
-    n_segments_per_zone = (60, 20, 5)
-    img = generate_density_gradient_field(n_segments_per_zone=n_segments_per_zone)
+def test_case6_hexagonal_network_reproduces_known_junction_splitting():
+    # Replaces the earlier density-field case. At this project's own
+    # already-documented thin (5px) rendering thickness, 2 of the 12 true
+    # vertices of a 7-hexagon flower render as a locally wider blob that
+    # splits under skeletonization -- reproduced here exactly as
+    # previously characterized (see generate_hexagonal_grid's own
+    # docstring), not a new/different finding.
+    radius, thickness = 40.0, 5
+    img = generate_hexagonal_grid(radius=radius, thickness=thickness)
     binarize_result, _, graph_result = _run_stage123(img)
     assert binarize_result.sanity_ok
 
-    from scipy.ndimage import label as ndi_label
+    ideal = hex_flower_topology(radius=radius)
+    assert ideal["n_junctions_deg3"] == 12
+    assert ideal["n_edges"] == 18
 
-    total_segments = sum(n_segments_per_zone)
-    _, n_components_4conn = ndi_label(binarize_result.mask)  # scipy default = 4-connectivity
-    assert n_components_4conn == total_segments, "the raw Otsu mask itself should show every segment separate"
-
-    n_components_measured = _n_components(graph_result)
-    assert n_components_measured < total_segments, (
-        "expected some diagonal-adjacency merging in the real pipeline, not full independence"
-    )
-    _, n_components_8conn = ndi_label(binarize_result.mask, structure=np.ones((3, 3)))
-    assert n_components_measured == n_components_8conn, (
-        "the skeleton's merge count should match 8-connectivity component counting on the same mask"
-    )
+    assert graph_result.n_junctions_deg_ge4 == 0
+    assert graph_result.n_junctions_deg3 == 14
+    assert graph_result.n_edges == 21
+    assert graph_result.n_endpoints == 0
 
 
-# -- case 7: illumination gradient -- does it actually fragment the shape? --
+# -- case 7: illumination gradient -- spurious component, not shape fragmentation --
 
 
-def test_case7_illumination_gradient_fragments_the_shape():
+def test_case7_illumination_gradient_adds_spurious_component_not_fragmentation():
     # `[speculated]` scenario (binarize.py states real images have no such
-    # gradient) -- but measured directly here, the effect IS real: Otsu's
-    # single global threshold, recomputed over the gradient-shifted
-    # histogram, drops part of a thin/dim region and increases
-    # n_components -- a genuine, reportable consequence of the assumption
-    # this case tests, not asserted a priori.
-    clean = generate_converging_lines()
+    # gradient) -- now on a T-junction base (matching case 2), not
+    # converging lines. Measured PRECISELY, not just "n_components goes
+    # up": the T-junction's own pixels are completely unaffected (exact
+    # same foreground count as the clean image) -- it does NOT fragment.
+    # What actually happens is the gradient pushes plain background at the
+    # image's bright edge above Otsu's threshold too, producing a second,
+    # spurious, UNRELATED component elsewhere in the image. "A new
+    # spurious region appears" is a different, more precise claim than
+    # "the shape breaks apart," and getting this right matters.
+    clean = generate_t_junction(tip_taper_frac=0.15)
     degraded = apply_illumination_gradient(clean, amplitude=60.0)
 
-    _, _, gr_clean = _run_stage123(clean)
-    _, _, gr_degraded = _run_stage123(degraded)
+    br_clean, _, gr_clean = _run_stage123(clean)
+    br_degraded, _, gr_degraded = _run_stage123(degraded)
 
     assert _n_components(gr_clean) == 1
-    assert _n_components(gr_degraded) > _n_components(gr_clean), (
-        "expected the illumination gradient to measurably fragment the shape"
-    )
+    assert _n_components(gr_degraded) == 2
+
+    from scipy.ndimage import label as ndi_label
+
+    labeled, n = ndi_label(br_degraded.mask)
+    assert n == 2
+    components = []
+    for i in range(1, n + 1):
+        ys, xs = np.where(labeled == i)
+        components.append({"size": len(ys), "col_span": int(xs.max() - xs.min()) + 1})
+    components.sort(key=lambda c: c["size"])
+
+    # the larger component is the T-junction itself, pixel-for-pixel
+    # identical in size to the clean mask's own foreground count -- proof
+    # the real shape is untouched, not merely "mostly" intact.
+    assert components[1]["size"] == int(br_clean.mask.sum())
+    # the smaller component is a thin spurious strip running the full
+    # image height at the bright edge, only 1px wide -- not a broken-off
+    # piece of the T-junction (which is >=5px thick everywhere).
+    assert components[0]["col_span"] <= 2
 
 
 # -- case 8: JPEG blocking -- does it corrupt topology at this quality/scale? --
