@@ -345,8 +345,8 @@ def case_debris(out_dir: Path) -> dict:
     _, sr_d, gr_d = _run_stage123(degraded)
     out_path_a = out_dir / "09a_debris_clean.png"
     out_path_b = out_dir / "09b_debris_degraded.png"
-    _save_graph_only(clean, sr_c, gr_c, out_path_a, "Clean — final graph")
-    _save_graph_only(degraded, sr_d, gr_d, out_path_b, "Degraded — final graph")
+    _save_3panel(clean, sr_c, gr_c, out_path_a, "Clean — final graph")
+    _save_3panel(degraded, sr_d, gr_d, out_path_b, "Degraded — final graph")
     return {
         "name": "debris", "title": "9. Debris — measured: one sub-branch lost, not bridged or fragmented",
         "image": out_path_a.name, "image_b": out_path_b.name,
