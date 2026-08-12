@@ -1,0 +1,22 @@
+# Pinned to the versions this export was built and verified against (the parent repo's own
+# dev venv). Not officially pinned anywhere in the parent repository (it has no
+# requirements.txt/pyproject.toml of its own, same situation crack_stats_export/requirements.txt
+# already documents for its own smaller subset) -- these are a known-good snapshot, not a
+# guarantee that other versions won't work.
+#
+# Scope verified directly (grepped every import across src/, scripts/, tests/ in this export,
+# not just carried over from memory): sknw is discussed in CLAUDE.md as a candidate library but
+# is not actually imported anywhere in this codebase, so it is deliberately left out below.
+
+numpy==2.2.6
+pandas==2.3.3
+scipy==1.15.3
+scikit-image==0.25.2
+networkx==3.4.2
+skan==0.13.1
+Pillow==12.3.0
+openpyxl==3.1.5
+matplotlib==3.10.9
+
+# Dev-only, needed to run tests/:
+pytest==9.1.1
