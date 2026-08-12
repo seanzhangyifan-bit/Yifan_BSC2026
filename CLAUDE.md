@@ -108,6 +108,34 @@ A third independent entry point: a visual, human-reviewable companion to the num
 - Two cases exist specifically to show a known method limitation honestly rather than hide it: `curved_t_junction_r30_corner_limitation` (corner cross-check doesn't resolve cleanly on a severely curved host at the default window, even though the tangent fit still does) and `anisotropy_orthogonal_blind_spot` (the 2nd-order orientation tensor reads an orthogonal grid as isotropic; only the rose histogram reveals the two peaks). Neither has a fabricated pass condition — see their row logic if extending this pattern.
 - Ground truth is not bundled into `synthetic.py`'s return value (still image-only, matching every existing test file's convention) — each case function re-derives its own expected values from the same arguments it passes to the generator.
 
+## Documentation map
+
+This file is the technical/scientific operating guide. Other docs cover other audiences —
+don't duplicate their content here, just know they exist:
+
+- `README.md` — how to run the pipeline, CLI flags, output layout, and a "Libraries and
+  code architecture" overview for a reader who doesn't need the thesis framing.
+- `GLOSSARY.md` — one-line definitions of the terms used above (poset, antichain, width
+  `w`, T/Y-junction, abutter/host, annulus, generation, growth-arc).
+- `CALIBRATION.md` — status table (🟢 derived / 🟡 empirical uncalibrated / 🔴 assumed) for
+  every tunable constant, with file:line pointers.
+- `docs/calibration_notes.md` — the full rationale for each constant, relocated verbatim
+  from what used to be multi-line inline comments.
+- `docs/crack_stats_schema.md` — column-by-column reference for `outputs/crack_stats.xlsx`
+  (the standalone batch export, see "Standalone crack-stats export" above).
+- `docs/crack_stats_v2_status.md` / `docs/crack_stats_v3_status.md` — running status docs for
+  two follow-on batch-export efforts: v2 re-runs the original (v1) two-pass methodology over a
+  scoped 19-image batch with flaking exclusion and thesis-notation columns; v3 is an independent,
+  alternate single-pass methodology (skip the second skeletonize, omit flake-touching edges by
+  direct mask membership instead of a distance buffer), cross-validated against v1/v2 rather than
+  replacing it — both remain runnable side by side.
+- `docs/dynamic_tracking_hypothetical.md` — a design discussion (not implemented, not tested) on
+  whether/how this pipeline could extend to in-situ drying video instead of static micrographs;
+  `scripts/tracing_poc.py` is a throwaway, unintegrated proof-of-concept tied to one idea in it.
+  Both are explicitly exploratory future-direction material, not part of the validated pipeline.
+- `docs/reviews/` — point-in-time methodology/rigor review findings.
+- `.vscode/launch.json` — VS Code Run/Debug configs (prompts for an image path).
+
 ## Conventions & guardrails
 
 - Every claim-bearing output should be traceable to what the method can actually support. This project uses an evidence-level discipline elsewhere in the thesis (`[measured]` / `[interpreted]` / `[speculated]` / `[cited]`); mirror that spirit in comments and docstrings — label what a number is, not just what it is called. E.g. "T-fraction is `[measured]`; the inference that small `w` implies quasi-static cracking is `[interpreted]`."
