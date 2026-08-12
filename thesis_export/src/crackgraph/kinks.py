@@ -3,7 +3,7 @@
 A sharp direction change in the *interior* of an edge is evidence that two
 distinct cracks were fused into one skeleton path: the corner is a
 degree-2 pixel, so skan never makes a node there and the junction logic
-never sees it. Per CLAUDE.md this is the en-passant / pseudo-junction
+never sees it. Per METHODOLOGY.md this is the en-passant / pseudo-junction
 case -- the atoms of the analysis should be growth-arcs, and a kink
 suggests two arrested cracks, not one continuous crack.
 

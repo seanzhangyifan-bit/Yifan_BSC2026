@@ -137,7 +137,7 @@ overview figure (per-section + whole-image rose diagrams and
 curvature/tortuosity histograms, see scripts/overview_figure.py) and,
 where attached, the full-image skeleton overlay and precedence graph
 from `analyze_image.py --full-image` (stage 4/5 -- exploratory on a
-full image, see CLAUDE.md's scope-discipline notes; validated so far
+full image, see METHODOLOGY.md's scope-discipline notes; validated so far
 only on the small corner crop).</p>
 {body}
 </body>

@@ -3,7 +3,7 @@ readings, and characterize (but do not resolve) any cycles.
 
 Scope, decided with the user: this pass builds the graph, unions both stage-4
 classifiers (tangent-fit + corner cross-check) into precedence constraints
-with provenance, and reports cycles as a data-quality metric per CLAUDE.md's
+with provenance, and reports cycles as a data-quality metric per METHODOLOGY.md's
 "report minimum-feedback-arc-set size... rather than silently deleting."
 It deliberately does NOT try to resolve cycles into a forced acyclic poset,
 and does NOT compute width `w` (stage 6) -- both are explicitly deferred
@@ -13,7 +13,7 @@ connections look like first").
 Atoms are unchanged from stage 3: each `path_index` (a row of
 GraphResult.summary, i.e. one skan-extracted skeleton branch) is already the
 atomic unit. No further arc-splitting and no collapsing is done here --
-CLAUDE.md's "atoms: arcs, not whole cracks" principle means two collinear
+METHODOLOGY.md's "atoms: arcs, not whole cracks" principle means two collinear
 segments straddling an uncollapsed junction are colored/ordered independently
 unless a future evidence-backed collapse pass says otherwise.
 
@@ -41,7 +41,7 @@ this first pass, worth revisiting once real data shows how often it bites.
 Cycle characterization uses networkx's condensation (each strongly-connected
 component collapsed to one supernode, which is always a DAG) rather than a
 hand-rolled minimum-feedback-arc-set solver (networkx has none, and
-CLAUDE.md's own steps separate "DAG/cycle check" from a later, more careful
+METHODOLOGY.md's own steps separate "DAG/cycle check" from a later, more careful
 poset-repair step). Any path_index inside a nontrivial SCC (size > 1) gets
 generation=None -- undetermined, reported rather than forced -- while
 everything else gets its topological generation for free from the
@@ -218,7 +218,7 @@ def build_precedence_graph(
 
     graph = nx.DiGraph()
     for arc in arcs:
-        # host -> abutter, NOT abutter -> host: per CLAUDE.md, "the crack
+        # host -> abutter, NOT abutter -> host: per METHODOLOGY.md, "the crack
         # that abuts arrived after the crack it hit" -- the host was
         # already there (an existing discontinuity the abutter's tip
         # couldn't cross), so the host is the *earlier* node and the

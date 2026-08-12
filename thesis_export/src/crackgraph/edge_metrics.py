@@ -1,20 +1,20 @@
 """Per-atomic-edge length/width/area metrics.
 
 Naming caution: "width" in this module means physical crack width in px
-(sampled from the EDT distance transform) -- CLAUDE.md's third chronometer
+(sampled from the EDT distance transform) -- METHODOLOGY.md's third chronometer
 ("crack width... earlier cracks tend wider due to post-crack drying
 shrinkage"). This is a completely different quantity from stage 6's poset
 antichain width `w` (the count of mutually-undatable cracks). The two are
 never mixed in this module's field names.
 
 Atoms are the same atomic edge (`path_index`, from skan's summary table)
-that precedence.py already keys its arcs on -- per CLAUDE.md's "atoms: arcs,
+that precedence.py already keys its arcs on -- per METHODOLOGY.md's "atoms: arcs,
 not whole cracks" rule, nothing here collapses collinear edges into a single
 "crack".
 
 Four area estimates are computed per edge/image, deliberately kept as
 separate, cross-checked numbers rather than collapsed into one "best"
-answer (matching CLAUDE.md's existing chronometer-agreement philosophy):
+answer (matching METHODOLOGY.md's existing chronometer-agreement philosophy):
 
 - `area_px2` (exact per-edge partition, seedless watershed): the primary
   method. [interpreted] -- a deterministic partition, but pixels right at a
@@ -248,7 +248,7 @@ def partition_area_by_edge(
     foreground. connectivity=8 matches how a 1px-wide skeleton can touch
     mask pixels diagonally.
 
-    Reproducible per CLAUDE.md's determinism requirement: no RNG anywhere.
+    Reproducible per METHODOLOGY.md's determinism requirement: no RNG anywhere.
     """
     markers = np.zeros(mask_clean.shape, dtype=np.int32)
     n_fallback = 0
@@ -352,7 +352,7 @@ def compute_junction_blob_ambiguity(
     This directly answers "how much of edge X's counted area is actually
     inside a zone geometrically shared by multiple arms" -- surfaced as
     [interpreted], not silently folded into an [measured]-looking area
-    total, per CLAUDE.md's evidence-level discipline.
+    total, per METHODOLOGY.md's evidence-level discipline.
     """
     results: list[JunctionBlobAmbiguity] = []
     for node_id, coord, eff_radius, r_lo, c_lo, disk in _iter_junction_disks(

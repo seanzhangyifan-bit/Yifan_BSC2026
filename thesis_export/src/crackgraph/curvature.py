@@ -15,7 +15,7 @@ overall and locally".
 Two numbers are reported per edge because they catch different things: a
 long smooth bend and several small sharp wiggles can have similar
 tortuosity but very different mean curvature (see test_curvature.py's
-kinked-line case) -- per CLAUDE.md's "chronometers can disagree
+kinked-line case) -- per METHODOLOGY.md's "chronometers can disagree
 informatively" ethos, both are kept rather than collapsed into one.
 
 [cited] Neither number here is a novel invention. Tortuosity (arc length

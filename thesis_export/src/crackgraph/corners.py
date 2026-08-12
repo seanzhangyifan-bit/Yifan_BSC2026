@@ -21,7 +21,7 @@ robustness). The advantage over the tangent fit is narrower and specific:
 no junction-blob/skeleton-jitter problem, not a general cure for
 curvature-vs-window tradeoffs.
 
-This is a CROSS-CHECK, not a replacement (decided with the user): CLAUDE.md
+This is a CROSS-CHECK, not a replacement (decided with the user): METHODOLOGY.md
 already treats independent chronometers (angle, curvature, width) agreeing
 or disagreeing as a validation signal that needs no ground truth. This
 module adds a fourth, geometrically distinct estimate of the same
@@ -268,7 +268,7 @@ def cross_check_junctions(
     """One CornerCrossCheck per degree-3 junction (every label, including
     ambiguous/insufficient_data from the tangent-fit method -- the corner
     geometry is independent and might resolve or independently confirm
-    those too, per CLAUDE.md's "log disagreements, don't smooth them over").
+    those too, per METHODOLOGY.md's "log disagreements, don't smooth them over").
     Uses the SAME classify_from_gaps as junctions.py so a T/Y/ambiguous
     disagreement can only come from the input bearings, not from two
     different classification rules.

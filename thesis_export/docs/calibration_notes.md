@@ -9,7 +9,7 @@ referenced sweep script), not just the one-line pointer left in the source file.
 
 `src/crackgraph/junctions.py:77` — value `5.0`
 
-> "a few px" per CLAUDE.md's own wording for stage 4, chosen to sit outside the pixel
+> "a few px" per METHODOLOGY.md's own wording for stage 4, chosen to sit outside the pixel
 > cluster where skeletonization jitter right at a vertex is worst. Not derived from
 > calibrated um-per-px (none exists yet -- same project-phase caveat as
 > SPUR_PX_PLACEHOLDER in skeleton.py). Revisit once calibration lands.
@@ -22,8 +22,8 @@ inner-radius sweep exists.
 
 `src/crackgraph/junctions.py:84` — value `60.0`
 
-> Not derived from real film thickness h (CLAUDE.md's general spec is "~h/2"; no
-> h/um-per-px exists yet) -- in documented tension with CLAUDE.md's "local approach
+> Not derived from real film thickness h (METHODOLOGY.md's general spec is "~h/2"; no
+> h/um-per-px exists yet) -- in documented tension with METHODOLOGY.md's "local approach
 > direction, not far-field" intent, and cannot be checked against h until calibration
 > lands.
 >
@@ -202,7 +202,7 @@ No dedicated sweep script found; used at `corners.py`'s bearing-matching step
 
 > Not derived from real film-thickness h or a calibrated um-per-pixel value -- neither
 > exists yet (calibration is supplied manually, later). Chosen only as "somewhat larger
-> than the annulus inner-radius jitter scale (a few px)" that CLAUDE.md mentions
+> than the annulus inner-radius jitter scale (a few px)" that METHODOLOGY.md mentions
 > elsewhere, so as to not eat real short branches. Must be revisited once calibration
 > lands.
 

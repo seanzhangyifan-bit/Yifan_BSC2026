@@ -9,7 +9,7 @@
 
 ### 1. [Overclaim] `EdgeDirection` fields labeled `[measured]` are actually extrapolated model output, not raw pixel measurement
 
-`src/crackgraph/junctions.py:131-134` labels `direction`, `bearing_deg`, `curvature_per_px` as `[measured]`. The module's own docstring (lines 29-34) states the tangent is "the fitted derivative at s = 0 ... extrapolated back from the band" — the band explicitly excludes points near the vertex (jitter/blob exclusion), so s=0 is *outside* the region the polynomial was actually fit over. This is a modeled quantity, not a direct pixel readout — closer to CLAUDE.md's "interpreted" tier. Tellingly, `overlay.py:243-259` is more careful: in detail mode it deliberately draws the fitted curve only over the actually-fitted band, "so what is drawn IS what was measured" — while the classification pipeline uses the extrapolated s=0 value under a `[measured]` tag.
+`src/crackgraph/junctions.py:131-134` labels `direction`, `bearing_deg`, `curvature_per_px` as `[measured]`. The module's own docstring (lines 29-34) states the tangent is "the fitted derivative at s = 0 ... extrapolated back from the band" — the band explicitly excludes points near the vertex (jitter/blob exclusion), so s=0 is *outside* the region the polynomial was actually fit over. This is a modeled quantity, not a direct pixel readout — closer to METHODOLOGY.md's "interpreted" tier. Tellingly, `overlay.py:243-259` is more careful: in detail mode it deliberately draws the fitted curve only over the actually-fitted band, "so what is drawn IS what was measured" — while the classification pipeline uses the extrapolated s=0 value under a `[measured]` tag.
 
 **Fix**: relabel these fields (e.g. `[measured; extrapolated tangent-fit value, see _edge_direction docstring]`) so a reader can't mistake curve-fit output for a raw observation.
 
@@ -24,19 +24,19 @@ max_disagreement = max(abs(a - b) for a, b in zip(corner_sorted, tangent_sorted)
 ```
 `agrees_with_tangent_fit` only compares the T/Y/ambiguous label string, and `max_gap_disagreement_deg` compares *sorted* gap magnitudes — both discard which physical arm was identified as the abutter. `_pair_t_like` (corners.py:202-229) does compute an ordered `[host_a, host_b, abutter_bearing]`, but that identity is discarded before reaching `CornerCrossCheck` — there's no field comparing it to `jc.abutter_path_index`/`jc.host_path_indices`.
 
-Concrete failure scenario: two methods could both say "T" with near-identical sorted gap sets, yet the corner method's abutter could correspond to a *different physical arm* than the tangent-fit's abutter. The current code would report this as "Agree," even though the underlying precedence claim (`abutter ≺ host` — the actual thing CLAUDE.md cares about) disagrees between methods. This is the "compare summary statistics, not the actual claim" failure the disagreement-logging discipline is supposed to prevent.
+Concrete failure scenario: two methods could both say "T" with near-identical sorted gap sets, yet the corner method's abutter could correspond to a *different physical arm* than the tangent-fit's abutter. The current code would report this as "Agree," even though the underlying precedence claim (`abutter ≺ host` — the actual thing METHODOLOGY.md cares about) disagrees between methods. This is the "compare summary statistics, not the actual claim" failure the disagreement-logging discipline is supposed to prevent.
 
 **Fix**: add arm-identity matching (nearest-bearing correspondence between the corner method's 3 arm bearings and the tangent-fit's 3 `EdgeDirection.bearing_deg` values) and report agreement/disagreement on *which arm is abutter*, not just on the label.
 
 ### 3. [Missing-justification] `QUAD_MIN_SPAN_PX = 15.0` gates the curvature chronometer with no measured backing
 
-`src/crackgraph/junctions.py:108-111`. This threshold decides `fit_degree` (2 vs 1), i.e. whether curvature — one of CLAUDE.md's three named chronometers — is computed at all for a given arm. Unlike `ANNULUS_OUTER_PX_PLACEHOLDER` and `CORNER_WINDOW_PX`, which got dedicated sweep scripts (`scripts/window_sweep.py`, `scripts/corner_window_sweep.py`) with printed bias/RMSE tables, this constant has only a qualitative justification ("a short arm cannot reveal its curvature reliably anyway").
+`src/crackgraph/junctions.py:108-111`. This threshold decides `fit_degree` (2 vs 1), i.e. whether curvature — one of METHODOLOGY.md's three named chronometers — is computed at all for a given arm. Unlike `ANNULUS_OUTER_PX_PLACEHOLDER` and `CORNER_WINDOW_PX`, which got dedicated sweep scripts (`scripts/window_sweep.py`, `scripts/corner_window_sweep.py`) with printed bias/RMSE tables, this constant has only a qualitative justification ("a short arm cannot reveal its curvature reliably anyway").
 
 **Fix**: give it the same measured-sweep treatment now that the sweep infrastructure already exists.
 
 ### 4. [Missing-justification] Classification-boundary tolerances that determine the headline T/Y/ambiguous census are un-swept placeholders
 
-`Y_ANGLE_TOL_DEG_PLACEHOLDER`, `T_STRAIGHT_TOL_DEG_PLACEHOLDER`, `T_RIGHT_TOL_DEG_PLACEHOLDER` (junctions.py:113-125), plus `CORNER_MIN_TURN_DEG`, `ABUTTER_AGREEMENT_TOL_DEG`, `BEARING_MATCH_TOL_DEG` (corners.py:77-91) are honestly commented as "not calibrated" / "not fitted to a noise model." CLAUDE.md names "junction-type census" as a headline floor deliverable, and that census's T-vs-Y split hinges entirely on these thresholds.
+`Y_ANGLE_TOL_DEG_PLACEHOLDER`, `T_STRAIGHT_TOL_DEG_PLACEHOLDER`, `T_RIGHT_TOL_DEG_PLACEHOLDER` (junctions.py:113-125), plus `CORNER_MIN_TURN_DEG`, `ABUTTER_AGREEMENT_TOL_DEG`, `BEARING_MATCH_TOL_DEG` (corners.py:77-91) are honestly commented as "not calibrated" / "not fitted to a noise model." METHODOLOGY.md names "junction-type census" as a headline floor deliverable, and that census's T-vs-Y split hinges entirely on these thresholds.
 
 **Fix**: same measured-sweep treatment as the window radii, before census numbers go in the thesis.
 

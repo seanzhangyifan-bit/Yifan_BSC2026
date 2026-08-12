@@ -6,7 +6,7 @@ A standalone, runnable copy of the full crack-pattern analysis codebase from the
 depend on the rest of that repository; everything needed to run every deliverable below is in
 this folder.
 
-**Start here for the science**: [`CLAUDE.md`](CLAUDE.md) explains *why* the analysis targets a
+**Start here for the science**: [`METHODOLOGY.md`](METHODOLOGY.md) explains *why* the analysis targets a
 partial order of crack growth rather than a full chronology — read that before the deliverables
 below make full sense. [`GLOSSARY.md`](GLOSSARY.md) has one-line term definitions;
 [`CALIBRATION.md`](CALIBRATION.md) has the calibration status of every tunable constant.
@@ -14,6 +14,15 @@ below make full sense. [`GLOSSARY.md`](GLOSSARY.md) has one-line term definition
 ```
 pip install -r requirements.txt
 ```
+
+## A note on authorship
+
+This project's scientific direction, methodology design, and every interpretive decision are the
+author's own (BSc thesis work, KIT Thin Film Technology group) — the choice to reconstruct a
+partial order rather than a chronology, the annulus/corner-cross-check measurement design, which
+constants get swept vs. asserted, and how every result in this repo is read and reported. The
+code implementation was written with AI assistance (Claude, Anthropic) under the author's
+direction and review, not autonomously.
 
 ## The five deliverables
 
@@ -36,8 +45,29 @@ python3 -m src.analyze_image path/to/image.jpg
 
 Binarizes, skeletonizes, classifies every junction, cross-checks against an independent
 background-corner method, and assembles a precedence graph — console report plus overlay PNGs
-under `outputs/<source-subfolder>/`. See `CLAUDE.md`'s "Pipeline shape" and README-equivalent
+under `outputs/<source-subfolder>/`. See `METHODOLOGY.md`'s "Pipeline shape" and README-equivalent
 sections above for the full stage-by-stage description and every CLI flag.
+
+## GUI (optional, easiest way to try this)
+
+No command-line flags to learn: upload an image, click run, see the result in your browser.
+
+```
+streamlit run app.py
+```
+
+Opens locally at `http://localhost:8501` — runs entirely on your own machine, nothing is
+uploaded anywhere. Two modes:
+
+- **Single image**: upload one micrograph, see the overlay and console report rendered inline.
+- **Batch folder**: upload several images, get back a results table (crack density, width,
+  connectivity) with a spreadsheet download.
+
+This is a thin front-end onto deliverables #1 and #2 below — same underlying pipeline as the CLI,
+same validation status, not a separate method. Deliverable #2's µm/mm² columns assume this
+project's own microscope calibration, which almost certainly doesn't apply to a different image
+source — the app flags this next to those columns rather than presenting them as universally
+correct.
 
 ## What's not included
 

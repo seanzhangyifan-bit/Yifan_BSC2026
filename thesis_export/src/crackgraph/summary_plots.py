@@ -115,7 +115,7 @@ def _plot_tortuosity_hist_on_ax(
     """Draw just the tortuosity histogram onto a pre-built Axes. Split out
     from _plot_curvature_hist_on_axes so render_overview_figure's clusters
     can show tortuosity alone (curvature omitted there for now -- see
-    CLAUDE.md).
+    METHODOLOGY.md).
 
     `bins` defaults to 15 (matplotlib auto-ranges to that Axes' own data,
     render_curvature_histogram's behavior, unchanged). render_overview_figure
@@ -185,7 +185,7 @@ def _add_cluster(
     """One rose + tortuosity-hist cluster (1 row x 2 sub-columns of the
     given GridSpec slice), labeled via a prefix on the tortuosity axis's
     title -- avoids changing the shared helpers' own title-setting logic.
-    Curvature is omitted here for now (see CLAUDE.md) -- render_curvature_
+    Curvature is omitted here for now (see METHODOLOGY.md) -- render_curvature_
     histogram/_plot_curvature_hist_on_axes still produce it elsewhere."""
     sub_gs = gs_slice.subgridspec(1, 2, wspace=0.6)
     ax_rose = fig.add_subplot(sub_gs[0, 0], projection="polar")
@@ -202,7 +202,7 @@ def render_overview_figure(
     out_path: str | Path,
 ) -> None:
     """Spatial layout for exactly a 2x2 quadrant grid (not a generic N x M
-    layout -- see CLAUDE.md): a big display of the whole raw micrograph in
+    layout -- see METHODOLOGY.md): a big display of the whole raw micrograph in
     the center, each quadrant's rose+tortuosity+curvature cluster in the
     figure corner matching that quadrant's actual position in the source
     image, and the whole image's *own* rose+tortuosity+curvature cluster

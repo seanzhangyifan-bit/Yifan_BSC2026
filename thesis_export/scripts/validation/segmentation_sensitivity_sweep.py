@@ -28,7 +28,7 @@ edges/junctions -- a real, precise finding about topology noise, not area).
 
 Run from the repo root:
 
-    python3 scripts/validation/segmentation_sensitivity_sweep.py [--image PATH] [--out PATH]
+    python3 scripts/validation/segmentation_sensitivity_sweep.py --image PATH [--out PATH]
 """
 
 import argparse
@@ -46,7 +46,6 @@ from src.crackgraph.io_utils import load_image
 from src.crackgraph.region import default_corner_crop
 from src.crackgraph.skeleton import skeletonize_and_prune
 
-DEFAULT_IMAGE = "/home/seanzzz/UNI/crack-project/data/raw/T5/T5-M_H95_v1_mm000001.jpg"
 OTSU_PERTURBATIONS_PCT = [-10, -5, 0, 5, 10]
 # [PLACEHOLDER] window/block size shared by both local-method comparison
 # points below -- not swept itself, tied to no calibrated length scale
@@ -137,13 +136,11 @@ def run_sweep(gray: np.ndarray) -> list[dict]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--image", default=DEFAULT_IMAGE)
+    parser.add_argument("--image", required=True, help="Path to a micrograph to run the sweep against.")
     parser.add_argument("--out", default=None)
     args = parser.parse_args()
 
-    out_path = Path(args.out) if args.out else Path(
-        "/home/seanzzz/.claude/jobs/1b81a62b/tmp/segmentation_sensitivity_data.json"
-    )
+    out_path = Path(args.out) if args.out else Path("outputs/segmentation_sensitivity_data.json")
 
     gray_full, _rgb_full = load_image(args.image)
     h, w = gray_full.shape

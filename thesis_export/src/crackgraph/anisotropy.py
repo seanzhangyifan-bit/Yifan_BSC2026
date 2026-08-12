@@ -61,7 +61,7 @@ not decoration -- it is the only thing here that can tell "two peaks 90
 deg apart" apart from "flat" (see test_anisotropy.py's documented grid
 case). Report A as [measured]; any "grid-like"/"mudcrack-like" verbal
 classification built on it is [interpreted] and must be read alongside
-the histogram, per CLAUDE.md's evidence-level discipline.
+the histogram, per METHODOLOGY.md's evidence-level discipline.
 """
 
 from dataclasses import dataclass

@@ -769,7 +769,7 @@ def generate_hexagonal_grid(
     6 edge-sharing neighbors), centered in the image.
 
     Unlike generate_grid's degree->=4 crossings, every interior vertex here
-    is degree-3 -- the topology CLAUDE.md's own reference spine (Goehring
+    is degree-3 -- the topology METHODOLOGY.md's own reference spine (Goehring
     2012) frames real mudcracks as evolving *toward* from an initial
     rectilinear pattern, and structurally the far more common real-crack
     junction valence (two cracks essentially never meet at one point
@@ -837,7 +837,7 @@ def generate_grid_with_flakes(
     """generate_grid's mesh, with circular filled disks ("flakes") stamped
     on top at `flake_centers` -- bright under the same threshold as real
     crack, exactly the delamination case flaking.py exists for (see its
-    module docstring and CLAUDE.md's flaking/delamination section): a 2D
+    module docstring and METHODOLOGY.md's flaking/delamination section): a 2D
     area of missing material, not a 1D fracture, wide enough
     (2*flake_radius) relative to `thickness` to trip flaking.py's
     width-based candidate identification. Defaults to one flake centered on
@@ -1092,7 +1092,7 @@ def generate_hierarchical_network(
     abutting it), NEVER a 4-way crossing. Deliberately replaces an
     earlier rectilinear-grid design (generate_grid's X-crossings) with
     this brick-bond layout instead, since real crack networks favor
-    T-junctions over 4-way crossings anyway (see CLAUDE.md's Goehring
+    T-junctions over 4-way crossings anyway (see METHODOLOGY.md's Goehring
     2012 reference). Course ends (both left and right) taper to a point
     -- every free tip in this generator does, courses and sub-branches
     alike; joints never taper, since both their ends land inside a T, not

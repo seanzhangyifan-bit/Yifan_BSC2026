@@ -3,7 +3,7 @@ angle measurement around each vertex.
 
 Only degree-3 nodes are classified. Degree>=4 junctions are counted (see
 GraphResult.n_junctions_deg_ge4) but never decomposed pairwise here -- the
-annulus method assumes a clean 3-way star; CLAUDE.md is explicit that
+annulus method assumes a clean 3-way star; METHODOLOGY.md is explicit that
 higher-valence junctions get no invented geometry.
 
 This module produces plain per-junction records only. It does not assemble
@@ -39,7 +39,7 @@ than an unstable quadratic (see fit_degree). The fit is not anchored at
 the vertex pixel -- that pixel sits inside the junction blob and is
 systematically displaced, so anchoring biases the direction (verified).
 The quadratic's second derivative also yields the signed curvature at the
-vertex for free -- groundwork for CLAUDE.md's second chronometer (approach
+vertex for free -- groundwork for METHODOLOGY.md's second chronometer (approach
 curvature).
 
 Curvature sign convention: kappa = (r'c'' - c'r'') / (r'^2 + c'^2)^(3/2)
@@ -362,7 +362,7 @@ def classify_junctions(
     Every degree-3 node gets exactly one JunctionClassification record --
     if its geometry can't be measured (too short an edge, missing data),
     it gets label="insufficient_data" with a failure_reason, never silently
-    dropped, per CLAUDE.md's "surface the gap, don't fill it" discipline.
+    dropped, per METHODOLOGY.md's "surface the gap, don't fill it" discipline.
 
     `medial_radius`, if supplied (see skeleton.py's SkeletonResult), is the
     distance-transform half-width at every mask pixel. At each vertex, the

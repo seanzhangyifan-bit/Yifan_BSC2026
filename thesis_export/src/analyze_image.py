@@ -448,7 +448,7 @@ def main():
     print()
     print("-- Edge geometry: length/width/area per atomic edge --")
     print(
-        "(width here is physical crack width in px -- CLAUDE.md's third chronometer; "
+        "(width here is physical crack width in px -- METHODOLOGY.md's third chronometer; "
         "NOT the poset antichain width `w` from stage 6, a different quantity)"
     )
     em = edge_metrics_result
@@ -589,7 +589,7 @@ def main():
     n_agree, n_disagree, n_unresolved = corner_agreement_counts(corner_cross_check)
     print(
         f"Agree: {n_agree}, disagree: {n_disagree}, unresolved: {n_unresolved} "
-        f"(of {len(corner_cross_check)})    [interpreted -- a validation signal per CLAUDE.md's "
+        f"(of {len(corner_cross_check)})    [interpreted -- a validation signal per METHODOLOGY.md's "
         "independent-chronometer philosophy, not a tiebreaker]"
     )
     for cc in corner_cross_check:
@@ -647,7 +647,7 @@ def main():
     print(
         f"Nontrivial cycles (strongly-connected clusters, size > 1): "
         f"{len(precedence_result.nontrivial_sccs)}    "
-        "[measured -- reported per CLAUDE.md, NOT deleted or force-resolved this pass]"
+        "[measured -- reported per METHODOLOGY.md, NOT deleted or force-resolved this pass]"
     )
     for scc in precedence_result.nontrivial_sccs:
         print(f"  cluster of {len(scc)} atomic edges: paths {sorted(scc)}")

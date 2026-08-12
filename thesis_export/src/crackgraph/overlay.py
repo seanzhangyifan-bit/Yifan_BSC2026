@@ -494,7 +494,7 @@ def render_precedence_overlay(
 
     Per-EDGE (not per merged-crack) generation coloring only: each atomic
     skeleton segment (path_index) is colored on its own by
-    precedence_result.generation, since CLAUDE.md's "atoms: arcs, not whole
+    precedence_result.generation, since METHODOLOGY.md's "atoms: arcs, not whole
     cracks" means two collinear segments straddling an uncollapsed junction
     may legitimately end up different colors -- that is meant to be
     visible, not smoothed into one crack's color. Segments with no

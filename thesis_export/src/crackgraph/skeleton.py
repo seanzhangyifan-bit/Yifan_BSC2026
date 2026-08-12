@@ -105,7 +105,7 @@ CORR_THRESHOLD = 0.99
 # Minimum branch length (px) for the correlation test to be meaningful at
 # all; shorter branches don't have enough points for a Pearson correlation
 # to mean anything, so they're never flagged by this criterion -- emit no
-# constraint rather than guess, per CLAUDE.md's near-120-degree-junction
+# constraint rather than guess, per METHODOLOGY.md's near-120-degree-junction
 # precedent. 🔴 assumed — see CALIBRATION.md.
 MIN_LEN_FOR_CORR_PX = 4
 
@@ -199,7 +199,7 @@ def skeletonize_and_prune(
     # Local crack half-width at every mask pixel -- used downstream (stage
     # 4, junctions.py) to keep the annulus fit band outside the junction
     # blob (which can be wider than a fixed inner-radius placeholder), and
-    # groundwork for CLAUDE.md's width chronometer (post-crack drying
+    # groundwork for METHODOLOGY.md's width chronometer (post-crack drying
     # shrinkage: earlier cracks tend wider).
     medial_radius = distance_transform_edt(mask_clean)
 

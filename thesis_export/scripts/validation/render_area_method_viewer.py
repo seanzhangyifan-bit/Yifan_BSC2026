@@ -186,7 +186,7 @@ def main() -> None:
     parser.add_argument("--out", default=None, help="Output JSON path")
     args = parser.parse_args()
 
-    out_path = Path(args.out) if args.out else Path("/home/seanzzz/.claude/jobs/1b81a62b/tmp/area_method_viewer_data.json")
+    out_path = Path(args.out) if args.out else Path("outputs/area_method_viewer_data.json")
     gray = _load_image(args.image)
     data = build_overlays(gray)
 

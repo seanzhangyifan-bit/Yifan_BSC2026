@@ -11,7 +11,7 @@ recorded in this file's own commit message), not predicted in advance --
 several cases turned up genuine, sometimes surprising findings (case 6's
 diagonal-adjacency merging, case 9's exact one-sub-branch loss), which this
 file locks in as regression coverage, consistent with this project's
-"surface the gap, don't fill it" discipline (CLAUDE.md).
+"surface the gap, don't fill it" discipline (METHODOLOGY.md).
 """
 
 import networkx as nx

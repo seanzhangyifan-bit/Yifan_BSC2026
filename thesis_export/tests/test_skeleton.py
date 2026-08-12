@@ -56,7 +56,7 @@ def test_flat_noisy_width_is_not_flagged():
 
 def test_short_branch_is_never_flagged_regardless_of_shape():
     # A perfect ramp, but shorter than MIN_LEN_FOR_CORR_PX -- no data, no
-    # constraint, per CLAUDE.md's near-120-deg-junction precedent.
+    # constraint, per METHODOLOGY.md's near-120-deg-junction precedent.
     widths = np.array([2.0, 40.0])
     assert is_corner_tracing_artifact(widths, corr_threshold=0.99, min_len_px=4) is False
 

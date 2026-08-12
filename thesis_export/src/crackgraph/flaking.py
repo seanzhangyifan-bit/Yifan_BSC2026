@@ -281,7 +281,7 @@ def cut_adjacent_path_indices(
     based on junction type/angle classification -- topology right at a cut
     can be genuinely irregular, so classifying it first and trusting that
     classification would be asking the least reliable part of the pipeline
-    to police itself. See flaking.py module docstring and CLAUDE.md's
+    to police itself. See flaking.py module docstring and METHODOLOGY.md's
     "emit no constraint rather than a low-confidence guess" principle.
 
     The buffer mask is built via distance_transform_edt thresholded at

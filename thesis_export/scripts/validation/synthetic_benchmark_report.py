@@ -8,7 +8,7 @@ MEASURED values next to each case's expected/ground-truth value, instead of
 step 1's closed-form-only comparison. Every tolerance used here is
 duplicated (with a cross-reference comment) from the matching pytest
 constant in tests/test_synthetic_benchmark_pipeline.py, never imported --
-this project's stated gallery/test convention (CLAUDE.md).
+this project's stated gallery/test convention (METHODOLOGY.md).
 
 Case 5 (crescent tiles) only runs `binarize` -- a filled 2D shape has no
 crack network to skeletonize. Cases 7-9 (degradation passes) show clean vs.

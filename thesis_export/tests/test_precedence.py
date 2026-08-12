@@ -80,7 +80,7 @@ def test_compute_generations_simple_chain_no_cycle():
 
 def test_compute_generations_three_cycle_leaves_generation_undetermined():
     # 0 -> 1 -> 2 -> 0: a contradictory precedence loop (exactly the
-    # "genuinely near-simultaneous or misread junction" case CLAUDE.md
+    # "genuinely near-simultaneous or misread junction" case METHODOLOGY.md
     # anticipates) -- must be reported, not silently broken or resolved.
     graph = nx.DiGraph()
     graph.add_edge(0, 1)

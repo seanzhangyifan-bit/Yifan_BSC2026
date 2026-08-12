@@ -5,7 +5,7 @@
 # guarantee that other versions won't work.
 #
 # Scope verified directly (grepped every import across src/, scripts/, tests/ in this export,
-# not just carried over from memory): sknw is discussed in CLAUDE.md as a candidate library but
+# not just carried over from memory): sknw is discussed in METHODOLOGY.md as a candidate library but
 # is not actually imported anywhere in this codebase, so it is deliberately left out below.
 
 numpy==2.2.6
@@ -20,3 +20,6 @@ matplotlib==3.10.9
 
 # Dev-only, needed to run tests/:
 pytest==9.1.1
+
+# Only needed for the optional GUI (app.py):
+streamlit==1.61.1

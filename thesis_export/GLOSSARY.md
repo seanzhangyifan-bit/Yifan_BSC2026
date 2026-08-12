@@ -1,9 +1,9 @@
 # Glossary
 
 One line per term, no elaboration — definitions drawn from existing prose in
-[`CLAUDE.md`](CLAUDE.md) and [`README.md`](README.md), not invented here. For the
+[`METHODOLOGY.md`](METHODOLOGY.md) and [`README.md`](README.md), not invented here. For the
 reasoning behind *why* the analysis targets these concepts rather than a full
-chronology, read CLAUDE.md.
+chronology, read METHODOLOGY.md.
 
 - **Partial order / poset** — an ordering where some pairs of elements have a known
   before/after relation and others simply don't; the analysis reconstructs this, not a

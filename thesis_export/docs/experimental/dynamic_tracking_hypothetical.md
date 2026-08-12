@@ -73,7 +73,7 @@ naively expect to be worst-case.
 ## 3. The incremental-update hypothesis, reframed as graph operations
 
 The pipeline already represents a crack pattern as a planar graph: nodes (junctions/endpoints),
-edges (crack segments with a full pixel polyline each) -- see `CLAUDE.md`'s "Atoms: arcs, not
+edges (crack segments with a full pixel polyline each) -- see `METHODOLOGY.md`'s "Atoms: arcs, not
 whole cracks". The key realization from this discussion: a video-tracking scheme only ever needs
 to touch pixels at the *frontier* -- a new blob, an existing tip, an existing edge's width -- never
 the whole frame. Every already-established node/edge from the previous frame just carries forward
@@ -170,7 +170,7 @@ cumulatively over many steps.
 
 Junction/fork detection under this scheme reuses machinery this project already has, rather than
 needing anything new: the **annulus technique** already used for junction-angle measurement
-(`CLAUDE.md`, stage 4) -- sample a small ring around the current tracing point and count distinct
+(`METHODOLOGY.md`, stage 4) -- sample a small ring around the current tracing point and count distinct
 angular sectors with foreground extending outward. One sector = keep tracing single-path. Two or
 more = a real fork, and the correct behavior is to spawn a separate trace per sector, not to pick
 a single "best" one (there often isn't a single correct branch at a genuine Y-split -- there are
@@ -178,7 +178,7 @@ two, and both are real).
 
 ## 6. The epistemic point (why this matters beyond performance)
 
-This ties directly back to `CLAUDE.md`'s core framing: a single static micrograph has no external
+This ties directly back to `METHODOLOGY.md`'s core framing: a single static micrograph has no external
 timestamps, so a T-junction only certifies a *local* fact (the abutting crack arrived after the
 crack it hit, *at that point*) -- the reconstructed partial order's incompleteness is a measured
 result of that limitation, not a failure.
