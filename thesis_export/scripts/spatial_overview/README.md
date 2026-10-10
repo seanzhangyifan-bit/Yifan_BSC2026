@@ -2,7 +2,7 @@
 
 **Purpose**: a first *look* at how much crack pattern varies across one whole coating — not a
 formal, citable result. Separate from `src/analyze_image.py` (which runs the full stage 1-5
-pipeline — junctions, kinks, corner cross-check — but only on one small corner-crop region per
+pipeline — junctions, corner cross-check — but only on one small corner-crop region per
 invocation); this tier deliberately runs a lighter slice (binarize → skeletonize → graph →
 curvature → anisotropy, no junctions/ordering) over a coarse grid of sections plus the whole
 image, so you can eyeball spatial variation quickly.

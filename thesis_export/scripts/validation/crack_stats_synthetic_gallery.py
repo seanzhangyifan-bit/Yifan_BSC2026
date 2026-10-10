@@ -2,7 +2,7 @@
 specifically (stage 1-3 + flaking.py -- the modules
 scripts/export_crack_stats.py actually imports), as opposed to
 scripts/validation_gallery.py's battery, which covers stage 4
-(junction/kink/corner/curvature/anisotropy) and is not part of
+(junction/corner/curvature/anisotropy) and is not part of
 crack_stats.xlsx at all.
 
 Runs generate_grid (at several widths), generate_wavy_grid,

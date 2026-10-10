@@ -75,7 +75,7 @@ from .graph import GraphResult
 ORIENT_WINDOW_PX_PLACEHOLDER = 10.0
 # [PLACEHOLDER] chord window (arc length) on each side of each scan point,
 # used to get a smoothed tangent bearing (see compute_orientation_samples).
-# Same jitter-averaging scale reasoning as curvature.py/kinks.py; not
+# Same jitter-averaging scale reasoning as curvature.py/corners.py; not
 # derived from calibrated h/um-per-px (none exists yet).
 
 ROSE_HISTOGRAM_N_BINS = 18  # display resolution only, not a fitted parameter
@@ -157,9 +157,10 @@ def compute_orientation_samples(
     orientation stat is a feature, not a gap.
 
     Edges shorter than 2*window_px fall back to a single endpoint-to
-    -endpoint chord sample (weight = full arc length) -- unlike kink
-    -flagging, orientation needs every edge's contribution, not just long
-    ones, so short edges are not simply dropped.
+    -endpoint chord sample (weight = full arc length) -- unlike a
+    threshold-based corner flag, orientation needs every edge's
+    contribution, not just long ones, so short edges are not simply
+    dropped.
 
     A sample is skipped only when no stable direction exists at all (a
     zero-length chord, or an exact 180-deg reversal where the two unit

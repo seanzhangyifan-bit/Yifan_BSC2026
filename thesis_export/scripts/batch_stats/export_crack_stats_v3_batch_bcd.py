@@ -1,23 +1,18 @@
 """One-off crack_stats_v3 run over three specific thesis batches (B/C/D),
 not the full default dataset scripts/export_crack_stats_v3.py's own main()
-covers. See docs/crack_stats_v3_status.md's "Batch B/C/D run" section for
-how this exact 19-file selection was resolved (two of the three groups'
-names don't map onto filenames the obvious way -- both were confirmed
-directly with the user rather than assumed).
+covers.
 
 Batch B -- T5 gap-height variation, PTFE (8 files, characterization2_ptfe/):
     T5-PTFE_H50/H95/H145/H190, each v1/v2.
 Batch C -- T5 dew-point/humidity variation, membrane (5 files,
     humidity_loading/): 0RH_NR212, 23RH_NR212 (v1/v2 each), 75RH_NR212_v1
-    only -- 75RH_NR212_v2 is excluded, user-flagged "weird" in a prior
-    session (see memory crack-stats-batch-exclusions.md).
+    only -- 75RH_NR212_v2 is excluded (see memory crack-stats-batch-exclusions.md).
 Batch D -- T2/T3/T4, membrane, low-gap-height variant (6 files): T2-M_H90_v1/v2,
     T3-M_H95_v1/v2, T4-M_H95_v1/v2. T2-M_H90 comes from "Pt Kat Characterization 2"
-    (same OneDrive source project as T3/T4's _H95 files) -- an earlier version of
-    this batch wrongly used T2-A_membran (data/raw/aquivion_t2_membran/), which
-    traces back to a different OneDrive project ("Pt Kat Aquivion T2") entirely,
-    not a low/high-height variant of the same T2 series. Corrected; see
-    docs/crack_stats_v3_status.md.
+    (same OneDrive source project as T3/T4's _H95 files) -- not
+    data/raw/aquivion_t2_membran/, which traces back to a different OneDrive
+    project ("Pt Kat Aquivion T2") entirely and is not a gap-height variant of
+    the same T2 series.
 
 Usage:
     python3 -m scripts.batch_stats.export_crack_stats_v3_batch_bcd [--out outputs/crack_stats_v3_batch_bcd.xlsx]

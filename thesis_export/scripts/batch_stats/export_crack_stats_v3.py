@@ -1,8 +1,8 @@
 """crack_stats_v3: a simplified, single-pass variant of
 scripts/export_crack_stats.py's flaking exclusion. Does NOT modify or
 replace that script -- both pipelines coexist, produce separate outputs,
-and are independently runnable. See docs/crack_stats_v3_status.md for the
-full methodology writeup and rationale.
+and are independently runnable. See docs/batch_stats/crack_stats_schema.md
+section 10 for the full methodology writeup and rationale.
 
 v1 (export_crack_stats.py) excludes a flaked/delaminated region by
 physically subtracting it from the mask and re-skeletonizing a SECOND
@@ -110,7 +110,7 @@ def compute_row(image_path: Path, *, cache_dir: Path | None = None) -> dict:
     # therefore re-despeckled after the flake is carved out), this value
     # is not re-cleaned post-subtraction -- v1 and v3 area numbers on
     # flaked images are not expected to be bit-identical even given the
-    # same source image. See docs/crack_stats_v3_status.md.
+    # same source image. See docs/batch_stats/crack_stats_schema.md section 10.
     crack_area_px2 = float(flaking_result.mask_corrected.sum())
     total_length_px = float(summary.loc[length_ok_mask, "branch_distance"].sum())
     n_edges_for_length = int(length_ok_mask.sum())
@@ -257,7 +257,7 @@ def main():
             "pruned-branch records, stats.json, overlay.png) here -- see cache_io.py. Use a "
             "directory distinct from any v1/v2 cache dir: this pipeline's mask_corrected.npz "
             "does not correspond to what was actually skeletonized (see "
-            "docs/crack_stats_v3_status.md). Off by default."
+            "docs/batch_stats/crack_stats_schema.md section 10). Off by default."
         ),
     )
     args = p.parse_args()

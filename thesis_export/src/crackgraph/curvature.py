@@ -7,10 +7,11 @@ junctions.py measures a *signed* curvature at a single point (the vertex,
 s=0) on one arm, as a byproduct of T/Y classification. This module instead
 scans the *whole* edge and reports an *unsigned* curvature profile plus a
 scale-invariant tortuosity, using the same chord-pair-turn-angle geometry
-as kinks.py's scan (see _chord_scan.py) but run continuously rather than
-thresholded/flagged: kinks.py asks "is there a sharp corner here" (evidence
-of two fused cracks); this module asks "how much does this one edge bend,
-overall and locally".
+as corners.py's wall-corner scan (see _chord_scan.py, the shared
+implementation this module and anisotropy.py both call into) but run
+continuously rather than thresholded/flagged: a threshold-based scan only
+asks "is there a sharp corner here"; this module asks "how much does this
+one edge bend, overall and locally".
 
 Two numbers are reported per edge because they catch different things: a
 long smooth bend and several small sharp wiggles can have similar
@@ -34,8 +35,9 @@ exists (fitting a circle through three points -- the back/current/forward
 triple -- and taking its radius, i.e. Menger curvature); the two agree
 exactly on a true circle (which is all the synthetic ground truth below
 can distinguish) but would generally disagree on a non-circular bend. The
-turning-angle method was chosen here specifically to reuse the scan
-already implemented in kinks.py, not for a documented accuracy advantage
+turning-angle method was chosen here specifically to reuse the same
+chord-pair scan already implemented for corners.py's wall-corner
+detection (see _chord_scan.py), not for a documented accuracy advantage
 over the circle-fit alternative.
 
 Known limitation: for a path of *constant* curvature (a true circular
@@ -66,7 +68,7 @@ from .graph import GraphResult
 
 CURVATURE_WINDOW_PX_PLACEHOLDER = 10.0
 # [PLACEHOLDER] chord window (arc length) on each side of each scan point.
-# Same jitter-averaging scale reasoning as kinks.py's KINK_WINDOW_PX_PLACEHOLDER
+# Same jitter-averaging scale reasoning as corners.py's CORNER_WINDOW_PX
 # and junctions.py's annulus radii; not derived from calibrated h/um-per-px
 # (none exists yet, so this is still a pixel-space placeholder, not a
 # um/h-anchored value). scripts/curvature_window_sweep.py's minimax sweep
@@ -140,9 +142,10 @@ def compute_edge_curvature(
     Tortuosity (arc_length / chord_length) is computed for every edge with
     a non-degenerate chord, independent of window_px -- even a 2-point edge
     has a tortuosity. The windowed curvature profile additionally requires
-    at least 2*window_px of arc length (same requirement as kinks.py's
-    scan); shorter edges get tortuosity but curvature_profile_px_inv=None,
-    which is not a failure (ok=True) -- just not enough edge to profile.
+    at least 2*window_px of arc length (same requirement as corners.py's
+    chord-pair scan); shorter edges get tortuosity but
+    curvature_profile_px_inv=None, which is not a failure (ok=True) -- just
+    not enough edge to profile.
 
     Per profile point: incoming/outgoing chords over window_px on each
     side (via _chord_scan.chord_pair_at), turn angle = arccos(dot/norms)
@@ -154,9 +157,9 @@ def compute_edge_curvature(
     not the full 2w between the two sampled points. kappa is therefore
     turn_rad / (actual_span / 2), using the real searchsorted span (not
     an assumed 2*window_px) so the calibration sweep measures honestly.
-    Every valid interior point is included -- unlike kinks.py, there is no
-    threshold and no non-max suppression, because the goal here is a
-    continuous profile, not discrete flagged events.
+    Every valid interior point is included -- unlike a threshold-based
+    corner scan, there is no threshold and no non-max suppression, because
+    the goal here is a continuous profile, not discrete flagged events.
     """
     summary = graph_result.summary
     edges: list[EdgeCurvature] = []

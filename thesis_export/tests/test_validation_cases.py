@@ -2,17 +2,15 @@
 ValidationCaseResult building) in validation_cases.py -- not a re-assertion
 of the underlying measurement tolerances, which already have their own
 dedicated coverage in test_junction_angle.py/test_corners.py/
-test_curvature.py/test_kinks.py/test_anisotropy.py. Runs a representative
-case per method end-to-end (real synthetic image -> real pipeline) and
-checks the wiring produced a sane, passing result on each one's clean/
-default parameters.
+test_curvature.py/test_anisotropy.py. Runs a representative case per method
+end-to-end (real synthetic image -> real pipeline) and checks the wiring
+produced a sane, passing result on each one's clean/default parameters.
 """
 
 from src.crackgraph.validation_cases import (
     ALL_CASES,
     case_anisotropy_aligned,
     case_curved_t_junction_r30_corner_limitation,
-    case_kink_60deg,
     case_t_junction_90,
 )
 
@@ -29,13 +27,6 @@ def test_t_junction_90_case_passes(tmp_path):
     assert result.passed is True
     assert (tmp_path / result.image_relpath).exists()
     assert len(result.rows) > 0
-
-
-def test_kink_60deg_case_passes(tmp_path):
-    result = case_kink_60deg(tmp_path)
-    assert result.method == "kink"
-    assert result.passed is True
-    assert (tmp_path / result.image_relpath).exists()
 
 
 def test_anisotropy_aligned_case_passes(tmp_path):

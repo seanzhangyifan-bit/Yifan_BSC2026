@@ -31,7 +31,6 @@ from .corners import CornerCrossCheck
 from .curvature import CurvatureScanResult, reliable_tortuosities
 from .graph import GraphResult
 from .junctions import JunctionAnalysisResult
-from .kinks import KinkScanResult
 from .region import Region
 from .skeleton import SkeletonResult
 from .summary_plots import render_curvature_histogram, render_orientation_rose
@@ -105,11 +104,6 @@ COLUMN_HEADERS: list[str] = [
     "n_junctions_ambiguous",
     "n_junctions_insufficient_data",
     "n_junctions_deg_ge4_unclassified",
-    # kinks
-    "kink_window_px_PLACEHOLDER",
-    "kink_min_turn_deg_PLACEHOLDER",
-    "n_kinks_flagged",
-    "n_edges_scanned_kinks",
     # corner cross-check
     "n_corner_checks_total",
     "n_corner_agree",
@@ -234,7 +228,6 @@ def append_chunk_to_workbook(
     curvature_result: CurvatureScanResult,
     anisotropy_result: AnisotropyResult,
     junction_result: JunctionAnalysisResult,
-    kink_result: KinkScanResult,
     corner_cross_check: list[CornerCrossCheck],
     overlay_png_path: Path,
     out_dir: Path,
@@ -332,10 +325,6 @@ def append_chunk_to_workbook(
         junction_result.n_ambiguous,
         junction_result.n_insufficient_data,
         junction_result.n_deg_ge4_unclassified,
-        kink_result.window_px,
-        kink_result.min_turn_deg,
-        len(kink_result.kinks),
-        kink_result.n_edges_scanned,
         len(corner_cross_check),
         n_agree,
         n_disagree,

@@ -315,8 +315,10 @@ def generate_kinked_line(
 ) -> np.ndarray:
     """Grayscale image of a single bent line: two straight arms meeting at
     a known interior corner. No third crack, so the corner is a degree-2
-    skeleton point (NOT a junction node) -- exactly the fused-two-cracks
-    case the kink scan must flag. `turn_deg` is the direction change
+    skeleton point (NOT a junction node) -- a sharp local bend with a known
+    closed-form turn angle, used by test_curvature.py to check that the
+    curvature scan concentrates its signal at that one point rather than
+    smearing it across the edge. `turn_deg` is the direction change
     experienced when traveling through the corner (0 = straight line).
     """
     img = np.full((size, size), bg_value, dtype=np.float64)

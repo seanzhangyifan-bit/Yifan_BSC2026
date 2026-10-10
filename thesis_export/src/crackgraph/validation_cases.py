@@ -29,13 +29,11 @@ from .corners import cross_check_junctions, find_background_contours
 from .curvature import compute_edge_curvature
 from .graph import extract_graph
 from .junctions import classify_junctions
-from .kinks import find_kinks
 from .overlay import render_overlay
 from .skeleton import skeletonize_and_prune
 from .summary_plots import render_orientation_rose
 from .synthetic import (
     generate_curved_t_junction,
-    generate_kinked_line,
     generate_oriented_segment_field,
     generate_t_junction,
     generate_y_junction,
@@ -45,8 +43,6 @@ from .synthetic import (
 ANGLE_RECOVERY_TOL_DEG = 6.0  # tests/test_junction_angle.py::ANGLE_RECOVERY_TOL_DEG
 Y_ANGLE_RECOVERY_TOL_DEG = 11.0  # tests/test_junction_angle.py::Y_ANGLE_RECOVERY_TOL_DEG
 GAP_RECOVERY_TOL_DEG = 20.0  # tests/test_corners.py::GAP_RECOVERY_TOL_DEG
-KINK_COORD_TOL_PX = 6.0  # tests/test_kinks.py::test_kink_detected_at_known_corner
-KINK_ANGLE_TOL_DEG = 12.0  # tests/test_kinks.py::test_kink_detected_at_known_corner
 STRAIGHT_TORTUOSITY_MAX = 1.02  # tests/test_curvature.py::STRAIGHT_TORTUOSITY_MAX
 STRAIGHT_MEAN_CURVATURE_MAX_PX_INV = 0.002  # tests/test_curvature.py::STRAIGHT_MEAN_CURVATURE_MAX_PX_INV
 CURVATURE_RECOVERY_REL_TOL = 0.25  # tests/test_curvature.py::CURVATURE_RECOVERY_REL_TOL
@@ -58,7 +54,7 @@ ANISOTROPY_HIGH_MIN = 0.8  # tests/test_anisotropy.py::ANISOTROPY_HIGH_MIN
 @dataclass
 class ValidationCaseResult:
     name: str
-    method: str  # "junction" | "curvature" | "kink" | "corner" | "anisotropy" -- report section grouping
+    method: str  # "junction" | "curvature" | "corner" | "anisotropy" -- report section grouping
     description: str
     image_relpath: str  # relative to the report's own directory
     rows: list[tuple[str, str, str, bool]]  # (metric, expected, measured, passed)
@@ -212,51 +208,6 @@ def case_curved_t_junction_r30_corner_limitation(out_dir: Path) -> ValidationCas
     return ValidationCaseResult(
         name, "junction",
         "Curved-host T-junction, radius=30px (severe curve) — tangent fit resolves T; corner cross-check is shown as-is, including where it disagrees.",
-        out_path.name, rows, all(r[3] for r in rows),
-    )
-
-
-# -- Kink detection cases -----------------------------------------------------
-
-
-def case_kink_60deg(out_dir: Path) -> ValidationCaseResult:
-    name = "kink_60deg"
-    gray = generate_kinked_line(turn_deg=60.0)
-    skel_res, graph_res = _run_stage123(gray)
-    kink_res = find_kinks(skel_res.skeleton, graph_res)
-    out_path = out_dir / f"{name}.png"
-    render_overlay(_to_rgb_uint8(gray), skel_res.skeleton, graph_res, out_path, kink_result=kink_res)
-
-    rows = [_row("n kinks flagged", "1", str(len(kink_res.kinks)), len(kink_res.kinks) == 1)]
-    if len(kink_res.kinks) == 1:
-        kink = kink_res.kinks[0]
-        true_corner = (60.0, 60.0)
-        coord_ok = (
-            abs(kink.coord[0] - true_corner[0]) < KINK_COORD_TOL_PX
-            and abs(kink.coord[1] - true_corner[1]) < KINK_COORD_TOL_PX
-        )
-        rows.append(_row("kink location (row, col)", f"{true_corner}", f"({kink.coord[0]:.1f}, {kink.coord[1]:.1f})", coord_ok))
-        rows.append(_row("turn angle (deg)", "60.0", f"{kink.turn_angle_deg:.1f}", _within(60.0, kink.turn_angle_deg, KINK_ANGLE_TOL_DEG)))
-
-    return ValidationCaseResult(
-        name, "kink",
-        "Single bent line, known 60° interior corner — must yield exactly one kink flag near the corner.",
-        out_path.name, rows, all(r[3] for r in rows),
-    )
-
-
-def case_straight_line_no_kink(out_dir: Path) -> ValidationCaseResult:
-    name = "straight_line_no_kink"
-    gray = generate_kinked_line(turn_deg=0.0)
-    skel_res, graph_res = _run_stage123(gray)
-    kink_res = find_kinks(skel_res.skeleton, graph_res)
-    out_path = out_dir / f"{name}.png"
-    render_overlay(_to_rgb_uint8(gray), skel_res.skeleton, graph_res, out_path, kink_result=kink_res)
-
-    rows = [_row("n kinks flagged", "0", str(len(kink_res.kinks)), len(kink_res.kinks) == 0)]
-    return ValidationCaseResult(
-        name, "kink",
-        "Perfectly straight line (negative control) — must yield zero kink flags.",
         out_path.name, rows, all(r[3] for r in rows),
     )
 
@@ -436,8 +387,6 @@ ALL_CASES = [
     case_curved_t_junction_r30_corner_limitation,
     case_y_junction_120,
     case_y_junction_ambiguous,
-    case_kink_60deg,
-    case_straight_line_no_kink,
     case_corner_crosscheck_t90,
     case_curvature_straight_line,
     case_curvature_arc,

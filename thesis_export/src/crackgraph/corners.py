@@ -114,13 +114,15 @@ def _scan_contour_for_corners(
     window_px: float,
     min_turn_deg: float,
 ) -> list[WallCorner]:
-    """Same chord-based turning-angle scan as kinks.py's find_kinks, but
+    """Chord-based turning-angle scan: walk the contour, compare the incoming
+    and outgoing chord over `window_px` at each candidate point, and flag
+    (then non-max-suppress) points where the turn exceeds `min_turn_deg` --
     restricted to points near `vertex` and recording the two wall bearings
     (not just the turn angle) at each kept corner. Contours are treated as
-    open arrays with no wraparound at the start/end seam, same
-    simplification kinks.py makes for skeleton paths -- a corner exactly at
-    a closed contour's arbitrary start/end point would be missed; accepted
-    as a rare edge case, not a correctness bug for the general case.
+    open arrays with no wraparound at the start/end seam -- a corner exactly
+    at a closed contour's arbitrary start/end point would be missed;
+    accepted as a rare edge case, not a correctness bug for the general
+    case.
     """
     d_vertex = np.linalg.norm(contour - vertex, axis=1)
     if d_vertex.min() > search_radius_px:

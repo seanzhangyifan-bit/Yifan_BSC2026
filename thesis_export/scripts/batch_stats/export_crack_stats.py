@@ -15,6 +15,7 @@ Usage:
 
 import argparse
 from pathlib import Path
+from typing import Callable
 
 import networkx as nx
 import numpy as np
@@ -154,18 +155,35 @@ def giant_component_span_px(node_coords: np.ndarray) -> float:
     return float(d.max()) if len(d) > 0 else float("nan")
 
 
-def compute_row(image_path: Path, *, cache_dir: Path | None = None) -> dict:
+#  Fixed, ordered stage labels compute_row reports through on_stage -- kept as a module-level
+# constant so callers (e.g. app.py's progress bar) can size a progress display against it
+# without having to run compute_row first.
+COMPUTE_ROW_STAGES = ["Binarizing", "Checking for flaking", "Skeletonizing", "Extracting graph", "Computing stats"]
+
+
+def compute_row(
+    image_path: Path,
+    *,
+    cache_dir: Path | None = None,
+    on_stage: Callable[[str], None] | None = None,
+) -> dict:
     """cache_dir is optional and off by default -- when set, also writes
     the six-file analysis cache plus an overlay.png into
     cache_dir/image_path.stem/ (see src/crackgraph/cache_io.py and
-    docs/crack_stats_v2_status.md), so a later session can regenerate a
-    figure or re-check a number without re-running binarize/skeletonize/
+    docs/batch_stats/crack_stats_schema.md section 9), so a figure or a
+    number can be regenerated or re-checked later without re-running binarize/skeletonize/
     prune on the full-resolution image. Existing callers that don't pass
-    cache_dir see no behavior change."""
+    cache_dir see no behavior change.
+
+    on_stage, if given, is called once per COMPUTE_ROW_STAGES entry, in order, as each
+    stage completes -- lets a caller (e.g. a GUI progress bar) show real per-stage
+    progress instead of one bump per whole image. Optional and unused by default."""
     gray, rgb = load_image(image_path)
     full_h, full_w = gray.shape
 
     binarize_result = binarize(gray)
+    if on_stage is not None:
+        on_stage("Binarizing")
 
     # Scout pass: skeletonize the raw mask only to get a width signal for
     # flaking identification. Real pass re-skeletonizes on the corrected
@@ -177,11 +195,17 @@ def compute_row(image_path: Path, *, cache_dir: Path | None = None) -> dict:
         scout_skeleton_result.skel_image,
         scout_skeleton_result.medial_radius,
     )
+    if on_stage is not None:
+        on_stage("Checking for flaking")
     if flaking_result.candidates:
         skeleton_result = skeletonize_and_prune(flaking_result.mask_corrected, source_image=gray)
     else:
         skeleton_result = scout_skeleton_result
+    if on_stage is not None:
+        on_stage("Skeletonizing")
     graph_result = extract_graph(skeleton_result.skeleton)
+    if on_stage is not None:
+        on_stage("Extracting graph")
 
     # Edges touching the exclusion cut are truncated by our own correction,
     # not by a real crack arrest -- their length/width are not real
@@ -282,6 +306,9 @@ def compute_row(image_path: Path, *, cache_dir: Path | None = None) -> dict:
         median_edge_length_um = median_edge_length_px_val * UM_PER_PX_MM_TAG
         median_edge_length_gc_um = median_edge_length_gc_px * UM_PER_PX_MM_TAG
         giant_component_span_um = giant_component_span_px_val * UM_PER_PX_MM_TAG
+
+    if on_stage is not None:
+        on_stage("Computing stats")
 
     stats_row = {
         "image_filename": image_path.name,

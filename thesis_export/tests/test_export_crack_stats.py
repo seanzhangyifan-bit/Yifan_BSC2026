@@ -5,7 +5,7 @@ median_pixelwise_width_px for why this exists alongside, not instead of,
 the older ratio-based estimate. Also covers the thesis-notation additions
 (median_edge_length_px, giant_component_nodes, giant_component_span_px)
 added for the ledge / ledge_gc / dgc statistics -- see
-docs/crack_stats_v2_status.md for what prompted them.
+docs/batch_stats/crack_stats_schema.md section 9 for what they're for.
 """
 
 import networkx as nx

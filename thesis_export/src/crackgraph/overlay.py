@@ -10,8 +10,8 @@ Two views, not one (`detail` flag), because "does this look right" and
 "audit the angle estimator" are genuinely different tasks that want
 different amounts of information on screen:
 - Default (`detail=False`): skeleton, endpoints, classification markers,
-  kink flags, corner cross-check markers (including disagreement rings --
-  that's a headline signal, not a diagnostic detail). No per-junction text
+  corner cross-check markers (including disagreement rings -- that's a
+  headline signal, not a diagnostic detail). No per-junction text
   labels -- at real junction densities (thousands per full image) a label
   per node is just visual noise, and the node_id is already in the console
   report (indexed by node_id and coordinate) for cross-referencing. This is
@@ -57,7 +57,6 @@ from matplotlib import cm
 from .corners import CornerCrossCheck
 from .graph import GraphResult
 from .junctions import JunctionAnalysisResult
-from .kinks import KinkScanResult
 from .precedence import PrecedenceGraphResult
 
 _LABEL_STYLE = {
@@ -111,14 +110,13 @@ def render_overlay(
     *,
     max_overlay_dim: int = 2500,
     junction_result: JunctionAnalysisResult | None = None,
-    kink_result: KinkScanResult | None = None,
     corner_cross_check: list[CornerCrossCheck] | None = None,
     detail: bool = False,
 ) -> float:
     """Save an overlay PNG. Returns the scale factor used for the display image.
 
     `detail=False` (default): clean quick-look view -- classification/
-    corner/kink markers and a short node_id label per junction, no fitted-
+    corner markers and a short node_id label per junction, no fitted-
     curve diagnostics. `detail=True`: adds the fitted-curve/tick/terminal-
     segment layer and switches labels to the full angle-gap text -- see
     module docstring.
@@ -319,14 +317,6 @@ def render_overlay(
             )
             any_junction_marker = True
 
-    if kink_result is not None and len(kink_result.kinks) > 0:
-        kink_pts = np.array([k.coord for k in kink_result.kinks]) * scale
-        ax.scatter(
-            kink_pts[:, 1], kink_pts[:, 0], s=20, c="magenta", marker="*", zorder=6,
-            label="kink (suspected 2 cracks, not split)",
-        )
-        any_junction_marker = True
-
     ax.set_xlim(0, disp_w)
     ax.set_ylim(disp_h, 0)
     ax.axis("off")
@@ -368,8 +358,8 @@ def render_crack_stats_overlay(
     the flaking-exclusion region tinted, and cut-adjacent edges (from
     flaking.cut_adjacent_path_indices) highlighted -- i.e. exactly the
     corrections crack_stats numbers already reflect, made visible. No
-    junction/kink/corner-cross-check layer -- this whole effort is scoped
-    to stage 1-3 (see crack_stats_v2_status.md). Same downsampling
+    junction/corner-cross-check layer -- this whole effort is scoped
+    to stage 1-3 (see docs/batch_stats/crack_stats_schema.md). Same downsampling
     convention as render_overlay: only the background is resampled
     (LANCZOS for the photo, NEAREST for the boolean mask so its edges stay
     sharp rather than blurring into fractional alpha), skeleton/edge

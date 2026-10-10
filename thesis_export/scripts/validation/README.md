@@ -1,6 +1,6 @@
 # Methodology validation & QA
 
-**Purpose**: this tier's job is to *back the core pipeline's claims*, not to produce a thesis
+**Purpose**: this tier's job is to *back the per-image pipeline's claims*, not to produce a thesis
 result of its own. It answers "why this constant, not another" and "does the method recover a
 known right answer" with actual numbers, not eyeballing. See `../../CALIBRATION.md` for the
 status of every tunable constant this tier justifies.

@@ -168,7 +168,7 @@ hardest case there is."
 
 `src/crackgraph/corners.py:77` — value `45.0`
 
-> minimum turning angle (see kinks.py's identically-shaped scan) to accept a contour
+> minimum turning angle (a chord-based turning-angle scan) to accept a contour
 > point as a real wall corner rather than boundary noise. Not calibrated.
 
 Held fixed (not swept) in `scripts/corner_window_sweep.py` (`MIN_TURN_DEG = 45.0`). No
@@ -208,7 +208,7 @@ No dedicated sweep script found; used at `corners.py`'s bearing-matching step
 
 No sweep script targets this constant. Note that in both `scripts/window_sweep.py` and
 `scripts/corner_window_sweep.py`, and in essentially all synthetic tests
-(`tests/test_kinks.py`, `tests/test_junction_angle.py`, `tests/test_corners.py`), the
+(`tests/test_junction_angle.py`, `tests/test_corners.py`), the
 pipeline is invoked with `spur_px=3` (an override, not the placeholder default) — i.e.
 the sweep/test harnesses deliberately bypass this constant's default value rather than
 validating it.
@@ -223,15 +223,11 @@ validating it.
 > segmentation miss) is still one crack, not two -- left unfilled it can force the skeleton
 > to trace around it, producing a spurious small loop/branch at that exact spot.
 
-Value carried over unchanged from an earlier, informal prototype comparison script this same
-session (not committed to `src/` at the time) -- not independently derived or swept here.
-That prototype found filling had a small measured effect on one specific image (310px total
-filled image-wide, 0px within the one crop specifically inspected) -- a single data point on
-a single image, not a general claim the effect is always negligible. Added to production
-after the user pointed out small black specks were visibly surviving into the real
-skeletonize pass untouched -- i.e. this constant existed informally before it existed in
-`src/`, and this entry is the first time its provenance is written down properly rather than
-left in a throwaway script.
+Value carried over unchanged from an earlier, informal prototype comparison script -- not
+independently derived or swept here. That prototype found filling had a small measured
+effect on one specific image (310px total filled image-wide, 0px within the one crop
+specifically inspected) -- a single data point on a single image, not a general claim the
+effect is always negligible.
 
 ## CORR_THRESHOLD
 
@@ -246,7 +242,7 @@ left in a throwaway script.
 > cracks. 0.99 was chosen to prioritize never touching a real crack over catching every
 > short artifact.
 
-No dedicated sweep script (the sweep this session was done by hand, comparing four
+No dedicated sweep script (the sweep was done by hand, comparing four
 full-image renders and matched zoomed crops, not a scripted RMSE-style sweep like
 `ANNULUS_OUTER_PX_PLACEHOLDER`/`CORNER_WINDOW_PX`). The rejected alternative criterion this
 threshold replaced — "fraction of the branch above its own tip-region median width,
@@ -267,34 +263,6 @@ survive. That is why this constant is a correlation coefficient, not a fraction.
 No sweep. Chosen as a bare minimum (a correlation over 2-3 points is essentially
 unconstrained) rather than derived or measured; revisit if short branches turn out to be a
 meaningful fraction of real corner-tracing artifacts.
-
-## KINK_WINDOW_PX_PLACEHOLDER
-
-`src/crackgraph/kinks.py:27` — value `10.0`
-
-> chord window (arc length) on each side of a candidate point. Same jitter-averaging
-> scale reasoning as the annulus radii in junctions.py; not derived from calibrated
-> h/um-per-px (none exists yet).
-
-No dedicated sweep script (unlike ANNULUS_OUTER_PX_PLACEHOLDER and CORNER_WINDOW_PX, each
-of which has its own sweep script). Only exercised via `tests/test_kinks.py`'s
-correctness tests, which check detection behavior, not this specific tolerance value.
-
-## KINK_TURN_DEG_PLACEHOLDER
-
-`src/crackgraph/kinks.py:32` — value `45.0`
-
-> minimum direction change to flag. Must exceed what smooth crack curvature plausibly
-> produces over ~2*window px, so that a flag means "probably two distinct cracks", not
-> "curved crack". Not calibrated; revisit once measured turn-angle histograms exist for
-> real images.
-
-No `scripts/*sweep*.py` references this constant. `tests/test_kinks.py`'s
-`test_kink_detected_at_known_corner` uses a `turn_deg=60.0` synthetic and asserts
-`abs(kink.turn_angle_deg - 60.0) < 12.0`, with the comment: "60-deg turn at the image
-center. Skeletonization rounds the apex over ~the line thickness, so the measured turn
-reads a bit under the drawn 60 deg -- tolerance reflects that, it's not estimator slack."
-This is a correctness check, not a calibration sweep of this constant itself.
 
 ## CORNER_TO_TANGENT_BEARING_TOL_DEG
 

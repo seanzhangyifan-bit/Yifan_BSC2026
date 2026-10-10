@@ -16,7 +16,6 @@ from src.crackgraph.corners import cross_check_junctions, find_background_contou
 from src.crackgraph.curvature import compute_edge_curvature
 from src.crackgraph.graph import extract_graph
 from src.crackgraph.junctions import classify_junctions
-from src.crackgraph.kinks import find_kinks
 from src.crackgraph.overlay import render_overlay
 from src.crackgraph.skeleton import skeletonize_and_prune
 from src.crackgraph.synthetic import generate_t_junction
@@ -35,7 +34,6 @@ def _run_full_pipeline(gray):
     curvature_result = compute_edge_curvature(skeleton_result.skeleton, graph_result)
     anisotropy_result = compute_anisotropy(skeleton_result.skeleton, graph_result)
     junction_result = classify_junctions(skeleton_result.skeleton, graph_result, medial_radius=skeleton_result.medial_radius)
-    kink_result = find_kinks(skeleton_result.skeleton, graph_result)
     background_contours = find_background_contours(skeleton_result.mask_clean)
     corner_cross_check = cross_check_junctions(
         junction_result,
@@ -51,7 +49,6 @@ def _run_full_pipeline(gray):
         "curvature_result": curvature_result,
         "anisotropy_result": anisotropy_result,
         "junction_result": junction_result,
-        "kink_result": kink_result,
         "corner_cross_check": corner_cross_check,
     }
 
@@ -69,7 +66,6 @@ def _append(tmp_path, xlsx_path, image_stem, results, gray, region_desc="test re
         overlay_path,
         max_overlay_dim=2500,
         junction_result=results["junction_result"],
-        kink_result=results["kink_result"],
         corner_cross_check=results["corner_cross_check"],
         detail=False,
     )
@@ -111,7 +107,6 @@ def test_data_row_matches_source_dataclasses(tmp_path):
     assert row["n_edges"] == results["graph_result"].n_edges
     assert row["anisotropy_index_0to1"] == pytest.approx(results["anisotropy_result"].anisotropy_index)
     assert row["n_junctions_T"] == results["junction_result"].n_t
-    assert row["n_kinks_flagged"] == len(results["kink_result"].kinks)
 
 
 def test_second_chunk_of_same_image_appends_a_row(tmp_path):

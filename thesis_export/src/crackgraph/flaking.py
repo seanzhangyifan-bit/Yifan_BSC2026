@@ -325,7 +325,7 @@ def flake_touching_path_indices(
     alongside cut_adjacent_path_indices, not instead of it -- v1
     (scripts/export_crack_stats.py) keeps using the buffer version
     unchanged; v3 (scripts/export_crack_stats_v3.py) uses this one. See
-    docs/crack_stats_v3_status.md for why v3 needs no buffer at all: it
+    docs/batch_stats/crack_stats_schema.md section 10 for why v3 needs no buffer at all: it
     never re-skeletonizes on a corrected mask, so excluded_mask itself (not
     a margin around it) is the only region whose skeleton pixels are
     known to be flaking noise rather than real crack.
