@@ -69,6 +69,8 @@ from scipy.ndimage import distance_transform_edt
 from skimage.measure import label, regionprops
 from skimage.morphology import binary_dilation, disk
 
+from .graph import path_pixel_indices
+
 # How many multiples of this image's own reference crack width a pixel's
 # local width must exceed to be flagged as a candidate-blob pixel. Chosen
 # to comfortably clear normal crack-width variance (irregular walls,
@@ -301,13 +303,10 @@ def cut_adjacent_path_indices(
     buffer_px = buffer_width_multiplier * reference_width_px
     buffer_px_int = max(1, int(np.ceil(buffer_px)))
     buffer_mask = distance_transform_edt(~excluded_mask) <= buffer_px_int
-    h, w = excluded_mask.shape
 
     flagged = set()
     for path_index in graph_result.summary.index:
-        coords = skeleton.path_coordinates(int(path_index))
-        rr = np.clip(np.round(coords[:, 0]).astype(int), 0, h - 1)
-        cc = np.clip(np.round(coords[:, 1]).astype(int), 0, w - 1)
+        rr, cc = path_pixel_indices(skeleton.path_coordinates(int(path_index)), excluded_mask.shape)
         if buffer_mask[rr, cc].any():
             flagged.add(int(path_index))
 
@@ -339,12 +338,9 @@ def flake_touching_path_indices(
     if not excluded_mask.any() or len(graph_result.summary) == 0:
         return set()
 
-    h, w = excluded_mask.shape
     flagged = set()
     for path_index in graph_result.summary.index:
-        coords = skeleton.path_coordinates(int(path_index))
-        rr = np.clip(np.round(coords[:, 0]).astype(int), 0, h - 1)
-        cc = np.clip(np.round(coords[:, 1]).astype(int), 0, w - 1)
+        rr, cc = path_pixel_indices(skeleton.path_coordinates(int(path_index)), excluded_mask.shape)
         if excluded_mask[rr, cc].any():
             flagged.add(int(path_index))
 

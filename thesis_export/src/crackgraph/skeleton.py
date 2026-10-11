@@ -77,6 +77,8 @@ import skan
 from scipy.ndimage import distance_transform_edt
 from skimage.morphology import remove_small_holes, remove_small_objects, skeletonize
 
+from .graph import path_pixel_indices
+
 SPUR_PX_PLACEHOLDER = 15  # 🔴 assumed — see CALIBRATION.md
 
 # Area (px^2) below which a fully-enclosed background hole inside the
@@ -157,8 +159,7 @@ def _tip_ordered_width_profile(
     coords = skel.path_coordinates(int(path_index))
     if skel.degrees[int(node_id_dst)] == 1:
         coords = coords[::-1]
-    rr = np.clip(np.round(coords[:, 0]).astype(int), 0, medial_radius.shape[0] - 1)
-    cc = np.clip(np.round(coords[:, 1]).astype(int), 0, medial_radius.shape[1] - 1)
+    rr, cc = path_pixel_indices(coords, medial_radius.shape)
     return 2.0 * medial_radius[rr, cc]
 
 

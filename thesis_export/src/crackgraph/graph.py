@@ -25,6 +25,16 @@ class GraphResult:
     summary: pd.DataFrame  # full skan.summarize() table, kept for stage 4 reuse
 
 
+def path_pixel_indices(coords: np.ndarray, shape: tuple[int, int]) -> tuple[np.ndarray, np.ndarray]:
+    """Round a skeleton path's (row, col) coordinates to integer pixel
+    indices, clipped to stay inside an image of the given shape -- so a path
+    touching the image border can't index out of bounds."""
+    h, w = shape
+    rr = np.clip(np.round(coords[:, 0]).astype(int), 0, h - 1)
+    cc = np.clip(np.round(coords[:, 1]).astype(int), 0, w - 1)
+    return rr, cc
+
+
 def extract_graph(skel: skan.Skeleton) -> GraphResult:
     summary = skan.summarize(skel, separator="_")
 

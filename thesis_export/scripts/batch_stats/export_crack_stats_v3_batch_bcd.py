@@ -23,7 +23,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from scripts.export_crack_stats_v3 import compute_row
+from scripts.batch_stats.export_crack_stats_v3 import compute_row
 
 BATCH_B_T5_GAP_HEIGHT_PTFE = [
     "data/raw/characterization2_ptfe/T5-PTFE_H50_v1_mm000001.jpg",

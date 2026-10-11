@@ -20,14 +20,13 @@ from typing import Callable
 import networkx as nx
 import numpy as np
 import pandas as pd
-from scipy.ndimage import distance_transform_edt
 from scipy.spatial import ConvexHull
 from scipy.spatial.distance import pdist
 
 from src.crackgraph.binarize import binarize
 from src.crackgraph.cache_io import save_analysis_cache
 from src.crackgraph.flaking import cut_adjacent_path_indices, exclude_flaking_regions
-from src.crackgraph.graph import extract_graph
+from src.crackgraph.graph import extract_graph, path_pixel_indices
 from src.crackgraph.io_utils import load_image
 from src.crackgraph.overlay import render_crack_stats_overlay
 from src.crackgraph.skeleton import skeletonize_and_prune
@@ -81,14 +80,11 @@ def median_pixelwise_width_px(skel, graph_result, cut_adjacent: set[int], medial
     single summary number around. [interpreted] -- a stated aggregation over [measured]
     per-pixel distance-transform values.
     """
-    h, w = medial_radius.shape
     widths = []
     for path_index in graph_result.summary.index:
         if path_index in cut_adjacent:
             continue
-        coords = skel.path_coordinates(int(path_index))
-        rr = np.clip(np.round(coords[:, 0]).astype(int), 0, h - 1)
-        cc = np.clip(np.round(coords[:, 1]).astype(int), 0, w - 1)
+        rr, cc = path_pixel_indices(skel.path_coordinates(int(path_index)), medial_radius.shape)
         widths.append(2.0 * medial_radius[rr, cc])
     if not widths:
         return float("nan")
@@ -178,12 +174,12 @@ def compute_row(
     on_stage, if given, is called once per COMPUTE_ROW_STAGES entry, in order, as each
     stage completes -- lets a caller (e.g. a GUI progress bar) show real per-stage
     progress instead of one bump per whole image. Optional and unused by default."""
+    report = on_stage or (lambda _stage: None)
     gray, rgb = load_image(image_path)
     full_h, full_w = gray.shape
 
     binarize_result = binarize(gray)
-    if on_stage is not None:
-        on_stage("Binarizing")
+    report("Binarizing")
 
     # Scout pass: skeletonize the raw mask only to get a width signal for
     # flaking identification. Real pass re-skeletonizes on the corrected
@@ -195,17 +191,14 @@ def compute_row(
         scout_skeleton_result.skel_image,
         scout_skeleton_result.medial_radius,
     )
-    if on_stage is not None:
-        on_stage("Checking for flaking")
+    report("Checking for flaking")
     if flaking_result.candidates:
         skeleton_result = skeletonize_and_prune(flaking_result.mask_corrected, source_image=gray)
     else:
         skeleton_result = scout_skeleton_result
-    if on_stage is not None:
-        on_stage("Skeletonizing")
+    report("Skeletonizing")
     graph_result = extract_graph(skeleton_result.skeleton)
-    if on_stage is not None:
-        on_stage("Extracting graph")
+    report("Extracting graph")
 
     # Edges touching the exclusion cut are truncated by our own correction,
     # not by a real crack arrest -- their length/width are not real
@@ -229,11 +222,10 @@ def compute_row(
     )
 
     # True per-pixel width, as opposed to avg_width_px's area/length ratio -- see
-    # median_pixelwise_width_px's docstring. Cheap: distance_transform_edt is one
-    # vectorized call over the same mask_clean already in memory.
-    medial_radius = distance_transform_edt(skeleton_result.mask_clean)
+    # median_pixelwise_width_px's docstring. medial_radius is the distance transform of
+    # this same mask_clean, already computed by skeletonize_and_prune.
     median_width_px = median_pixelwise_width_px(
-        skeleton_result.skeleton, graph_result, cut_adjacent, medial_radius
+        skeleton_result.skeleton, graph_result, cut_adjacent, skeleton_result.medial_radius
     )
 
     # crack_area_pct divides by the WHOLE image; this divides by the area we actually have
@@ -307,8 +299,7 @@ def compute_row(
         median_edge_length_gc_um = median_edge_length_gc_px * UM_PER_PX_MM_TAG
         giant_component_span_um = giant_component_span_px_val * UM_PER_PX_MM_TAG
 
-    if on_stage is not None:
-        on_stage("Computing stats")
+    report("Computing stats")
 
     stats_row = {
         "image_filename": image_path.name,

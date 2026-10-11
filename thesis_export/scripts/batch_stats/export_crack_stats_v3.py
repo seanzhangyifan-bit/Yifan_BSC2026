@@ -45,7 +45,7 @@ from src.crackgraph.io_utils import load_image
 from src.crackgraph.overlay import render_crack_stats_overlay
 from src.crackgraph.skeleton import skeletonize_and_prune
 
-from scripts.export_crack_stats import (
+from scripts.batch_stats.export_crack_stats import (
     ADDITIONAL_IMAGES,
     CONFIRMED_SCALE_BAR_IMAGES,
     KNOWN_BAD_FRAME_SUBSTRINGS,
