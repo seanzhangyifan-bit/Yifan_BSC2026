@@ -74,7 +74,7 @@ Outputs go to `outputs/<image's folder name>/`. Files are named `<image>_<corner
 ### 4. Print the report, lines 363–730
 One section per stage, each number tagged `[measured]`, `[interpreted]` or `[PLACEHOLDER]`:
 - every option value used, plus library versions, so the run can be reproduced exactly
-- binarize threshold and sanity check
+- binarize threshold and foreground fraction
 - flaking candidates
 - pruning counts
 - node counts

@@ -1345,8 +1345,7 @@ def generate_density_gradient_field(
     requested if a zone is too crowded for these parameters to succeed --
     surfacing that gap instead of quietly under-filling the zone.
 
-    Exists to check whether binarize()'s single global Otsu threshold (and
-    its sanity_band foreground-fraction check) holds up under strong local
+    Exists to check whether binarize()'s single global Otsu threshold holds up under strong local
     density variation within one image -- the defensible version of
     "global vs. local threshold bias" for this pipeline, since Otsu being
     global-only is this project's deliberate design choice (binarize.py's

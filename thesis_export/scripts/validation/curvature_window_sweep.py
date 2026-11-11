@@ -66,7 +66,7 @@ def run_sweep():
                 rel_errors = []
                 for seed in range(n_seeds):
                     gray = generate_curved_t_junction(radius=radius, jitter_px=jitter, rng_seed=seed)
-                    b = binarize(gray, sanity_band=(0.0, 1.0))
+                    b = binarize(gray)
                     s = skeletonize_and_prune(b.mask, source_image=gray, spur_px=3)
                     g = extract_graph(s.skeleton)
                     r = compute_edge_curvature(s.skeleton, g, window_px=window)

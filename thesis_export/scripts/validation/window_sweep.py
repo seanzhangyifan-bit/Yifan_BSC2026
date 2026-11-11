@@ -88,7 +88,7 @@ def run_sweep():
                 errors = []
                 for seed in range(n_seeds):
                     gray = make(jitter, seed)
-                    b = binarize(gray, sanity_band=(0.0, 1.0))
+                    b = binarize(gray)
                     s = skeletonize_and_prune(b.mask, source_image=gray, spur_px=3)
                     g = extract_graph(s.skeleton)
                     r = classify_junctions(

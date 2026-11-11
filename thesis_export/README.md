@@ -71,7 +71,7 @@ validation levels. Each has its own folder-level README with full detail; this t
 | # | Deliverable | What it does | Validation level | Where |
 |---|---|---|---|---|
 | 1 | **Per-image pipeline** | Junction classification (T/Y), precedence-graph assembly | Synthetic ground-truth pytest suite + sweep-justified window constants + corner-cross-check agreement + real-image visual review | `src/`, run via `python3 -m src.analyze_image <image_path>` |
-| 2 | **Batch crack-stats export** | Numeric spreadsheets (crack density, width, connectivity) across many images/conditions | Two independent methodologies (v1/v2, v3) cross-validated against each other on real images; batch-level sanity-band checks | `scripts/batch_stats/` |
+| 2 | **Batch crack-stats export** | Numeric spreadsheets (crack density, width, connectivity) across many images/conditions | Two independent methodologies (v1/v2, v3) cross-validated against each other on real images | `scripts/batch_stats/` |
 | 3 | **Spatial overview & report** | First-look spatial-variation figures + one master HTML report across all analyzed images | None formal — deliberately a first look, not a citable result | `scripts/spatial_overview/` |
 | 4 | **Methodology validation & QA** | Synthetic ground-truth galleries + calibration sweeps that justify the per-image pipeline's tunable constants | This *is* the validation evidence for #1 | `scripts/validation/` |
 | 5 | **Exploratory / future work** | In-situ video-tracking hypothesis + a throwaway tracing PoC | Explicitly unvalidated, not integrated | `scripts/experimental/` |

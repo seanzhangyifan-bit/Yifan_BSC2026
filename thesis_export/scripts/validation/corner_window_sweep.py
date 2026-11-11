@@ -93,7 +93,7 @@ def run_sweep():
                 n_resolved = 0
                 for seed in range(n_seeds):
                     gray = make(jitter, seed)
-                    b = binarize(gray, sanity_band=(0.0, 1.0))
+                    b = binarize(gray)
                     s = skeletonize_and_prune(b.mask, source_image=gray, spur_px=3)
                     g = extract_graph(s.skeleton)
                     contours = find_background_contours(s.mask_clean)

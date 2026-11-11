@@ -3,7 +3,7 @@
 Extends scripts/validation/synthetic_benchmark_raw_gallery.py's case-dict/HTML pattern:
 each case now actually runs through binarize -> skeletonize_and_prune ->
 extract_graph (at the pipeline's own PRODUCTION defaults -- spur_px =
-SPUR_PX_PLACEHOLDER, sanity_band = binarize()'s own default) and reports
+SPUR_PX_PLACEHOLDER) and reports
 MEASURED values next to each case's expected/ground-truth value, instead of
 step 1's closed-form-only comparison. Every tolerance used here is
 duplicated (with a cross-reference comment) from the matching pytest
@@ -132,7 +132,6 @@ def case_tapered_line(out_dir: Path) -> dict:
                 "truncation, not a rounding artifact.",
         "rows": [
             _row("otsu_threshold (measured)", "n/a — data-driven", f"{br.threshold:.1f}"),
-            _row("sanity_ok", "True", br.sanity_ok),
             _row("full geometric length (px)", f"{length:.0f}", "—"),
             _row("bright-mask span (px, measured)", "< 90% of 200 (tolerance)", measured_span_px),
             _row("n_edges / n_endpoints (single unbroken path)", "1 / 2", f"{gr.n_edges} / {gr.n_endpoints}"),
@@ -233,20 +232,17 @@ def case_crescent(out_dir: Path) -> dict:
         "name": "crescent", "title": "5. Crescent mesh — actual skeletonization",
         "image": out_path.name,
         "desc": "Runs the real skeletonize_and_prune/extract_graph on the full 16-tile fish-scale "
-                "mesh this time, not binarize-only on one isolated tile. Two real findings: this "
-                "default tiling is dense enough to trip binarize()'s own sanity_band ceiling "
-                "(foreground fraction exceeds 15%), and every tile's skeleton fuses into ONE "
-                "connected component (the tiles genuinely touch, as designed). Reported as "
+                "mesh this time, not binarize-only on one isolated tile. Finding: every tile's "
+                "skeleton fuses into ONE connected component (the tiles genuinely touch, as designed). Reported as "
                 "observed measurements — a filled 2D tiling has no combinatorial 'expected' "
                 "skeleton topology to check against, unlike the crack-network cases.",
         "rows": [
-            _row("sanity_ok", "n/a — see foreground_fraction row", br.sanity_ok),
-            _row("foreground_fraction vs. sanity_band ceiling (0.15)", "<= 0.15", f"{br.foreground_fraction:.4f}"),
+            _row("foreground_fraction (measured, observational)", "n/a", f"{br.foreground_fraction:.4f}"),
             _row("area vs. n_tiles x per-tile area (upper bound, tiles touch)", f"<= {upper_bound_area:.0f}", measured_area),
             _row("n_components (measured, observational)", "n/a", _n_components(gr)),
             _row("n_endpoints / deg3 / edges (measured, observational)", "n/a", f"{gr.n_endpoints} / {gr.n_junctions_deg3} / {gr.n_edges}"),
         ],
-        "error": f"binarize() sanity check tripped: {br.foreground_fraction * 100:.1f}% foreground vs. 15% ceiling",
+        "error": "n/a — observational (no expected topology for a filled tiling)",
     }
 
 

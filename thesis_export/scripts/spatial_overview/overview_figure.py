@@ -54,7 +54,7 @@ def parse_args():
 
 
 def _run_pipeline_slice(gray):
-    binarize_result = binarize(gray, sanity_band=(0.01, 0.15))
+    binarize_result = binarize(gray)
     skeleton_result = skeletonize_and_prune(binarize_result.mask, source_image=gray)
     # Same flaking exclusion as every other entry point: without it, a flaked
     # patch's own interior skeleton mesh would be counted in the rose diagram

@@ -32,7 +32,7 @@ Y_ANGLE_RECOVERY_TOL_DEG = 11.0
 
 
 def _run_pipeline(gray, spur_px=3, **kwargs):
-    binarize_result = binarize(gray, sanity_band=(0.0, 1.0))
+    binarize_result = binarize(gray)
     skeleton_result = skeletonize_and_prune(binarize_result.mask, source_image=gray, spur_px=spur_px)
     graph_result = extract_graph(skeleton_result.skeleton)
     return classify_junctions(skeleton_result.skeleton, graph_result, **kwargs)
@@ -196,7 +196,7 @@ def test_medial_radius_widens_effective_inner_radius_at_thick_junction():
     # medial_radius supplied, effective_inner_radius_px must widen past
     # inner_radius_px to clear the blob.
     gray = generate_t_junction(angle_deg=90.0, thickness=15, arm_length=60.0)
-    binarize_result = binarize(gray, sanity_band=(0.0, 1.0))
+    binarize_result = binarize(gray)
     skeleton_result = skeletonize_and_prune(binarize_result.mask, source_image=gray, spur_px=3)
     graph_result = extract_graph(skeleton_result.skeleton)
 

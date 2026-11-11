@@ -81,7 +81,6 @@ def parse_args():
     p.add_argument("--corner-artifact-corr-threshold", type=float, default=CORR_THRESHOLD)
     p.add_argument("--min-object-px", type=int, default=4)
     p.add_argument("--max-overlay-dim", type=int, default=2500)
-    p.add_argument("--otsu-sanity-band", type=float, nargs=2, default=(0.01, 0.15))
     p.add_argument("--corner-frac", type=float, default=0.125)
     p.add_argument("--edge-margin-frac", type=float, default=0.02)
     p.add_argument("--annulus-inner-px", type=float, default=ANNULUS_INNER_PX_PLACEHOLDER)
@@ -209,7 +208,7 @@ def main():
         )
         stem_suffix = "corner"
 
-    binarize_result = binarize(gray, sanity_band=tuple(args.otsu_sanity_band))
+    binarize_result = binarize(gray)
 
     # Scout pass: skeletonize the raw mask only to get a width signal
     # (medial_radius) for flaking identification -- not necessarily the
@@ -374,18 +373,6 @@ def main():
     print("-- Stage 1: Binarize --")
     print(f"Threshold value:        {binarize_result.threshold:.2f}        [measured]")
     print(f"Foreground fraction:    {binarize_result.foreground_fraction * 100:.2f}%     [measured]")
-    band = binarize_result.sanity_band
-    status = "PASS" if binarize_result.sanity_ok else "FAIL"
-    print(
-        f"Sanity check:           {status} "
-        f"(expected band {band[0] * 100:.0f}-{band[1] * 100:.0f}%)   [interpreted]"
-    )
-    if not binarize_result.sanity_ok:
-        print(
-            f"[WARNING] foreground fraction {binarize_result.foreground_fraction * 100:.2f}% "
-            "is outside the expected band -- inspect the threshold/mask before trusting "
-            "downstream counts."
-        )
     print()
     print("-- Flaking/delamination exclusion (see crackgraph/flaking.py) --")
     print(

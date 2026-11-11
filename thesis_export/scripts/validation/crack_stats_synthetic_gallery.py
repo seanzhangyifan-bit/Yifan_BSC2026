@@ -48,7 +48,7 @@ def _to_rgb_uint8(gray: np.ndarray) -> np.ndarray:
 
 
 def _run_stage123(gray: np.ndarray, spur_px: float = 3.0):
-    binarize_result = binarize(gray, sanity_band=(0.0, 1.0))
+    binarize_result = binarize(gray)
     skeleton_result = skeletonize_and_prune(binarize_result.mask, source_image=gray, spur_px=spur_px)
     graph_result = extract_graph(skeleton_result.skeleton)
     return binarize_result, skeleton_result, graph_result

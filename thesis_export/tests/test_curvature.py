@@ -46,7 +46,7 @@ TORTUOSITY_RECOVERY_REL_TOL = 0.10
 
 
 def _run_curvature(gray, **kwargs):
-    binarize_result = binarize(gray, sanity_band=(0.0, 1.0))
+    binarize_result = binarize(gray)
     skeleton_result = skeletonize_and_prune(binarize_result.mask, source_image=gray, spur_px=3)
     graph_result = extract_graph(skeleton_result.skeleton)
     return compute_edge_curvature(skeleton_result.skeleton, graph_result, **kwargs)

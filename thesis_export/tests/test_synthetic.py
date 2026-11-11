@@ -12,7 +12,7 @@ from src.crackgraph.synthetic import generate_t_junction
 def test_t_junction_topology():
     gray = generate_t_junction()
 
-    binarize_result = binarize(gray, sanity_band=(0.0, 1.0))
+    binarize_result = binarize(gray)
     assert binarize_result.mask.any()
 
     skeleton_result = skeletonize_and_prune(

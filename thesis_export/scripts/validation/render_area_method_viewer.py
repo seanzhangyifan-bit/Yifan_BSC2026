@@ -86,7 +86,7 @@ def _to_data_uri(rgb: np.ndarray) -> str:
 
 
 def build_overlays(gray: np.ndarray) -> dict:
-    binarize_result = binarize(gray, sanity_band=(0.0, 1.0))
+    binarize_result = binarize(gray)
     skeleton_result = skeletonize_and_prune(binarize_result.mask, source_image=gray, spur_px=3.0)
     graph_result = extract_graph(skeleton_result.skeleton)
     mask_clean = skeleton_result.mask_clean

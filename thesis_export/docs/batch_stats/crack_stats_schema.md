@@ -262,15 +262,15 @@ can be positively cleared against the second, unconfirmed one either. If a futur
 this file turns up a filename that looks like it could be that second bad frame, its three
 `calibrated` columns should be treated as unreliable until confirmed either way.
 
-## 7. Data quality note: 23 of 39 rows fall outside the expected crack-fraction band
+## 7. Data quality note: 23 of 39 rows fall outside the old 1–15% crack-fraction band
 
-This pipeline's Otsu-threshold step has its own built-in sanity check: `crack_area_pct` is
-expected to fall roughly between 1% and 15% (a band read off a small non-PTFE sample set, not
-re-derived here). **23 of the 39 rows in this workbook fall outside that band** — a plain
-majority. That is the headline finding of this section: **the band, as currently set, does not
-generalize past the original T5/humidity-loading sample set it was tuned on** — not that 23
-images are individually suspect. Read the table below as "this sanity check needs re-tuning
-against a wider sample," not as 23 separate data-quality problems.
+The Otsu-threshold step used to carry a built-in sanity check: `crack_area_pct` was expected to
+fall roughly between 1% and 15% (a band read off a small non-PTFE sample set, never derived).
+**23 of the 39 rows in this workbook fall outside that band** — a plain majority. The band did
+not generalize past the original T5/humidity-loading sample set it was tuned on, so it was
+removed from the code on 2026-11-11 (see `CHANGELOG.md`). The table below is kept because the
+very low rows (near 0%) are still worth a look on their own; read the high rows as normal
+variation, not as data-quality problems.
 
 | `image_filename` | `source_folder` | `crack_area_pct` | `giant_component_fraction` | Read |
 |---|---|---|---|---|

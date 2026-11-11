@@ -27,7 +27,7 @@ TOL = dict(y_angle_tol_deg=15.0, t_straight_tol_deg=20.0, t_right_tol_deg=20.0)
 
 
 def _run_real_pipeline(gray, spur_px=3):
-    binarize_result = binarize(gray, sanity_band=(0.0, 1.0))
+    binarize_result = binarize(gray)
     skeleton_result = skeletonize_and_prune(binarize_result.mask, source_image=gray, spur_px=spur_px)
     graph_result = extract_graph(skeleton_result.skeleton)
     junction_result = classify_junctions(skeleton_result.skeleton, graph_result)

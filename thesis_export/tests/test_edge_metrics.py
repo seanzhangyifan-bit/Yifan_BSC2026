@@ -22,7 +22,7 @@ WIDTH_RECOVERY_TOL_PX = 2.0
 
 
 def _run(gray, spur_px=3.0, **kwargs):
-    binarize_result = binarize(gray, sanity_band=(0.0, 1.0))
+    binarize_result = binarize(gray)
     skeleton_result = skeletonize_and_prune(binarize_result.mask, source_image=gray, spur_px=spur_px)
     graph_result = extract_graph(skeleton_result.skeleton)
     result = compute_edge_metrics(
@@ -108,7 +108,7 @@ def test_area_conservation_with_pruned_fragment():
 
 def test_watershed_determinism():
     gray = generate_t_junction(angle_deg=90.0)
-    binarize_result = binarize(gray, sanity_band=(0.0, 1.0))
+    binarize_result = binarize(gray)
     skeleton_result = skeletonize_and_prune(binarize_result.mask, source_image=gray, spur_px=3.0)
     graph_result = extract_graph(skeleton_result.skeleton)
     r1 = partition_area_by_edge(

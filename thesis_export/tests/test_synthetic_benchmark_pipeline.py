@@ -1,8 +1,8 @@
 """Pipeline-integration checks for the synthetic-benchmark matrix (step 2):
 each of the 9 cases run through the REAL binarize -> skeletonize_and_prune ->
 extract_graph chain, at the pipeline's own PRODUCTION defaults (spur_px =
-SPUR_PX_PLACEHOLDER, sanity_band = binarize()'s own default) -- unlike
-test_grid_synthetic.py's `_run_stage123`, which deliberately overrides both
+SPUR_PX_PLACEHOLDER) -- unlike
+test_grid_synthetic.py's `_run_stage123`, which deliberately overrides it
 to isolate raw topology from real pruning/threshold behavior, this file's
 whole point is to exercise that real behavior, not bypass it.
 
@@ -37,7 +37,7 @@ from src.crackgraph.synthetic_degradation import apply_debris, apply_illuminatio
 
 
 def _run_stage123(gray: np.ndarray):
-    """Full stage 1-3 at PRODUCTION defaults -- no spur_px/sanity_band
+    """Full stage 1-3 at PRODUCTION defaults -- no spur_px
     override, unlike test_grid_synthetic.py's own helper of the same
     name, since testing the real default behavior is this file's point.
     """
@@ -65,7 +65,6 @@ def test_case1_tapered_line_otsu_truncates_the_dim_tip():
     img = generate_tapered_line(length=length, max_thickness=16.0, min_thickness=0.0)
     binarize_result, skeleton_result, graph_result = _run_stage123(img)
 
-    assert binarize_result.sanity_ok
     # single unbroken skeleton path -- the taper doesn't fragment.
     assert graph_result.n_edges == 1
     assert graph_result.n_endpoints == 2
@@ -120,7 +119,6 @@ def test_case3_converging_lines_merge_forms_a_real_t_junction():
     # back tips + 1 front tip), 1 junction, 3 edges, all one component.
     img = generate_converging_lines()
     binarize_result, _, graph_result = _run_stage123(img)
-    assert binarize_result.sanity_ok
     assert graph_result.n_endpoints == 3
     assert graph_result.n_junctions_deg3 == 1
     assert graph_result.n_junctions_deg_ge4 == 0
@@ -134,7 +132,6 @@ def test_case3_converging_lines_merge_forms_a_real_t_junction():
 def test_case4_hierarchical_network_25px_subbranches_survive_pruning():
     img = generate_hierarchical_network(sub_branch_length=25.0)
     binarize_result, _, graph_result = _run_stage123(img)
-    assert binarize_result.sanity_ok
     expected = hierarchical_network_topology(n_courses=3, n_bricks_per_course=3, sub_branches_per_primary=3)
     assert graph_result.n_junctions_deg_ge4 == expected["n_junctions_deg_ge4"] == 0
     assert graph_result.n_junctions_deg3 == expected["n_junctions_deg3"]
@@ -150,7 +147,6 @@ def test_case4_hierarchical_network_12px_subbranches_are_pruned_away():
     # gone, not just shortened. Measured directly: exact match.
     img = generate_hierarchical_network(sub_branch_length=12.0)
     binarize_result, _, graph_result = _run_stage123(img)
-    assert binarize_result.sanity_ok
     expected_primary_only = hierarchical_network_topology(
         n_courses=3, n_bricks_per_course=3, sub_branches_per_primary=0
     )
@@ -171,11 +167,6 @@ def test_case5_crescent_mesh_full_pipeline_measured():
     # observational measurements, not predictions.
     img = generate_crescent_scale_pattern()
     binarize_result, skeleton_result, graph_result = _run_stage123(img)
-
-    # Real finding: the default 4x4 tiling is dense enough to trip
-    # binarize()'s own sanity_band ceiling.
-    assert not binarize_result.sanity_ok
-    assert binarize_result.foreground_fraction > binarize_result.sanity_band[1]
 
     # The tiles genuinely touch (by design) -- expect one connected
     # skeleton component across the whole mesh, not 16 separate ones.
@@ -203,7 +194,6 @@ def test_case6_hexagonal_network_reproduces_known_junction_splitting():
     radius, thickness = 40.0, 5
     img = generate_hexagonal_grid(radius=radius, thickness=thickness)
     binarize_result, _, graph_result = _run_stage123(img)
-    assert binarize_result.sanity_ok
 
     ideal = hex_flower_topology(radius=radius)
     assert ideal["n_junctions_deg3"] == 12

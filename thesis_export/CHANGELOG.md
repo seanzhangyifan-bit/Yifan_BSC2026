@@ -11,6 +11,20 @@ Commit IDs link each entry to its full details in `git log`. Findings are number
 
 ## 2026-11-11
 
+### Removed: foreground-fraction sanity band in binarize
+
+**No change to results**: no measured number changes. The per-image spreadsheet loses three
+columns.
+
+`binarize()` used to flag images whose crack share fell outside 1%–15%. It was only a warning;
+no later step read it. The band was never derived, and 23 of 39 batch images fell outside it
+(see `docs/batch_stats/crack_stats_schema.md` §7), so it flagged normal variation.
+
+- **Removed**: the `sanity_band` argument and the `sanity_ok`/`sanity_band` result fields; the
+  `--otsu-sanity-band` option and PASS/FAIL line in `analyze_image`; the `binarize_sanity_ok`,
+  `binarize_sanity_band_lo` and `binarize_sanity_band_hi` spreadsheet columns.
+- **Kept**: `foreground_fraction`, still printed and still in the spreadsheet.
+
 The entries down to "Added: entry-point smoke tests" are one bug-fix pass (review findings 9,
 11, 13–19). All 174 tests pass.
 

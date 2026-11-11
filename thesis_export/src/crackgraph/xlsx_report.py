@@ -62,9 +62,6 @@ COLUMN_HEADERS: list[str] = [
     # stage 1: binarize
     "otsu_threshold_0to255",
     "foreground_fraction_0to1",
-    "binarize_sanity_ok",
-    "binarize_sanity_band_lo",
-    "binarize_sanity_band_hi",
     # stage 2: skeleton
     "skeleton_px_pre_prune",
     "skeleton_px_post_prune",
@@ -288,9 +285,6 @@ def append_chunk_to_workbook(
         edge_margin_frac,
         binarize_result.threshold,
         binarize_result.foreground_fraction,
-        binarize_result.sanity_ok,
-        binarize_result.sanity_band[0],
-        binarize_result.sanity_band[1],
         skeleton_result.n_pixels_pre_prune,
         skeleton_result.n_pixels_post_prune,
         skeleton_result.spur_px_threshold,
