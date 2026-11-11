@@ -11,6 +11,27 @@ Commit IDs link each entry to its full details in `git log`. Findings are number
 
 ## 2026-11-11
 
+### Changed: the crack-stats export no longer selects images by file name
+
+**Changes results** for the command-line export only: which images get a row. The numbers for any
+given image are unchanged, except for the `_D_mm000000` bad frame (below).
+
+`export_crack_stats.py` now gives a row to every image file (`.jpg`, `.jpeg`, `.png`, `.tif`,
+`.tiff`, `.bmp`) under `--data-dir`, in any subfolder. Choosing which images belong in a table is
+up to you: put only those in the folder, or upload them in the GUI, which never used these rules.
+
+- Removed: the `*_mm000001.jpg` pattern (`RAW_GLOB`), the extra-image list (`ADDITIONAL_IMAGES`,
+  for `23RH_PTFE_v1_mm000003.jpg`), the scale-bar skip list (`CONFIRMED_SCALE_BAR_IMAGES`, for
+  `T5-M_H190_v2_mm000001.jpg`) and the bad-frame name check (`KNOWN_BAD_FRAME_SUBSTRINGS`). Pointed
+  at the whole of `data/raw/`, the export now includes the `lu`/`ro` captures and the scale-bar
+  image too, and a `_D_mm000000` frame would get (wrong) µm values instead of empty ones.
+- `find_batch_images` → `find_images(data_dir, pattern="**/*")`.
+- `junction_tolerance_sweep.py` keeps its fixed image set through a new `--glob` option (default
+  `**/*_mm000001.jpg`). It no longer applies the two hand-listed exceptions, so a re-run covers
+  `T5-M_H190_v2_mm000001.jpg` but not `23RH_PTFE_v1_mm000003.jpg`.
+- Schema doc §2 now describes the old rules as guidance for choosing images, not as rules the
+  export applies; §6 and §7b, walkthrough page 5, the batch README and `METHODOLOGY.md` updated.
+
 ### Renamed: flaking area names use `px`
 
 **No change to results**: names and wording only.

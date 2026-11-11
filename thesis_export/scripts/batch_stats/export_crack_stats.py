@@ -14,7 +14,9 @@ Usage:
     python3 -m scripts.batch_stats.export_crack_stats [--data-dir data/raw]
         [--out outputs/crack_stats.xlsx] [--cache-dir DIR] [--scale-bars-checked]
 
---data-dir defaults to data/raw inside this folder (not bundled; for example
+Every image file under --data-dir (any subfolder) gets a row; choose what to
+analyse by what you put there, or upload files in the GUI instead. --data-dir
+defaults to data/raw inside this folder (not bundled; for example
 --data-dir ../data/raw). Pass --scale-bars-checked only if you have looked at
 every image and confirmed none carries a burned-in scale bar.
 """
@@ -38,43 +40,14 @@ from src.crackgraph.io_utils import load_image
 from src.crackgraph.overlay import render_crack_stats_overlay
 from src.crackgraph.skeleton import skeletonize_and_prune
 
-# Source: an external calibration tool (figlib/calibration.py,
-# calibration.json) that is NOT part of this repository -- this is a
-# hand-carried snapshot of that tool's output, not derived here and not
-# re-derived by eye. Valid for the "mm" (full-resolution stitched mosaic)
-# tag ONLY -- do not apply to 100x/200x/300x/500x/800x single-tile frames,
-# which have their own, different factors. If this repo ever imports that
-# tool directly, figlib.calibration.um_per_px("mm") should replace this
-# constant as the live source of truth.
+# Source: an external calibration tool that is NOT part of this repository -- this is not derived here.
+# Only applicable for (Zhang 2026)
 UM_PER_PX_MM_TAG = 100 / 164  # 0.609756... um/px
 
-# Filenames confirmed to be mistagged as "mm" but are not the standard
-# mosaic capture (would read ~2x too small if calibrated with the factor
-# above). This pattern can't actually match RAW_GLOB below (wrong suffix,
-# 000000 not 000001) but is kept here, checked explicitly, as a second,
-# independent guard rather than relying on the glob suffix alone.
-KNOWN_BAD_FRAME_SUBSTRINGS = ["_D_mm000000"]
-
-# The "*_mm000001.jpg" naming convention is NOT a reliable guarantee of "no
-# blue scale-bar overlay" -- it's just usually true. Every one of the 13
-# mm000001 files was directly viewed (bottom-right corner crop) and exactly
-# one had a burned-in blue "100.00um" bar despite matching the naming
-# pattern: T5-M_H190_v2_mm000001.jpg. It is excluded entirely below, not
-# just calibration-nulled, because it violates the actual selection
-# criterion (no scale bar), not just the calibration-scope caveat. If more
-# images are ever added to data/raw/, re-verify by eye -- don't trust the
-# 000001 suffix alone.
-CONFIRMED_SCALE_BAR_IMAGES = ["T5-M_H190_v2_mm000001.jpg"]
-
-# Sample where the default *_mm000001.jpg index is the wrong (undersized) capture --
-# this sample's actual mm000000/mm000001 pair is 4429x3322, not the standard ~7300x7600
-# every other row has. mm000002/mm000003 are the standard-sized pair; mm000002 carries
-# the blue scale bar, mm000003 doesn't (directly verified). See docs/batch_stats/crack_stats_schema.md
-# S7b.
-ADDITIONAL_IMAGES = ["humidity_loading_ptfe/23RH_PTFE_v1_mm000003.jpg"]
-
-# Both RAW_GLOB and ADDITIONAL_IMAGES are relative to --data-dir.
-RAW_GLOB = "**/*_mm000001.jpg"
+# Image files main() picks up under --data-dir (recursively). Which images to
+# analyse is the user's choice -- what they put in the folder or upload to the
+# GUI -- not something this script infers from file names.
+IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp"}
 DEFAULT_DATA_DIR = "data/raw"
 
 # Values for the scale_bar_check column. "Confirmed" is only written when the
@@ -89,28 +62,15 @@ SCALE_BAR_NOT_CHECKED = "not checked"
 COMPUTE_ROW_STAGES = ["Binarizing", "Skeletonizing", "Checking for flaking", "Extracting graph", "Computing stats"]
 
 
-def find_batch_images(data_dir: Path) -> list[Path]:
-    """Every *_mm000001.jpg under data_dir, plus whichever ADDITIONAL_IMAGES
-    exist there, minus CONFIRMED_SCALE_BAR_IMAGES. Prints a notice for each
-    skipped file. Exits with a clear message if nothing is left."""
-    found = sorted(data_dir.glob(RAW_GLOB))
-    for rel in ADDITIONAL_IMAGES:
-        path = data_dir / rel
-        if path.exists():
-            found.append(path)
-        else:
-            print(f"[skip] {rel} -- listed in ADDITIONAL_IMAGES but not found under {data_dir}")
-
-    image_paths = []
-    for path in found:
-        if path.name in CONFIRMED_SCALE_BAR_IMAGES:
-            print(f"[skip] {path.relative_to(data_dir)} -- confirmed blue scale-bar overlay, excluded")
-        else:
-            image_paths.append(path)
-
+def find_images(data_dir: Path, pattern: str = "**/*") -> list[Path]:
+    """Every image file (IMAGE_SUFFIXES) under data_dir matching `pattern`, sorted.
+    Exits with a clear message if there are none."""
+    image_paths = sorted(
+        p for p in data_dir.glob(pattern) if p.is_file() and p.suffix.lower() in IMAGE_SUFFIXES
+    )
     if not image_paths:
         raise SystemExit(
-            f"No images found: nothing matched {RAW_GLOB!r} under {data_dir}. "
+            f"No images found under {data_dir} (pattern {pattern!r}). "
             "Pass --data-dir to point at your micrograph folder."
         )
     return image_paths
@@ -323,18 +283,15 @@ def compute_row(
     )
     giant_component_span_px_val = giant_component_span_px(gc_coords)
 
-    is_bad_frame = any(s in image_path.name for s in KNOWN_BAD_FRAME_SUBSTRINGS)
-    if is_bad_frame:
-        crack_area_mm2 = avg_width_um = avg_edge_length_um = median_width_um = None
-        median_edge_length_um = median_edge_length_gc_um = giant_component_span_um = None
-    else:
-        crack_area_mm2 = crack_area_px2 * (UM_PER_PX_MM_TAG ** 2) / 1e6
-        avg_width_um = avg_width_px * UM_PER_PX_MM_TAG
-        avg_edge_length_um = avg_edge_length_px * UM_PER_PX_MM_TAG
-        median_width_um = median_width_px * UM_PER_PX_MM_TAG
-        median_edge_length_um = median_edge_length_px_val * UM_PER_PX_MM_TAG
-        median_edge_length_gc_um = median_edge_length_gc_px * UM_PER_PX_MM_TAG
-        giant_component_span_um = giant_component_span_px_val * UM_PER_PX_MM_TAG
+    # Calibrated columns assume every image uses UM_PER_PX_MM_TAG; nothing here
+    # checks the magnification. The _px columns don't depend on it.
+    crack_area_mm2 = crack_area_px2 * (UM_PER_PX_MM_TAG ** 2) / 1e6
+    avg_width_um = avg_width_px * UM_PER_PX_MM_TAG
+    avg_edge_length_um = avg_edge_length_px * UM_PER_PX_MM_TAG
+    median_width_um = median_width_px * UM_PER_PX_MM_TAG
+    median_edge_length_um = median_edge_length_px_val * UM_PER_PX_MM_TAG
+    median_edge_length_gc_um = median_edge_length_gc_px * UM_PER_PX_MM_TAG
+    giant_component_span_um = giant_component_span_px_val * UM_PER_PX_MM_TAG
 
     t_stats = time.perf_counter() - t0_stats
     t_total = time.perf_counter() - t_start
@@ -423,7 +380,7 @@ def main():
 
     repo_root = Path(__file__).resolve().parent.parent.parent
     data_dir = (repo_root / args.data_dir).resolve()
-    image_paths = find_batch_images(data_dir)
+    image_paths = find_images(data_dir)
     scale_bar_check = SCALE_BAR_CHECKED if args.scale_bars_checked else SCALE_BAR_NOT_CHECKED
     cache_dir = repo_root / args.cache_dir if args.cache_dir else None
 

@@ -73,11 +73,10 @@ A fourth, independent entry point -- a stripped-down stage 1-3 only (binarize ->
 graph extraction, no junctions/anisotropy/curvature/ordering) batch export, built for external
 consumption rather than in-repo analysis.
 
-- **`scripts/batch_stats/export_crack_stats.py`**: globs `data/raw/**/*_mm000001.jpg` plus an explicit
-  `ADDITIONAL_IMAGES` override list (for samples where the default `000001` index is wrong -- e.g.
-  an undersized non-standard capture), excludes `CONFIRMED_SCALE_BAR_IMAGES` (files matching the
-  `_mm000001` naming pattern but directly verified to carry a scale bar anyway), and writes
-  `outputs/crack_stats.xlsx`. Full column reference, evidence-level legend (measured/interpreted/
+- **`scripts/batch_stats/export_crack_stats.py`**: gives a row to every image file under `--data-dir`
+  (any subfolder) and writes `outputs/crack_stats.xlsx`. It does not select images by file name;
+  which images belong in a table is the user's choice (the folder's contents, or the GUI's uploads).
+  Full column reference, evidence-level legend (measured/interpreted/
   calibrated), and calibration-factor provenance/scope live in `docs/batch_stats/crack_stats_schema.md`
   -- read that file rather than re-deriving any of it here.
 - **Downstream consumer, stated explicitly**: `../image_visualization` ("figlib" in its own docs) is
@@ -88,14 +87,13 @@ consumption rather than in-repo analysis.
   figlib's own code (`_sample_id()`, its `crack_levels_table` configs) already assumes, rather than
   duplicating figlib's own docs here.
 - **`v1`/`v2` replicate convention**: a filename's `v#` is a physically distinct replicate capture of
-  the same condition, not a document-revision number. The export includes every replicate that
-  passes the scale-bar/size checks -- it does not collapse multiple replicates down to one canonical
-  row per condition. Consumers wanting per-condition statistics group rows by `image_filename` with
+  the same condition, not a document-revision number. Include every replicate that passes the
+  scale-bar/size checks when choosing images, rather than one canonical image per condition. Consumers wanting per-condition statistics group rows by `image_filename` with
   the trailing `_mm######.jpg` index stripped, and average only where >=2 replicates exist (matching
   what figlib's own `crack_levels_table` figures already do).
-- **Naming-convention caveat**: the `mm000000`/`mm000001` naming pattern does *not* reliably predict
-  which file carries the burned-in blue scale bar -- every candidate needs a direct visual check
-  (bottom-right corner crop) before inclusion.
+- **Naming-convention caveat, when choosing images**: the `mm000000`/`mm000001` naming pattern does
+  *not* reliably predict which file carries the burned-in blue scale bar -- check every candidate by
+  eye (bottom-right corner crop) before including it. The export itself doesn't look at names.
 
 ## Synthetic-pattern validation gallery
 

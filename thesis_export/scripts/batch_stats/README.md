@@ -11,7 +11,8 @@ extraction) — no junctions, no ordering, no timing claims. See
 with a pixel inside a flaked/delaminated region is omitted from the stats and the connectivity
 graph.
 
-- **`export_crack_stats.py`**: every `*_mm000001.jpg` under `--data-dir`, one row each. Run:
+- **`export_crack_stats.py`**: every image file under `--data-dir` (any subfolder), one row each. It doesn't
+  select by file name: put only the images you want in the folder, or use the GUI. Run:
   `python3 -m scripts.batch_stats.export_crack_stats --data-dir <your image folder> [--out outputs/crack_stats.xlsx] [--cache-dir DIR] [--scale-bars-checked]`.
   `--data-dir` defaults to `data/raw` inside this folder, which isn't bundled. Pass
   `--scale-bars-checked` only if you have looked at every image for a burned-in scale bar;

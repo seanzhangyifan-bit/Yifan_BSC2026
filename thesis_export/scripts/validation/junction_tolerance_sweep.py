@@ -43,7 +43,7 @@ import numpy as np
 import pandas as pd
 from scipy.stats import spearmanr
 
-from scripts.batch_stats.export_crack_stats import DEFAULT_DATA_DIR, find_batch_images
+from scripts.batch_stats.export_crack_stats import DEFAULT_DATA_DIR, find_images
 from src.crackgraph.binarize import binarize
 from src.crackgraph.flaking import exclude_flaking_regions, remove_flake_touching_edges
 from src.crackgraph.graph import extract_graph
@@ -148,6 +148,10 @@ def t_share(n_t: float, n_y: float, n_ambiguous: float) -> float:
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--data-dir", type=str, default=DEFAULT_DATA_DIR)
+    p.add_argument(
+        "--glob", type=str, default="**/*_mm000001.jpg",
+        help="Which images under --data-dir to sweep (default: the thesis image set's mm000001 captures).",
+    )
     p.add_argument("--out-dir", type=str, default="outputs/junction_tolerance_sweep")
     p.add_argument(
         "--full-image", action="store_true",
@@ -159,7 +163,7 @@ def main():
     data_dir = (repo_root / args.data_dir).resolve()
     out_dir = repo_root / args.out_dir
     out_dir.mkdir(parents=True, exist_ok=True)
-    image_paths = find_batch_images(data_dir)
+    image_paths = find_images(data_dir, args.glob)
     settings = sweep_settings()
     region = "full image" if args.full_image else "top-left corner crop (~1.5% of image area)"
 
