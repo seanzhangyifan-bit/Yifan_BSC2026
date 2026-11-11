@@ -279,7 +279,7 @@ def compute_row(
     # crack_area_pct divides by the WHOLE image; this divides by the area we have
     # evidence about (whole image minus the flaking exclusion, which could be cracked
     # or not underneath -- see flaking.py).
-    valid_area_px2 = full_w * full_h - flaking_result.excluded_area_px2
+    valid_area_px2 = full_w * full_h - flaking_result.excluded_area_px
     crack_area_pct_excl_flakes = (
         100.0 * crack_area_px2 / valid_area_px2 if valid_area_px2 > 0 else float("nan")
     )

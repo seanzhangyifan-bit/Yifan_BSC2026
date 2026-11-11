@@ -190,7 +190,7 @@ def test_flaking_recovers_known_circle_area_on_a_grid():
     true_flake_area_px2 = int(true_flake_mask.sum())
 
     assert len(flaking_result.candidates) == 1
-    assert abs(flaking_result.excluded_area_px2 - true_flake_area_px2) / true_flake_area_px2 < 0.20
+    assert abs(flaking_result.excluded_area_px - true_flake_area_px2) / true_flake_area_px2 < 0.20
 
 
 def test_flaking_finds_nothing_on_a_plain_grid_with_no_flakes():
@@ -202,4 +202,4 @@ def test_flaking_finds_nothing_on_a_plain_grid_with_no_flakes():
         skeleton_result.mask_clean, skeleton_result.skel_image, skeleton_result.medial_radius,
     )
     assert flaking_result.candidates == []
-    assert flaking_result.excluded_area_px2 == 0
+    assert flaking_result.excluded_area_px == 0

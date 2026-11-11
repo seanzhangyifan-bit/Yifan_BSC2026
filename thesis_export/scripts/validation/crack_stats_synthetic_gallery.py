@@ -191,11 +191,11 @@ def case_grid_with_flakes(out_dir: Path) -> dict:
         "desc": "A grid junction overrun by a filled disk (bright, exactly like real delamination "
                 "under Otsu thresholding) -- the case flaking.py exists for. True flake area is "
                 "measured independently (disk pixels alone, no grid overlap) and compared to "
-                "flaking.py's own recovered excluded_area_px2.",
+                "flaking.py's own recovered excluded_area_px.",
         "rows": [
             _row("n candidates found", 1, len(flaking_result.candidates)),
-            _row("true flake area (px^2, disk only)", true_flake_area_px2, flaking_result.excluded_area_px2),
-            _row("recovery ratio", "1.00", f"{flaking_result.excluded_area_px2 / true_flake_area_px2:.3f}"),
+            _row("true flake area (px^2, disk only)", true_flake_area_px2, flaking_result.excluded_area_px),
+            _row("recovery ratio", "1.00", f"{flaking_result.excluded_area_px / true_flake_area_px2:.3f}"),
             _row("n edges omitted (touch the flaked region)", "(see overlay, magenta)", len(omitted)),
         ],
     }

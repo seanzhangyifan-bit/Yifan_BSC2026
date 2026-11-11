@@ -37,7 +37,7 @@ class AnalysisCache:
     excluded_mask: np.ndarray  # bool
     flaking_candidates: list[FlakingCandidate]
     reference_width_px: float  # [measured]
-    excluded_area_px2: int  # [measured]
+    excluded_area_px: int  # [measured]
     excluded_area_pct: float  # [measured]
     pruned_branches: list[PrunedBranchRecord]
 
@@ -102,12 +102,12 @@ def save_analysis_cache(
 
     candidates_payload = {
         "reference_width_px": flaking_result.reference_width_px,
-        "excluded_area_px2": flaking_result.excluded_area_px2,
+        "excluded_area_px": flaking_result.excluded_area_px,
         "excluded_area_pct": flaking_result.excluded_area_pct,
         "candidates": [
             {
                 "label": c.label,
-                "area_px2": c.area_px2,
+                "area_px": c.area_px,
                 "solidity": c.solidity,
                 "bbox": list(c.bbox),
             }
@@ -140,7 +140,7 @@ def load_analysis_cache(out_dir: Path, image_stem: str) -> AnalysisCache:
     flaking_candidates = [
         FlakingCandidate(
             label=c["label"],
-            area_px2=c["area_px2"],
+            area_px=c["area_px"],
             solidity=c["solidity"],
             bbox=tuple(c["bbox"]),
         )
@@ -157,7 +157,7 @@ def load_analysis_cache(out_dir: Path, image_stem: str) -> AnalysisCache:
         excluded_mask=excluded_mask,
         flaking_candidates=flaking_candidates,
         reference_width_px=candidates_payload["reference_width_px"],
-        excluded_area_px2=candidates_payload["excluded_area_px2"],
+        excluded_area_px=candidates_payload["excluded_area_px"],
         excluded_area_pct=candidates_payload["excluded_area_pct"],
         pruned_branches=pruned_branches,
     )

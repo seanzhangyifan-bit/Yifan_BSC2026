@@ -4,11 +4,11 @@ A flaked patch is bright under Otsu like a crack, but it is missing material,
 not a fracture, and hides whatever crack pattern was underneath.
 
 - Identify: pixels wider than WIDTH_FLAG_MULTIPLIER_K x this image's median
-  crack width, in regions of at least MIN_CANDIDATE_AREA_PX2. Width is the only
-  criterion; a solidity criterion was tried and dropped.
-- Exclude: grow each region back out to its true edge (GROWTH_MULTIPLIER),
+  crack width, in regions of at least MIN_CANDIDATE_AREA_PX. Width is the only
+  criterion.
+- Exclude: grow each region back out (GROWTH_MULTIPLIER),
   staying inside the mask.
-- Edges: the mask is skeletonized once; any skeleton edge with a pixel inside
+- Edges: any skeleton edge with a pixel inside
   the excluded region is omitted from the stats and the connectivity graph
   (flake_touching_path_indices).
 
@@ -25,21 +25,19 @@ from skimage.morphology import binary_dilation, disk
 from .graph import GraphResult, extract_graph, path_pixel_indices
 
 # How many multiples of this image's own reference crack width a pixel's
-# local width must exceed to be flagged as a candidate-blob pixel. Chosen
+# local width must exceed to be flagged as a candidate-flake pixel. Chosen
 # to comfortably clear normal crack-width variance (irregular walls,
-# junction blobs) while still catching genuinely oversized regions -- not
-# swept. 🔴 assumed
+# junction blobs) while still catching genuinely oversized regions. 🔴 assumed
 WIDTH_FLAG_MULTIPLIER_K = 4.0
 
-# Minimum connected-component area (px^2) of flagged pixels to consider as a
+# Minimum connected-component area (px) of flagged pixels to consider as a
 # flaking candidate at all, screening out small noise specks. 🔴 assumed
-MIN_CANDIDATE_AREA_PX2 = 500
+MIN_CANDIDATE_AREA_PX = 500
 
 # Growth budget, in multiples of the reference crack width, for recovering
 # each candidate's true boundary from its (by-construction eroded) seed.
 # 2.0 = WIDTH_FLAG_MULTIPLIER_K / 2 exactly undoes the seed's own erosion;
-# the extra 0.2 is a margin verified by visual inspection (this session, on
-# T2-A_membran_v2) to reliably reach the true black boundary without
+# the extra 0.2 is a margin verified by visual inspection to reliably reach the true black boundary without
 # growing much further than needed. 🟡 empirical, uncalibrated -- verified
 # by eye on one real image, not swept.
 GROWTH_MULTIPLIER = 2.2
@@ -53,7 +51,7 @@ GROWTH_STEP_PX = 3
 @dataclass
 class FlakingCandidate:
     label: int
-    area_px2: int  # [measured]
+    area_px: int  # [measured]
     solidity: float  # [measured] area / convex-hull area -- reported for diagnostic
     # visibility only, NOT a filter criterion (see module docstring for why
     # solidity was dropped as a pass/fail gate).
@@ -66,7 +64,7 @@ class FlakingResult:
     reference_width_px: float  # [measured] this image's median skeleton-sampled crack width
     excluded_mask: np.ndarray  # bool, same shape as the input mask
     mask_corrected: np.ndarray  # bool -- mask_clean with excluded_mask subtracted
-    excluded_area_px2: int  # [measured]
+    excluded_area_px: int  # [measured]
     excluded_area_pct: float  # [measured] of the full image
 
 
@@ -87,7 +85,7 @@ def identify_candidates(
     reference_width_px: float,
     *,
     K: float = WIDTH_FLAG_MULTIPLIER_K,
-    min_area_px2: int = MIN_CANDIDATE_AREA_PX2,
+    min_area_px: int = MIN_CANDIDATE_AREA_PX,
 ) -> tuple[list[FlakingCandidate], np.ndarray]:
     """Returns (candidates, labeled_wide_mask) -- the label image is needed
     by grow_and_exclude to recover each candidate's own flagged seed
@@ -102,9 +100,9 @@ def identify_candidates(
     labeled = label(wide_mask)
 
     candidates = [
-        FlakingCandidate(label=rp.label, area_px2=int(rp.area), solidity=float(rp.solidity), bbox=rp.bbox)
+        FlakingCandidate(label=rp.label, area_px=int(rp.area), solidity=float(rp.solidity), bbox=rp.bbox)
         for rp in regionprops(labeled)
-        if rp.area >= min_area_px2
+        if rp.area >= min_area_px
     ]
     return candidates, labeled
 
@@ -160,7 +158,7 @@ def exclude_flaking_regions(
     medial_radius: np.ndarray,
     *,
     K: float = WIDTH_FLAG_MULTIPLIER_K,
-    min_area_px2: int = MIN_CANDIDATE_AREA_PX2,
+    min_area_px: int = MIN_CANDIDATE_AREA_PX,
     growth_multiplier: float = GROWTH_MULTIPLIER,
     step_px: int = GROWTH_STEP_PX,
 ) -> FlakingResult:
@@ -174,7 +172,7 @@ def exclude_flaking_regions(
     reference_width_px = compute_reference_width_px(skel_image, medial_radius)
     candidates, labeled_wide_mask = identify_candidates(
         mask_clean, medial_radius, reference_width_px,
-        K=K, min_area_px2=min_area_px2,
+        K=K, min_area_px=min_area_px,
     )
 
     if not candidates:
@@ -186,15 +184,15 @@ def exclude_flaking_regions(
         )
 
     mask_corrected = mask_clean & ~excluded_mask
-    excluded_area_px2 = int(excluded_mask.sum())
-    excluded_area_pct = 100.0 * excluded_area_px2 / mask_clean.size
+    excluded_area_px = int(excluded_mask.sum())
+    excluded_area_pct = 100.0 * excluded_area_px / mask_clean.size
 
     return FlakingResult(
         candidates=candidates,
         reference_width_px=reference_width_px,
         excluded_mask=excluded_mask,
         mask_corrected=mask_corrected,
-        excluded_area_px2=excluded_area_px2,
+        excluded_area_px=excluded_area_px,
         excluded_area_pct=excluded_area_pct,
     )
 

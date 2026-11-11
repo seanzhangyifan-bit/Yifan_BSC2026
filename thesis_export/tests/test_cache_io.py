@@ -38,15 +38,15 @@ def _make_skeleton_result(pruned_branches):
 
 def _make_flaking_result(mask_corrected, excluded_mask):
     candidates = [
-        FlakingCandidate(label=1, area_px2=600, solidity=0.9, bbox=(0, 0, 10, 10)),
-        FlakingCandidate(label=2, area_px2=800, solidity=0.7, bbox=(5, 5, 15, 15)),
+        FlakingCandidate(label=1, area_px=600, solidity=0.9, bbox=(0, 0, 10, 10)),
+        FlakingCandidate(label=2, area_px=800, solidity=0.7, bbox=(5, 5, 15, 15)),
     ]
     return FlakingResult(
         candidates=candidates,
         reference_width_px=4.5,
         excluded_mask=excluded_mask,
         mask_corrected=mask_corrected,
-        excluded_area_px2=int(excluded_mask.sum()),
+        excluded_area_px=int(excluded_mask.sum()),
         excluded_area_pct=100.0 * excluded_mask.sum() / excluded_mask.size,
     )
 
@@ -80,10 +80,10 @@ def test_round_trip_preserves_arrays_and_pruned_branches(tmp_path):
     np.testing.assert_array_equal(loaded.skeleton_final, skeleton_result.skel_image)
     np.testing.assert_array_equal(loaded.excluded_mask, excluded_mask)
     assert loaded.reference_width_px == flaking_result.reference_width_px
-    assert loaded.excluded_area_px2 == flaking_result.excluded_area_px2
+    assert loaded.excluded_area_px == flaking_result.excluded_area_px
     assert loaded.excluded_area_pct == flaking_result.excluded_area_pct
-    assert [(c.label, c.area_px2, c.solidity, c.bbox) for c in loaded.flaking_candidates] == [
-        (c.label, c.area_px2, c.solidity, c.bbox) for c in flaking_result.candidates
+    assert [(c.label, c.area_px, c.solidity, c.bbox) for c in loaded.flaking_candidates] == [
+        (c.label, c.area_px, c.solidity, c.bbox) for c in flaking_result.candidates
     ]
 
     assert len(loaded.pruned_branches) == 2

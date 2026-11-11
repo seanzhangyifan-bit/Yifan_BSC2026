@@ -377,9 +377,9 @@ def main():
         "[interpreted -- flagged by local width only, not junction-blob-filtered yet]"
     )
     for c in flaking_result.candidates:
-        print(f"  area={c.area_px2} px2  solidity={c.solidity:.3f}  bbox={c.bbox}")
+        print(f"  area={c.area_px} px  solidity={c.solidity:.3f}  bbox={c.bbox}")
     print(
-        f"Excluded area: {flaking_result.excluded_area_px2} px2 "
+        f"Excluded area: {flaking_result.excluded_area_px} px "
         f"({flaking_result.excluded_area_pct:.3f}% of image)    [measured]"
     )
     if flaking_result.candidates:

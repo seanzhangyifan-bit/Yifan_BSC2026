@@ -11,6 +11,15 @@ Commit IDs link each entry to its full details in `git log`. Findings are number
 
 ## 2026-11-11
 
+### Renamed: flaking area names use `px`
+
+**No change to results**: names and wording only.
+
+`MIN_CANDIDATE_AREA_PX2` → `MIN_CANDIDATE_AREA_PX`, `FlakingCandidate.area_px2` → `area_px`,
+`FlakingResult.excluded_area_px2` → `excluded_area_px` (also in `cache_io.py`). The analysis
+cache's `flaking_candidates.json` now uses the keys `area_px` and `excluded_area_px`, so cache
+folders written before this change can't be loaded; re-run with `--cache-dir` to rebuild them.
+
 ### Removed: the two-pass flaking method; one crack-stats exporter
 
 **Changes results**: every number from an image with flaking, in every tool. Images without

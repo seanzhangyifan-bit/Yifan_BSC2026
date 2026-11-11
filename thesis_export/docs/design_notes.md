@@ -139,7 +139,7 @@ reads a genuine half-width rather than "however close this pixel happens to
 be to an edge"), median rather than mean so a blob's own messy interior
 skeleton (a small fraction of total skeleton mileage) can't drag the
 reference value up. Connected components of the flagged region are kept as
-candidates only above MIN_CANDIDATE_AREA_PX2 -- width is the single
+candidates only above MIN_CANDIDATE_AREA_PX -- width is the single
 identification criterion, deliberately: an earlier version also required
 high solidity (area / convex-hull area) to separate compact blobs from
 merely-locally-wide, elongated crack bands, but that second criterion was

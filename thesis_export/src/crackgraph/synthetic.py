@@ -851,7 +851,7 @@ def generate_grid_with_flakes(
     module does, by drawing the disks alone on a blank canvas with
     skimage.draw.disk at the same `flake_centers`/`flake_radius` and
     summing the boolean mask, so a caller can compare it against
-    flaking.py's own recovered `excluded_area_px2` without trusting this
+    flaking.py's own recovered `excluded_area_px` without trusting this
     function's bookkeeping.
     """
     if flake_centers is None:
