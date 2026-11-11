@@ -13,7 +13,7 @@ neither replaces the other:
 - **`export_crack_stats.py`** ("v1"/"v2" in the docs — same script, different scope/flags): the
   original, exercised over the full 39-image dataset. Excludes flaked/delaminated regions with a
   two-pass skeletonize (scout for reference width → grow the excluded region back to its true
-  boundary → re-skeletonize the corrected mask). Run: `python3 -m scripts.batch_stats.export_crack_stats [--out outputs/crack_stats.xlsx]`.
+  boundary → re-skeletonize the corrected mask). Run: `python3 -m scripts.batch_stats.export_crack_stats --data-dir <your image folder> [--out outputs/crack_stats.xlsx] [--scale-bars-checked]`. `--data-dir` defaults to `data/raw` inside this folder, which isn't bundled. Pass `--scale-bars-checked` only if you have looked at every image for a burned-in scale bar; otherwise the `scale_bar_check` column says `not checked`. The v3 scripts take the same two options.
 - **`export_crack_stats_v3.py`** + **`export_crack_stats_v3_batch_bcd.py`**: an alternate,
   single-pass methodology — skip the second skeletonize, and instead of a distance-buffer cut,
   omit any edge with a pixel physically inside the excluded region. ~2x faster per image.

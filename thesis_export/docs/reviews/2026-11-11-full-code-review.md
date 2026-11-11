@@ -7,8 +7,8 @@
 - **Baseline**: commit `08d6e83`, plus the uncommitted doc tidy-up in `skeleton.py`,
   `flaking.py`, `CALIBRATION.md`, `METHODOLOGY.md`, `docs/calibration_notes.md` and the new
   `docs/design_notes.md`.
-- **Status**: finding 1 is fixed (see its section). Everything else is still open. All 157 tests
-  passed on the baseline.
+- **Status**: findings 1–3 are fixed (see their sections). Everything else is still open. All 157
+  tests passed on the baseline.
 
 ## Summary
 
@@ -44,8 +44,8 @@ the code but didn't run it.
 | # | Severity | What | Where |
 |---|---|---|---|
 | 1 | High | ~~Corner cross-check flips west-pointing cracks to east~~ **Fixed** | `corners.py:205`, `:237` |
-| 2 | High | Batch exporters crash: image folder hard-coded, no way to point at your own | `export_crack_stats.py:67–69, 361–365` |
-| 3 | High | Every exported row claims "scale bar visually confirmed" | `export_crack_stats.py:309`, `export_crack_stats_v3.py:202` |
+| 2 | High | ~~Batch exporters crash: image folder hard-coded, no way to point at your own~~ **Fixed** | `export_crack_stats.py:67–69, 361–365` |
+| 3 | High | ~~Every exported row claims "scale bar visually confirmed"~~ **Fixed** | `export_crack_stats.py:309`, `export_crack_stats_v3.py:202` |
 | 4 | Medium | v3 definitions sheet describes the v1 method, not v3 | `add_definitions_sheet.py:88` |
 | 5 | Medium | Docs still describe the deleted kink feature | 4 docs, example gallery, `CALIBRATION.md` |
 | 6 | Medium | 20 wrong line numbers in the calibration docs; table shows stray backslashes | `CALIBRATION.md`, `docs/calibration_notes.md` |
@@ -96,7 +96,13 @@ cases never hit this, which is why the test suite passes.
 (`a + _angle_diff(b, a) / 2`), or average unit vectors and take `atan2`. Add a regression test
 with an abutter at 179°/−179°. This is a ~5-line change.
 
-### 2. Batch exporters can't find images in this folder (verified)
+### 2. Batch exporters can't find images in this folder (verified) — FIXED
+
+> **Fixed 2026-11-11.** All four scripts with a hard-coded image folder (`export_crack_stats.py`,
+> `export_crack_stats_v3.py`, `export_crack_stats_v3_batch_bcd.py`, `skeleton_loop_sweep.py`) take
+> `--data-dir`. Missing `ADDITIONAL_IMAGES` entries are skipped with a notice, and the "no images"
+> check runs after filtering. The batch B/C/D runner lists any missing files up front. On
+> `../data/raw`, the new discovery picks exactly the same 41 images as the old code.
 
 **What's wrong.** `export_crack_stats.py` and `export_crack_stats_v3.py` look for images at a
 fixed location, `<thesis_export>/data/raw/**/*_mm000001.jpg`, and have no option to point them
@@ -116,7 +122,11 @@ affected, because it calls `compute_row` on uploaded files directly.
 - Run the empty-list check *after* filtering.
 - Update the README to show the new option.
 
-### 3. Every row claims the scale bar was "visually confirmed" (from reading)
+### 3. Every row claims the scale bar was "visually confirmed" (from reading) — FIXED
+
+> **Fixed 2026-11-11.** `compute_row` now takes `scale_bar_check` and defaults to `"not checked"`, so the
+> GUI always writes that. The batch scripts write `"no blue bar (visually confirmed)"` only when run
+> with `--scale-bars-checked`. Documented in `crack_stats_schema.md` and `scripts/batch_stats/README.md`.
 
 **What's wrong.** Both exporters write `"scale_bar_check": "no blue bar (visually confirmed)"`
 into every row (`export_crack_stats.py:309`, `export_crack_stats_v3.py:202`). That was true for

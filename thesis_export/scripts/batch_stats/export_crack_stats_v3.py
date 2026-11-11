@@ -26,7 +26,10 @@ would falsely bridge two real crack networks that only "connect" through
 a region we have zero evidence about.
 
 Usage:
-    python3 -m scripts.batch_stats.export_crack_stats_v3 [--out outputs/crack_stats_v3.xlsx]
+    python3 -m scripts.batch_stats.export_crack_stats_v3 [--data-dir data/raw]
+        [--out outputs/crack_stats_v3.xlsx] [--scale-bars-checked]
+
+See export_crack_stats.py's docstring for --data-dir and --scale-bars-checked.
 """
 
 import argparse
@@ -46,11 +49,12 @@ from src.crackgraph.overlay import render_crack_stats_overlay
 from src.crackgraph.skeleton import skeletonize_and_prune
 
 from scripts.batch_stats.export_crack_stats import (
-    ADDITIONAL_IMAGES,
-    CONFIRMED_SCALE_BAR_IMAGES,
     KNOWN_BAD_FRAME_SUBSTRINGS,
-    RAW_GLOB,
+    SCALE_BAR_CHECKED,
+    SCALE_BAR_NOT_CHECKED,
     UM_PER_PX_MM_TAG,
+    add_batch_args,
+    find_batch_images,
     giant_component_nodes,
     giant_component_span_px,
     median_edge_length_px,
@@ -58,7 +62,12 @@ from scripts.batch_stats.export_crack_stats import (
 )
 
 
-def compute_row(image_path: Path, *, cache_dir: Path | None = None) -> dict:
+def compute_row(
+    image_path: Path,
+    *,
+    cache_dir: Path | None = None,
+    scale_bar_check: str = SCALE_BAR_NOT_CHECKED,
+) -> dict:
     """See module docstring for how this differs from
     export_crack_stats.compute_row: one skeletonize pass instead of two,
     and omitted (any pixel inside the grown-out flake) instead of
@@ -199,7 +208,7 @@ def compute_row(image_path: Path, *, cache_dir: Path | None = None) -> dict:
         "source_folder": image_path.parent.name,
         "image_width_px": full_w,
         "image_height_px": full_h,
-        "scale_bar_check": "no blue bar (visually confirmed)",
+        "scale_bar_check": scale_bar_check,
         "crack_area_pct": 100.0 * crack_area_px2 / (full_w * full_h),
         "crack_area_pct_excl_flakes": crack_area_pct_excl_flakes,
         "crack_area_mm2": crack_area_mm2,
@@ -248,7 +257,7 @@ def compute_row(image_path: Path, *, cache_dir: Path | None = None) -> dict:
 
 
 def main():
-    p = argparse.ArgumentParser(description=__doc__)
+    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--out", type=str, default="outputs/crack_stats_v3.xlsx")
     p.add_argument(
         "--cache-dir", type=str, default=None,
@@ -260,26 +269,19 @@ def main():
             "docs/batch_stats/crack_stats_schema.md section 10). Off by default."
         ),
     )
+    add_batch_args(p)
     args = p.parse_args()
 
     repo_root = Path(__file__).resolve().parent.parent.parent
-    all_image_paths = sorted(repo_root.glob(RAW_GLOB)) + [
-        repo_root / p for p in ADDITIONAL_IMAGES
-    ]
-    if not all_image_paths:
-        raise SystemExit(f"No images matched {RAW_GLOB!r} under {repo_root}")
-
-    image_paths = [p for p in all_image_paths if p.name not in CONFIRMED_SCALE_BAR_IMAGES]
-    skipped = [p for p in all_image_paths if p.name in CONFIRMED_SCALE_BAR_IMAGES]
-    for p in skipped:
-        print(f"[skip] {p.relative_to(repo_root)} -- confirmed blue scale-bar overlay, excluded")
-
+    data_dir = (repo_root / args.data_dir).resolve()
+    image_paths = find_batch_images(data_dir)
+    scale_bar_check = SCALE_BAR_CHECKED if args.scale_bars_checked else SCALE_BAR_NOT_CHECKED
     cache_dir = repo_root / args.cache_dir if args.cache_dir else None
 
     rows = []
     for i, image_path in enumerate(image_paths, 1):
-        print(f"[{i}/{len(image_paths)}] {image_path.relative_to(repo_root)}")
-        rows.append(compute_row(image_path, cache_dir=cache_dir))
+        print(f"[{i}/{len(image_paths)}] {image_path.relative_to(data_dir)}")
+        rows.append(compute_row(image_path, cache_dir=cache_dir, scale_bar_check=scale_bar_check))
 
     out_path = repo_root / args.out
     out_path.parent.mkdir(parents=True, exist_ok=True)

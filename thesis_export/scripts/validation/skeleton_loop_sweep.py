@@ -48,7 +48,7 @@ from src.crackgraph.graph import extract_graph
 from src.crackgraph.io_utils import load_image
 from src.crackgraph.skeleton import skeletonize_and_prune
 
-RAW_GLOB = "data/raw/**/*_mm000001.jpg"
+RAW_GLOB = "**/*_mm000001.jpg"  # relative to --data-dir
 
 # Same folder->substrate mapping already established for this dataset (see
 # docs/crack_stats_schema.md S3): T5/, aquivion_t2_membran/,
@@ -89,12 +89,19 @@ def sweep_one(image_path: Path) -> dict:
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--out", type=str, default="outputs/skeleton_loop_sweep.csv")
+    p.add_argument(
+        "--data-dir", type=str, default="data/raw",
+        help="Folder holding the micrographs (default: data/raw inside this folder).",
+    )
     args = p.parse_args()
 
     repo_root = Path(__file__).resolve().parent.parent.parent
-    image_paths = sorted(repo_root.glob(RAW_GLOB))
+    data_dir = (repo_root / args.data_dir).resolve()
+    image_paths = sorted(data_dir.glob(RAW_GLOB))
     if not image_paths:
-        raise SystemExit(f"No images matched {RAW_GLOB!r} under {repo_root}")
+        raise SystemExit(
+            f"No images matched {RAW_GLOB!r} under {data_dir}. Pass --data-dir to point at your micrograph folder."
+        )
 
     rows = []
     for i, path in enumerate(image_paths, 1):

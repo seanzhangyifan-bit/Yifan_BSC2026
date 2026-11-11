@@ -117,8 +117,9 @@ in the table below — the app's checkbox says so directly.
 ## What's not included
 
 - **`data/raw/`** — the private micrograph collection this pipeline was developed and run
-  against. Not bundled (large, and not the parent repo's own to redistribute). Point any script
-  at your own images instead.
+  against. Not bundled (large, and not the parent repo's own to redistribute). Point the batch
+  scripts at your own images with `--data-dir <folder>`; the per-image pipeline and GUI take an
+  image path or upload directly.
 - **`crack_stats_export/`** — a separate, smaller export in the parent repo, built specifically
   for the sibling `image_visualization` project to consume `crack_stats.xlsx`. Different purpose
   from this folder (a thesis-submission archive of the whole project); not duplicated here.

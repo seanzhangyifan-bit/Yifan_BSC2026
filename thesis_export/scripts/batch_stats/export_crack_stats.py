@@ -10,7 +10,14 @@ docs/crack_stats_schema.md for the full column reference this script's
 output is documented against -- keep the two in sync if either changes.
 
 Usage:
-    python3 -m scripts.batch_stats.export_crack_stats [--out outputs/crack_stats.xlsx]
+    python3 -m scripts.batch_stats.export_crack_stats [--data-dir data/raw]
+        [--out outputs/crack_stats.xlsx] [--scale-bars-checked]
+
+--data-dir defaults to data/raw inside this folder. The thesis images aren't
+bundled, so point it at your own copy (for example --data-dir ../data/raw).
+Pass --scale-bars-checked only if you have looked at every image and
+confirmed none carries a burned-in scale bar; otherwise each row records
+scale_bar_check = "not checked".
 """
 
 import argparse
@@ -64,9 +71,44 @@ CONFIRMED_SCALE_BAR_IMAGES = ["T5-M_H190_v2_mm000001.jpg"]
 # every other row has. mm000002/mm000003 are the standard-sized pair; mm000002 carries
 # the blue scale bar, mm000003 doesn't (directly verified). See docs/crack_stats_schema.md
 # S7b.
-ADDITIONAL_IMAGES = ["data/raw/humidity_loading_ptfe/23RH_PTFE_v1_mm000003.jpg"]
+ADDITIONAL_IMAGES = ["humidity_loading_ptfe/23RH_PTFE_v1_mm000003.jpg"]
 
-RAW_GLOB = "data/raw/**/*_mm000001.jpg"
+# Both RAW_GLOB and ADDITIONAL_IMAGES are relative to --data-dir.
+RAW_GLOB = "**/*_mm000001.jpg"
+DEFAULT_DATA_DIR = "data/raw"
+
+# Values for the scale_bar_check column. "Confirmed" is only written when the
+# caller vouches that every image was inspected by eye (--scale-bars-checked);
+# compute_row never assumes it.
+SCALE_BAR_CHECKED = "no blue bar (visually confirmed)"
+SCALE_BAR_NOT_CHECKED = "not checked"
+
+
+def find_batch_images(data_dir: Path) -> list[Path]:
+    """Every *_mm000001.jpg under data_dir, plus whichever ADDITIONAL_IMAGES
+    exist there, minus CONFIRMED_SCALE_BAR_IMAGES. Prints a notice for each
+    skipped file. Exits with a clear message if nothing is left."""
+    found = sorted(data_dir.glob(RAW_GLOB))
+    for rel in ADDITIONAL_IMAGES:
+        path = data_dir / rel
+        if path.exists():
+            found.append(path)
+        else:
+            print(f"[skip] {rel} -- listed in ADDITIONAL_IMAGES but not found under {data_dir}")
+
+    image_paths = []
+    for path in found:
+        if path.name in CONFIRMED_SCALE_BAR_IMAGES:
+            print(f"[skip] {path.relative_to(data_dir)} -- confirmed blue scale-bar overlay, excluded")
+        else:
+            image_paths.append(path)
+
+    if not image_paths:
+        raise SystemExit(
+            f"No images found: nothing matched {RAW_GLOB!r} under {data_dir}. "
+            "Pass --data-dir to point at your micrograph folder."
+        )
+    return image_paths
 
 
 def median_pixelwise_width_px(skel, graph_result, cut_adjacent: set[int], medial_radius: np.ndarray) -> float:
@@ -162,6 +204,7 @@ def compute_row(
     *,
     cache_dir: Path | None = None,
     on_stage: Callable[[str], None] | None = None,
+    scale_bar_check: str = SCALE_BAR_NOT_CHECKED,
 ) -> dict:
     """cache_dir is optional and off by default -- when set, also writes
     the six-file analysis cache plus an overlay.png into
@@ -173,7 +216,11 @@ def compute_row(
 
     on_stage, if given, is called once per COMPUTE_ROW_STAGES entry, in order, as each
     stage completes -- lets a caller (e.g. a GUI progress bar) show real per-stage
-    progress instead of one bump per whole image. Optional and unused by default."""
+    progress instead of one bump per whole image. Optional and unused by default.
+
+    scale_bar_check is written verbatim into the row. It defaults to "not
+    checked"; only a caller that has inspected the image passes
+    SCALE_BAR_CHECKED."""
     report = on_stage or (lambda _stage: None)
     gray, rgb = load_image(image_path)
     full_h, full_w = gray.shape
@@ -306,7 +353,7 @@ def compute_row(
         "source_folder": image_path.parent.name,
         "image_width_px": full_w,
         "image_height_px": full_h,
-        "scale_bar_check": "no blue bar (visually confirmed)",
+        "scale_bar_check": scale_bar_check,
         "crack_area_pct": 100.0 * crack_area_px2 / (full_w * full_h),
         "crack_area_pct_excl_flakes": crack_area_pct_excl_flakes,
         "crack_area_mm2": crack_area_mm2,
@@ -345,8 +392,23 @@ def compute_row(
     return stats_row
 
 
+def add_batch_args(p: argparse.ArgumentParser) -> None:
+    """--data-dir and --scale-bars-checked, shared by every batch export script."""
+    p.add_argument(
+        "--data-dir", type=str, default=DEFAULT_DATA_DIR,
+        help="Folder holding the micrographs (default: data/raw inside this folder).",
+    )
+    p.add_argument(
+        "--scale-bars-checked", action="store_true",
+        help=(
+            "Record scale_bar_check as visually confirmed. Only pass this if you have "
+            "inspected every image for a burned-in scale bar."
+        ),
+    )
+
+
 def main():
-    p = argparse.ArgumentParser(description=__doc__)
+    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--out", type=str, default="outputs/crack_stats.xlsx")
     p.add_argument(
         "--cache-dir", type=str, default=None,
@@ -356,26 +418,19 @@ def main():
             "Off by default; existing callers see no behavior change."
         ),
     )
+    add_batch_args(p)
     args = p.parse_args()
 
     repo_root = Path(__file__).resolve().parent.parent.parent
-    all_image_paths = sorted(repo_root.glob(RAW_GLOB)) + [
-        repo_root / p for p in ADDITIONAL_IMAGES
-    ]
-    if not all_image_paths:
-        raise SystemExit(f"No images matched {RAW_GLOB!r} under {repo_root}")
-
-    image_paths = [p for p in all_image_paths if p.name not in CONFIRMED_SCALE_BAR_IMAGES]
-    skipped = [p for p in all_image_paths if p.name in CONFIRMED_SCALE_BAR_IMAGES]
-    for p in skipped:
-        print(f"[skip] {p.relative_to(repo_root)} -- confirmed blue scale-bar overlay, excluded")
-
+    data_dir = (repo_root / args.data_dir).resolve()
+    image_paths = find_batch_images(data_dir)
+    scale_bar_check = SCALE_BAR_CHECKED if args.scale_bars_checked else SCALE_BAR_NOT_CHECKED
     cache_dir = repo_root / args.cache_dir if args.cache_dir else None
 
     rows = []
     for i, image_path in enumerate(image_paths, 1):
-        print(f"[{i}/{len(image_paths)}] {image_path.relative_to(repo_root)}")
-        rows.append(compute_row(image_path, cache_dir=cache_dir))
+        print(f"[{i}/{len(image_paths)}] {image_path.relative_to(data_dir)}")
+        rows.append(compute_row(image_path, cache_dir=cache_dir, scale_bar_check=scale_bar_check))
 
     out_path = repo_root / args.out
     out_path.parent.mkdir(parents=True, exist_ok=True)

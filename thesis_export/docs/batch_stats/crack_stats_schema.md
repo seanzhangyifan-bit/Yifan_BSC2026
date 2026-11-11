@@ -114,7 +114,7 @@ see §4.
 | 2 | `source_folder` | Which `data/raw/` subfolder the image lives in — see §3 for the full list of 7 | — | — |
 | 3 | `image_width_px` | Original raw image width | px | `measured` |
 | 4 | `image_height_px` | Original raw image height | px | `measured` |
-| 5 | `scale_bar_check` | Result of the direct per-image visual check described in §2 (not the naming-convention inference) | text | — |
+| 5 | `scale_bar_check` | `no blue bar (visually confirmed)` only when the run was started with `--scale-bars-checked`, i.e. someone did the direct per-image visual check described in §2 (not the naming-convention inference). Otherwise `not checked`, which is also what the GUI always writes. | text | — |
 | 6 | `crack_area_pct` | `corrected_mask.sum() ÷ (image_width_px × image_height_px) × 100` — share of image pixels classified as crack by Otsu thresholding, after flaking exclusion (§4b) and despeckling (tiny objects below `min_object_px` removed). | % of image area | `measured` |
 | 7 | `crack_area_mm2` | `crack_area_px² × (0.6098 µm/px)² ÷ 1e6` | mm² | `calibrated` |
 | 8 | `avg_width_px` | `crack_area_px² ÷ total_skeleton_length_px` (length excluding cut-adjacent edges, §4b) — an area-based width estimate, **not** the distance-transform-sampled width used elsewhere in this pipeline. See §caveat below. | px | `interpreted` |
