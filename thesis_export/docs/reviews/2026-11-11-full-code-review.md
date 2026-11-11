@@ -243,8 +243,10 @@ From `docs/reviews/2026-07-05-stage4-corner-junction-kink-rigor-review.md`:
 - **#2 partly addressed.** `precedence.py` now matches arms by identity and reports conflicting
   abutters. The corner method's own "agrees" flag still compares only the T/Y label and sorted
   gaps.
-- **#3 and #4 still open.** `QUAD_MIN_SPAN_PX` and the T/Y tolerances that decide the junction
-  census are still 🔴 unswept.
+- **#3 still open; #4 partly addressed.** `QUAD_MIN_SPAN_PX` is still 🔴 unswept. The T/Y
+  tolerances now have a measured sensitivity check (2026-11-11,
+  `docs/junction_tolerance_sensitivity.md`): absolute counts depend strongly on them, and the
+  ranking of conditions holds for ±5° / ±25% changes. They're still 🔴 assumed, not calibrated.
 
 ---
 

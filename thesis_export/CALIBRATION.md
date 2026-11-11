@@ -20,9 +20,9 @@ rationale (relocated verbatim from its old inline comment).
 |`ANNULUS_INNER_PX_PLACEHOLDER`|[`junctions.py:77`](src/crackgraph/junctions.py)|5.0|🔴 assumed|"a few px" heuristic; no sweep — both sweep scripts hold it fixed|
 |`ANNULUS_OUTER_PX_PLACEHOLDER`|[`junctions.py:79`](src/crackgraph/junctions.py)|60.0|🟡 empirical, uncalibrated|minimax-RMSE sweep, `scripts/validation/window_sweep.py`|
 |`QUAD_MIN_SPAN_PX`|[`junctions.py:81`](src/crackgraph/junctions.py)|15.0|🔴 assumed|reasoned (needs "lever arm" for a stable quadratic) but no formula or sweep pins the exact value|
-|`Y_ANGLE_TOL_DEG_PLACEHOLDER`|[`junctions.py:83`](src/crackgraph/junctions.py)|15.0|🔴 assumed|no sweep, no noise model|
-|`T_STRAIGHT_TOL_DEG_PLACEHOLDER`|[`junctions.py:85`](src/crackgraph/junctions.py)|20.0|🔴 assumed|no sweep|
-|`T_RIGHT_TOL_DEG_PLACEHOLDER`|[`junctions.py:87`](src/crackgraph/junctions.py)|20.0|🔴 assumed|no sweep|
+|`Y_ANGLE_TOL_DEG_PLACEHOLDER`|[`junctions.py:83`](src/crackgraph/junctions.py)|15.0|🔴 assumed|no noise model; sensitivity measured, not calibrated: see `docs/junction_tolerance_sensitivity.md` (Y count swings 6–208 across 5–25°)|
+|`T_STRAIGHT_TOL_DEG_PLACEHOLDER`|[`junctions.py:85`](src/crackgraph/junctions.py)|20.0|🔴 assumed|sensitivity measured, not calibrated: see `docs/junction_tolerance_sensitivity.md`|
+|`T_RIGHT_TOL_DEG_PLACEHOLDER`|[`junctions.py:87`](src/crackgraph/junctions.py)|20.0|🔴 assumed|sensitivity measured, not calibrated: see `docs/junction_tolerance_sensitivity.md`|
 |`CORNER_SEARCH_RADIUS_PX`|[`corners.py:58`](src/crackgraph/corners.py)|25.0|🔴 assumed|held fixed *in* the corner sweep, never itself swept|
 |`CORNER_WINDOW_PX`|[`corners.py:60`](src/crackgraph/corners.py)|10.0|🟡 empirical, uncalibrated|RMSE + unresolved-rate sweep, `scripts/validation/corner_window_sweep.py`|
 |`CORNER_MIN_TURN_DEG`|[`corners.py:62`](src/crackgraph/corners.py)|45.0|🔴 assumed|held fixed in sweep script, never itself swept|

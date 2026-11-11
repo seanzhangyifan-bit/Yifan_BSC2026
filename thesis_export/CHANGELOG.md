@@ -11,6 +11,23 @@ Commit IDs link each entry to its full details in `git log`. Findings are number
 
 ## 2026-11-11
 
+### Added: sensitivity check for the T/Y junction cut-offs
+
+**No change to results** (adds an analysis). Review finding 12.
+
+New script `scripts/validation/junction_tolerance_sweep.py` re-sorts each image's measured
+junction angles under 17 cut-off settings. Results in
+[`docs/junction_tolerance_sensitivity.md`](docs/junction_tolerance_sensitivity.md), on 41 images
+(corner crop):
+
+- At the current cut-offs, 67% of junctions are ambiguous, 26% T, 7% Y.
+- Absolute T share ranges 9–45% as all cut-offs go from ×0.5 to ×1.5. The Y count ranges 6–208.
+- Ranking conditions by T share holds for ±5° / ±25% changes (rank correlation 0.82–0.98).
+
+**Affects how you report junction counts**: report absolute T/Y numbers with a range, not as
+fixed values, and check that any comparison between conditions keeps its direction across the
+tested cut-offs.
+
 ### Fixed: corner cross-check read west-pointing cracks as east-pointing
 
 **Changes results** (corner cross-check and precedence agreement only). Commit `65d1ed9`,

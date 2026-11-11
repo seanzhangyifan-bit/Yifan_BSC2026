@@ -11,6 +11,10 @@ status of every tunable constant this tier justifies.
   expected-vs-measured tables. Includes two cases that show a known method limitation honestly
   (severely curved host defeats the corner cross-check; an orthogonal grid reads as isotropic
   under the 2nd-order orientation tensor) rather than hiding them.
+- `junction_tolerance_sweep.py --data-dir <image folder>`: how much the T/Y/ambiguous junction
+  census changes when the classification cut-offs move. Measures each image's junction angles
+  once, then re-sorts them under 17 cut-off settings. Results and interpretation:
+  `../../docs/junction_tolerance_sensitivity.md`.
 - `crack_stats_synthetic_gallery.py`, `synthetic_benchmark_raw_gallery.py`,
   `synthetic_benchmark_report.py`: a newer, larger 9-case synthetic-benchmark matrix (canonical
   geometries, structural networks, degradation resilience), built in two steps — raw geometry
