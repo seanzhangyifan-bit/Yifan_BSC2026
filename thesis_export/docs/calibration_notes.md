@@ -200,6 +200,35 @@ No dedicated sweep script found; used at `corners.py`'s bearing-matching step
 
 `src/crackgraph/skeleton.py:30` — value `15`
 
+**Physical justification (added 2026-11-11, after the fact).** The value was chosen before
+any of this was known; it was then checked against measured length scales and found to
+match them. It was not re-derived or changed.
+
+- **Scale.** 15 px × 0.6098 µm/px = **9.1 µm** (calibration for `mm` mosaic images only; see
+  `docs/batch_stats/crack_stats_schema.md` §6).
+- **Agglomerate size** `[measured]`. Laser diffraction of the wet inks
+  (`../image_visualization/data/Auswertung_PGV_v1.xlsx`, read via figlib's `psd_data.py`):
+  d90 = 7.7–7.9 µm and d99 ≈ 7–10 µm for inks T2–T4; T1 d90 = 4.2 µm; T5 d90 = 1.3 µm with a
+  ~2 vol% tail above 10 µm.
+- **Film thickness** `[measured]` (`../image_visualization/data/Schichten_Charakterisierung.xlsx`):
+  mostly 8–16 µm; the thin T5 height-variation series is 3–6 µm.
+- **Argument** `[interpreted]`. Agglomerates of this size make the crack walls rough on the
+  same scale, and thinning turns wall bumps into short dead ends. A dead end shorter than
+  about one large agglomerate (or one film thickness) can't be told apart from wall
+  roughness, so it isn't counted as a crack.
+
+**Caveats.**
+- The PSD is of diluted wet ink; agglomerates may re-form during drying. It is the best
+  available proxy for agglomerate size in the dried layer, not a direct measurement of it.
+- One cut-off is used for every image on purpose. The physical scales differ between inks
+  and coatings, and a per-condition cut-off would make conditions measured differently.
+- The argument covers spurs (wall bumps), not fragments: removed fragments on thin-crack
+  images are mostly pieces of real faint cracks broken up by thresholding.
+- `ledge` depends strongly on this cut-off (on six 2048 px crops, `ledge` rises 50% on
+  T3-PTFE_v1 between no cut-off and 15 px), so it must be reported together with `ledge`.
+
+Original note, kept for history:
+
 > Not derived from real film-thickness h or a calibrated um-per-pixel value -- neither
 > exists yet (calibration is supplied manually, later). Chosen only as "somewhat larger
 > than the annulus inner-radius jitter scale (a few px)" that METHODOLOGY.md mentions

@@ -11,6 +11,16 @@ Commit IDs link each entry to its full details in `git log`. Findings are number
 
 ## 2026-11-11
 
+### Documented: physical justification for the spur cut-off
+
+**No change to results**: `SPUR_PX_PLACEHOLDER` stays 15 px; only its documentation changed.
+
+15 px = 9.1 µm on `mm` images, about the largest measured agglomerate size (d99 of inks T2–T4,
+7–10 µm, laser diffraction) and the typical film thickness (8–16 µm). A shorter dead end can't
+be told apart from crack-wall roughness. The value was chosen first and checked against these
+scales afterwards. Status 🔴 → 🟢 in `CALIBRATION.md`; full sources and caveats in
+`docs/calibration_notes.md`.
+
 ### Removed: foreground-fraction sanity band in binarize
 
 **No change to results**: no measured number changes. The per-image spreadsheet loses three

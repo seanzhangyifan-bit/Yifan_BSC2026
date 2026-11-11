@@ -25,8 +25,8 @@ from .graph import path_pixel_indices
 
 # Tunable settings. Full rationale for each: docs/calibration_notes.md.
 
-# SPUR_PX_PLACEHOLDER: dead-end or isolated branches shorter than this (px)
-# are pruned as noise. 🔴 assumed, not tied to film thickness yet.
+# SPUR_PX_PLACEHOLDER: dead ends/isolated branches shorter than this (px) are pruned. 15 px = 9.1 um
+# (mm images only) ~ largest agglomerates and film thickness. 🟢, see docs/calibration_notes.md.
 SPUR_PX_PLACEHOLDER = 15
 
 # HOLE_AREA_THRESHOLD_PX2: holes inside a crack smaller than this (px^2) are

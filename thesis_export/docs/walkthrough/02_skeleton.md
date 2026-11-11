@@ -57,7 +57,7 @@ references) lives in [`docs/design_notes.md`](../design_notes.md).
 
 | Line | Setting | Value | Meaning |
 |---|---|---|---|
-| 30 | `SPUR_PX_PLACEHOLDER` | 15 px | Dead ends and loose pieces shorter than this are removed. 🔴 Not tied to film thickness yet; the most important unjustified number in this file. |
+| 30 | `SPUR_PX_PLACEHOLDER` | 15 px = 9.1 µm | Dead ends and loose pieces shorter than this are removed. 🟢 About the largest measured agglomerate size and the typical film thickness, so shorter branches can't be told from wall roughness. See `docs/calibration_notes.md`. |
 | 35 | `HOLE_AREA_THRESHOLD_PX2` | 50 px² | Holes inside a crack smaller than this are filled first, so the skeleton doesn't loop around a speck of dust. 🔴 |
 | 41 | `CORR_THRESHOLD` | 0.99 | How steadily a branch's width must grow to count as a fake corner branch (see below). 🟡 Hand-tested at 0.8–0.99 on one image. |
 | 45 | `MIN_LEN_FOR_CORR_PX` | 4 px | Branches shorter than this skip the width test; too few points to judge. 🔴 |
