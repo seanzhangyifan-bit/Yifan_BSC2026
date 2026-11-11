@@ -1,65 +1,18 @@
-"""Identify and exclude large flaked/delaminated catalyst-layer regions from
-the crack mask before they contaminate crack-area, width, length, and
-connectivity statistics.
+"""Find flaked-off catalyst-layer patches and exclude them from the crack mask.
 
-Why this exists: a flaked-off patch (catalyst layer physically absent,
-exposing substrate) reads as bright/foreground under the same Otsu threshold
-as a real crack, but it is not a crack -- it is a 2D area of missing
-material, not a 1D fracture. Left uncorrected, it (a) inflates
-crack_area_pct, (b) corrupts avg_width_px/avg_edge_length_px because
-skeletonizing its filled interior produces a genuinely multi-branched,
-non-representative medial axis (not the "double-line loop" artifact
-documented in skeleton.py -- a different mechanism: the medial axis of a
-blob-shaped region is *inherently* branchy, this isn't thinning noise), and
-(c) silently discards the fact that we have zero evidence about what crack
-pattern, if any, existed under the now-missing material.
+A flaked patch is bright under Otsu like a crack, but it is missing material,
+not a fracture, and hides whatever crack pattern was underneath.
 
-Identification (this module's own contribution, not reused from elsewhere):
-a pixel is a candidate-blob pixel if its local width (2 * medial_radius,
-the same EDT half-width skeleton.py already computes) exceeds
-WIDTH_FLAG_MULTIPLIER_K times this image's own reference crack width --
-sampled at skeleton centerline pixels only (the one place medial_radius
-reads a genuine half-width rather than "however close this pixel happens to
-be to an edge"), median rather than mean so a blob's own messy interior
-skeleton (a small fraction of total skeleton mileage) can't drag the
-reference value up. Connected components of the flagged region are kept as
-candidates only above MIN_CANDIDATE_AREA_PX2 -- width is the single
-identification criterion, deliberately: an earlier version also required
-high solidity (area / convex-hull area) to separate compact blobs from
-merely-locally-wide, elongated crack bands, but that second criterion was
-dropped after a real elongated candidate on T2-A_membran_v2 (solidity
-0.674, well below the 0.75 cutoff) was confirmed by inspection to be real
-delamination, not a wide crack -- solidity was excluding genuine cases and
-was harder to justify than width alone. One criterion, explainable, beats
-two where the second one is doing more harm than good.
+- Identify: pixels wider than WIDTH_FLAG_MULTIPLIER_K x this image's median
+  crack width, in regions of at least MIN_CANDIDATE_AREA_PX2. Width is the only
+  criterion; a solidity criterion was tried and dropped.
+- Exclude: grow each region back out to its true edge (GROWTH_MULTIPLIER),
+  staying inside the mask, and remove it.
+- Edges that pass near the cut have untrustworthy lengths, so they are dropped
+  from length/width stats (cut_adjacent_path_indices), not reshaped.
 
-Treatment: WIDTH_FLAG_MULTIPLIER_K=4 means a flagged seed pixel is, by
-construction, more than (K/2) * reference_width_px from the nearest
-background pixel -- the seed starts already eroded inward from the true
-boundary by that amount. Growing the seed back out has to at least undo
-that erosion before it can reach the true edge; GROWTH_MULTIPLIER=2.2
-follows directly (2.0 = K/2 exactly undoes the erosion, +10% margin to
-reliably clear it -- verified by visual inspection against real candidates,
-not derived from first principles). Growth is mask-constrained dilation
-(can never cross a real black boundary), cropped to each candidate's padded
-bounding box (growth is inherently local, so this is a safe, not a lossy,
-optimization). Nothing here converges to a fully "moated" stop in the
-mathematical sense -- almost every candidate touches at least one thin
-crack corridor, and dilation will keep creeping a little further down it on
-every step, forever, in a fully connected network. GROWTH_MULTIPLIER is
-therefore a disclosed stopping budget, not a discovered boundary.
-
-Deliberately not built here: any attempt to reshape the exclusion boundary
-to look more like a natural crack tip (a "meniscus", considered and
-rejected in favour of the approach below) -- that would be shaping the
-output to look right rather than measuring anything, which this project's
-own evidence-level discipline rules out. Instead, edges that end up
-touching the exclusion boundary are meant to be flagged and dropped from
-downstream length/width statistics (see cut_adjacent_path_indices) rather
-than having their geometry cosmetically smoothed.
-
-Every constant below is 🔴 assumed (chosen by inspection this session, no
-independent sweep) except where noted -- see CALIBRATION.md's convention.
+Constants are 🔴 assumed unless noted. Full rationale:
+docs/design_notes.md, section "flaking.py".
 """
 
 from dataclasses import dataclass, field

@@ -198,7 +198,7 @@ No dedicated sweep script found; used at `corners.py`'s bearing-matching step
 
 ## SPUR_PX_PLACEHOLDER
 
-`src/crackgraph/skeleton.py:22` — value `15`
+`src/crackgraph/skeleton.py:30` — value `15`
 
 > Not derived from real film-thickness h or a calibrated um-per-pixel value -- neither
 > exists yet (calibration is supplied manually, later). Chosen only as "somewhat larger
@@ -215,7 +215,7 @@ validating it.
 
 ## HOLE_AREA_THRESHOLD_PX2
 
-`src/crackgraph/skeleton.py:91` — value `50`
+`src/crackgraph/skeleton.py:35` — value `50`
 
 > Area (px^2) below which a fully-enclosed background hole inside the foreground mask gets
 > filled in, right after `remove_small_objects` and before `skeletonize()`. A tiny
@@ -231,7 +231,7 @@ effect is always negligible.
 
 ## CORR_THRESHOLD
 
-`src/crackgraph/skeleton.py:63` — value `0.99`
+`src/crackgraph/skeleton.py:41` — value `0.99`
 
 > Pearson correlation (pixel position vs. local width) above which a branch is treated as
 > a corner-tracing medial-axis artifact rather than a real crack spur. Swept at
@@ -254,7 +254,7 @@ survive. That is why this constant is a correlation coefficient, not a fraction.
 
 ## MIN_LEN_FOR_CORR_PX
 
-`src/crackgraph/skeleton.py:70` — value `4`
+`src/crackgraph/skeleton.py:45` — value `4`
 
 > Minimum branch length (px) for the correlation test to be meaningful at all; shorter
 > branches don't have enough points for a Pearson correlation to mean anything, so they're

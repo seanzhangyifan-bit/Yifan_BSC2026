@@ -28,10 +28,10 @@ rationale (relocated verbatim from its old inline comment).
 |`CORNER\\\_MIN\\\_TURN\\\_DEG`|[`corners.py:77`](src/crackgraph/corners.py)|45.0|🔴 assumed|held fixed in sweep script, never itself swept|
 |`ABUTTER\\\_AGREEMENT\\\_TOL\\\_DEG`|[`corners.py:82`](src/crackgraph/corners.py)|30.0|🔴 assumed|no sweep|
 |`BEARING\\\_MATCH\\\_TOL\\\_DEG`|[`corners.py:88`](src/crackgraph/corners.py)|30.0|🔴 assumed|no sweep|
-|`SPUR\\\_PX\\\_PLACEHOLDER`|[`skeleton.py:22`](src/crackgraph/skeleton.py)|15|🔴 assumed|heuristic tied to another unswept placeholder; tests override it (`spur\\\_px=3`) rather than validate it|
-|`HOLE\\\_AREA\\\_THRESHOLD\\\_PX2`|[`skeleton.py:91`](src/crackgraph/skeleton.py)|50|🔴 assumed|carried over unchanged from an earlier prototype comparison script; not independently derived or swept|
-|`CORR\\\_THRESHOLD`|[`skeleton.py:63`](src/crackgraph/skeleton.py)|0.99|🟡 empirical, uncalibrated|4-point visual sweep (0.8/0.9/0.95/0.99) on one real image, T2-A\_membran\_v2|
-|`MIN\\\_LEN\\\_FOR\\\_CORR\\\_PX`|[`skeleton.py:70`](src/crackgraph/skeleton.py)|4|🔴 assumed|no sweep; floor for a Pearson correlation to be meaningful at all|
+|`SPUR\\\_PX\\\_PLACEHOLDER`|[`skeleton.py:30`](src/crackgraph/skeleton.py)|15|🔴 assumed|heuristic tied to another unswept placeholder; tests override it (`spur\\\_px=3`) rather than validate it|
+|`HOLE\\\_AREA\\\_THRESHOLD\\\_PX2`|[`skeleton.py:35`](src/crackgraph/skeleton.py)|50|🔴 assumed|carried over unchanged from an earlier prototype comparison script; not independently derived or swept|
+|`CORR\\\_THRESHOLD`|[`skeleton.py:41`](src/crackgraph/skeleton.py)|0.99|🟡 empirical, uncalibrated|4-point visual sweep (0.8/0.9/0.95/0.99) on one real image, T2-A\_membran\_v2|
+|`MIN\\\_LEN\\\_FOR\\\_CORR\\\_PX`|[`skeleton.py:45`](src/crackgraph/skeleton.py)|4|🔴 assumed|no sweep; floor for a Pearson correlation to be meaningful at all|
 |`KINK\\\_WINDOW\\\_PX\\\_PLACEHOLDER`|[`kinks.py:27`](src/crackgraph/kinks.py)|10.0|🔴 assumed|no sweep, unlike its annulus/corner-window cousins|
 |`KINK\\\_TURN\\\_DEG\\\_PLACEHOLDER`|[`kinks.py:32`](src/crackgraph/kinks.py)|45.0|🔴 assumed|no sweep; correctness tests only, not calibration|
 |`CORNER\\\_TO\\\_TANGENT\\\_BEARING\\\_TOL\\\_DEG`|[`precedence.py:58`](src/crackgraph/precedence.py)|45.0|🔴 assumed|comment self-documents as not yet swept|
