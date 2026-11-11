@@ -104,7 +104,7 @@ crack it branches from** (its host).
 | Line | Code | What it means |
 |---|---|---|
 | 111 | `remove_small_objects(mask, min_size=min_object_px)` | Fill **bright spots** under 4 pixels: light shining through the catalyst layer, not cracks. |
-| 112 | `remove_small_holes(..., area_threshold=DARK_SPECK_AREA_PX)` | Remove **dark specks** under 130 px² inside cracks: pieces of catalyst layer or dust sitting in the crack. |
+| 112 | `remove_small_holes(..., area_threshold=DARK_SPECK_AREA_PX)` | Remove **dark specks** under 130 px inside cracks: pieces of catalyst layer or dust sitting in the crack. |
 | 113 | `skel_image = skeletonize(mask_clean)` | **The thinning.** Zhang–Suen, via scikit-image. |
 | 121 | `medial_radius = distance_transform_edt(mask_clean)` | The width map. On a full image this takes about 13 seconds, the slowest single step. |
 | 123 | `skel = skan.Skeleton(skel_image, source_image=source_image)` | Hand the skeleton to skan, which turns pixels into branches and junctions. |

@@ -50,7 +50,7 @@ edges between two junctions are type 2 or 3, whatever spur_px is.
 Effect: these edges inflate n_edges and deflate edge-length statistics on
 affected images (see docs/batch_stats/crack_stats_schema.md S4) and add
 junctions to the census. Speck loops are reduced by dark-speck removal,
-raised from 50 to 130 px^2 (the area of a d90 ~ 7.8 um agglomerate) on
+raised from 50 to 130 px (the area of a d90 ~ 7.8 um agglomerate) on
 2026-11-11; that removes about 10 loops on the densest crops. Short edges
 between close junctions would need a junction-merging step; none is
 implemented.

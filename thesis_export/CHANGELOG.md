@@ -21,7 +21,7 @@ Commit IDs link each entry to its full details in `git log`. Findings are number
   (`remove_small_objects`, `min_object_px`). Previously called "bright specks" and described as
   removed.
 
-### Changed: host-stub pruning replaces the corner test; dark-speck removal raised to 130 px²
+### Changed: host-stub pruning replaces the corner test; dark-speck removal raised to 130 px
 
 **Changes results**: edge counts and edge-length statistics (`ledge`, `ledge,gc`,
 `avg_edge_length_px`) on dense images with wide cracks; small shifts in total length. Re-run every
@@ -35,8 +35,8 @@ Two changes to stage 2 (`skeleton.py`), made together:
    crack's centre line to bumps on its wall (correlation 0.94–0.99) and removed some real cracks
    cut off by the image edge. `CORR_THRESHOLD` and `MIN_LEN_FOR_CORR_PX` are gone; the rule uses
    only `spur_px`. Tested against two other variants (`docs/design_notes.md`).
-2. **Dark-speck removal 50 → 130 px²**, renamed `HOLE_AREA_THRESHOLD_PX2` → `DARK_SPECK_AREA_PX`.
-   130 px² is the area of a d90 ≈ 7.8 µm agglomerate (inks T2–T4). Removes loops around specks
+2. **Dark-speck removal 50 → 130 px**, renamed `HOLE_AREA_THRESHOLD_PX2` → `DARK_SPECK_AREA_PX`.
+   130 px is the area of a d90 ≈ 7.8 µm agglomerate (inks T2–T4). Removes loops around specks
    inside wide cracks.
 
 **Measured on 2048 px centre crops of 6 micrographs** (no flaking exclusion):

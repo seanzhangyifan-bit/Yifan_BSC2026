@@ -247,22 +247,22 @@ validating it.
 `src/crackgraph/skeleton.py:30` — value `130` (was `HOLE_AREA_THRESHOLD_PX2` = `50` until 2026-11-11)
 
 Dark specks inside a crack (pieces of catalyst layer or dust sitting in the gap) smaller than this
-many px² are removed right after bright spots are filled (`remove_small_objects`) and before
+many px are removed right after bright spots are filled (`remove_small_objects`) and before
 `skeletonize()`. A speck left in makes the skeleton loop around it, adding two junctions and
 short edges.
 
-**Physical justification.** 130 px² × (0.6098 µm/px)² = **48 µm²**, the area of a circle of
+**Physical justification.** 130 px × (0.6098 µm/px)² = **48 µm²**, the area of a circle of
 diameter ≈ 7.8 µm: the d90 agglomerate size of inks T2–T4 `[measured]` (same PSD source as
 `SPUR_PX_PLACEHOLDER` above). A dark speck no bigger than one agglomerate inside a crack is
 read as material sitting in the gap, not a separate crack cell `[interpreted]`. Same caveats
 as above: wet-ink PSD, one value for every image, `mm` images only.
 
-**Measured effect of 50 → 130 px²** (2048 px centre crops of 6 micrographs,
+**Measured effect of 50 → 130 px** (2048 px centre crops of 6 micrographs,
 `outputs/hole_fill_test/`): 14 real specks inside cracks newly removed (plus 5 dark background
 slivers cut off at the crop edge), removing their loops; `ledge` +0.9 to +6.9% on the four crops with specks,
 `wcrack`, crack area and `N` unchanged.
 
-The old 50 px² value was carried over from an informal prototype script and never derived.
+The old 50 px value was carried over from an informal prototype script and never derived.
 
 ## Removed: CORR_THRESHOLD and MIN_LEN_FOR_CORR_PX
 

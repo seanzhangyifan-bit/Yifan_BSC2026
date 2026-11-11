@@ -29,7 +29,7 @@ rationale (relocated verbatim from its old inline comment).
 |`ABUTTER_AGREEMENT_TOL_DEG`|[`corners.py:64`](src/crackgraph/corners.py)|30.0|🔴 assumed|no sweep|
 |`BEARING_MATCH_TOL_DEG`|[`corners.py:66`](src/crackgraph/corners.py)|30.0|🔴 assumed|no sweep|
 |`SPUR_PX_PLACEHOLDER`|[`skeleton.py:24`](src/crackgraph/skeleton.py)|15|🟢 derived (after the fact)|15 px = 9.1 µm ≈ largest measured agglomerates (d99 of inks T2–T4, 7–10 µm) and typical film thickness (8–16 µm); `mm` images only. Tests still override it (`spur_px=3`)|
-|`DARK_SPECK_AREA_PX`|[`skeleton.py:30`](src/crackgraph/skeleton.py)|130|🟢 derived|130 px² = 48 µm², the area of a d90 ≈ 7.8 µm agglomerate (inks T2–T4); `mm` images only. Was `HOLE_AREA_THRESHOLD_PX2` = 50 (🔴) until 2026-11-11|
+|`DARK_SPECK_AREA_PX`|[`skeleton.py:30`](src/crackgraph/skeleton.py)|130|🟢 derived|130 px = 48 µm², the area of a d90 ≈ 7.8 µm agglomerate (inks T2–T4); `mm` images only. Was `HOLE_AREA_THRESHOLD_PX2` = 50 (🔴) until 2026-11-11|
 |`CORNER_TO_TANGENT_BEARING_TOL_DEG`|[`precedence.py:59`](src/crackgraph/precedence.py)|45.0|🔴 assumed|comment self-documents as not yet swept|
 |`WIDTH_TRIM_INNER_PX_PLACEHOLDER`|[`edge_metrics.py`](src/crackgraph/edge_metrics.py)|5.0|🔴 assumed|same "a few px" heuristic as `ANNULUS_INNER_PX_PLACEHOLDER`, no independent sweep|
 |`AREA_JUNCTION_BLOB_RADIUS_PLACEHOLDER`|[`edge_metrics.py`](src/crackgraph/edge_metrics.py)|5.0|🔴 assumed|same heuristic again, no sweep|
