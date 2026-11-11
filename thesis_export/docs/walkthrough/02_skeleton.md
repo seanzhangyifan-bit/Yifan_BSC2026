@@ -1,0 +1,129 @@
+# 2. Skeletonizing
+
+**File**: `src/crackgraph/skeleton.py` (~225 lines)
+
+**What it does.** It thins every crack in the mask down to a line **1 pixel wide** running along
+its middle, called the **skeleton**, then removes junk branches the thinning creates.
+
+**Why.** Thick blobs can't be measured as a network. On 1-pixel lines, a crack's length is the
+number of pixels it covers, and a junction is wherever 3 or more lines meet.
+
+**The hard part is the cleanup.** Most of this file decides which branches are fake.
+
+For a picture of how thinning works, see `outputs/skeleton_animation.gif` in the parent repo if
+you still have it. Thinning peels the crack like an onion, one pixel layer per pass, until only
+the centre line is left.
+
+---
+
+## Opening description, lines 1–15
+
+A short summary of the above, plus the main known limitation. On wide or ragged cracks, thinning
+can trace both walls for a short stretch and leave a small **loop** instead of one line. The
+pruning below never removes those loops. The full reasoning (measurements, rejected methods,
+references) lives in [`docs/design_notes.md`](../design_notes.md).
+
+## Settings, lines 26–45
+
+| Line | Setting | Value | Meaning |
+|---|---|---|---|
+| 30 | `SPUR_PX_PLACEHOLDER` | 15 px | Dead ends and loose pieces shorter than this are removed. 🔴 Not tied to film thickness yet; the most important unjustified number in this file. |
+| 35 | `HOLE_AREA_THRESHOLD_PX2` | 50 px² | Holes inside a crack smaller than this are filled first, so the skeleton doesn't loop around a speck of dust. 🔴 |
+| 41 | `CORR_THRESHOLD` | 0.99 | How steadily a branch's width must grow to count as a fake corner branch (see below). 🟡 Hand-tested at 0.8–0.99 on one image. |
+| 45 | `MIN_LEN_FOR_CORR_PX` | 4 px | Branches shorter than this skip the width test; too few points to judge. 🔴 |
+
+## Result containers, lines 48–77
+
+- **`PrunedBranchRecord`** (line 49): one removed branch. It stores *why* it was removed
+  (`"spur"`, `"fragment"` or `"corner_artifact"`), its length and its exact pixel path, so you
+  can later draw what was cut.
+- **`SkeletonResult`** (line 61): everything this step produces. The fields that matter most:
+  - `skeleton`: the cleaned skeleton as a skan network. The next step uses this.
+  - `mask_clean`: the crack mask after specks are removed and holes filled. Crack area is
+    counted from this.
+  - `medial_radius`: the **width map**. For every crack pixel, its distance to the nearest crack
+    edge, which is half the local crack width. Every width number in the project comes from
+    this.
+  - The rest are counts and lengths of what was removed, for reporting.
+
+---
+
+## `_tip_ordered_width_profile(...)`, line 80
+
+**For**: listing the crack width at each pixel along one branch, **starting from its loose end**,
+so the next function can ask "does the width grow as you walk in from the tip?"
+
+| Line | Code | What it means |
+|---|---|---|
+| 80–86 | header | Inputs: the skeleton, the width map, which branch (`path_index`), and its two endpoint IDs. Returns a list of widths. The leading `_` means "internal helper". |
+| 92 | `coords = skel.path_coordinates(int(path_index))` | The branch's pixels in order, from its stored start point to its end point. |
+| 93 | `if skel.degrees[int(node_id_dst)] == 1:` | Is the *end* point a loose end? (Degree 1 = only one branch touches it.) |
+| 94 | `coords = coords[::-1]` | If so, flip the list so it starts at the tip. `[::-1]` = reversed. |
+| 95 | `rr, cc = path_pixel_indices(coords, medial_radius.shape)` | Positions → whole-number pixel indices (rows, columns), clamped inside the image. Helper from `graph.py`. |
+| 96 | `return 2.0 * medial_radius[rr, cc]` | Look up the half-width at every pixel at once, and double it. |
+
+**Small blind spot.** For an isolated piece with two loose ends, line 94 always flips it, so the
+direction is arbitrary. The next function only flags width that *rises*, so a piece ramping the
+other way isn't caught. That rarely matters, since short isolated pieces are removed by length
+anyway.
+
+## `is_corner_tracing_artifact(widths, ...)`, line 99
+
+**The idea.** Thinning sends a branch into every sharp inward corner of a crack's outline, even
+where no crack exists. Along such a fake branch, the width climbs steadily toward the corner.
+Along a real crack, the width wobbles around a constant value.
+
+| Line | Code | What it means |
+|---|---|---|
+| 109–111 | `if n < min_len_px: return False` | Too short to judge → keep it. |
+| 112–113 | `if widths.std() == 0: return False` | Perfectly constant width → not growing → keep it. (Also avoids dividing by zero.) |
+| 114–115 | `corr = np.corrcoef(positions, widths)[0, 1]` | **The key line.** Correlation between "position along the branch" and "width": near 0 = flat (real), near +1 = steady growth (fake). |
+| 116 | `return bool(corr > corr_threshold)` | Fake if above 0.99. |
+
+Correlation tests for a *trend*. That's why it replaced an earlier "share of pixels wider than
+the tip" test, which behaved like a coin flip on real noisy cracks. See `docs/design_notes.md`.
+
+## `skeletonize_and_prune(mask, ...)`, line 119: the main function
+
+**Preparation**
+
+| Line | Code | What it means |
+|---|---|---|
+| 128 | `remove_small_objects(mask, min_size=min_object_px)` | Delete specks under 4 pixels. |
+| 129 | `remove_small_holes(..., area_threshold=HOLE_AREA_THRESHOLD_PX2)` | Fill holes under 50 px² inside cracks. |
+| 130 | `skel_image = skeletonize(mask_clean)` | **The thinning.** Zhang–Suen, via scikit-image. |
+| 138 | `medial_radius = distance_transform_edt(mask_clean)` | The width map. On a full image this takes about 13 seconds, the slowest single step. |
+| 140 | `skel = skan.Skeleton(skel_image, source_image=source_image)` | Hand the skeleton to skan, which turns pixels into branches and junctions. |
+
+**The cleanup loop, line 148.** It repeats up to 10 times and stops early when a round removes
+nothing.
+
+| Line | Code | What it means |
+|---|---|---|
+| 149 | `summary = skan.summarize(skel, separator="_")` | A table with one row per branch: length (`branch_distance`) and **type**. Type 0 = isolated piece, 1 = dead end, 2 = junction to junction, 3 = closed loop. |
+| 152 | `is_spur = (type == 1) & (length < spur_px)` | Short dead ends. |
+| 153 | `is_fragment = (type == 0) & (length < spur_px)` | Short isolated pieces. |
+| 164–177 | corner check | For dead ends and isolated pieces that *weren't* already too short, run the width-growth test on each. |
+| 179–180 | `if ... == 0: break` | Nothing flagged → done. |
+| 181–200 | record | Save each flagged branch's length and pixel path *before* removing it, because skan renumbers branches after every removal. |
+| 203 | `skel = skel.prune_paths(...)` | **Remove all flagged branches.** skan returns a fresh, cleaned skeleton. |
+
+**Why repeat?** Removing one spur can turn a junction into a plain bend, which can make a
+neighbouring branch into a new short dead end. The next round catches it.
+
+**Return, line 208.** Packs everything into `SkeletonResult`.
+
+---
+
+## Worth knowing
+
+- **Only types 0 and 1 are ever removed.** Junction-to-junction branches (type 2) and loops
+  (type 3) are never touched, which is exactly why the "fake loop" problem stays unfixed.
+  `scripts/validation/skeleton_loop_sweep.py` measured it across the dataset: 0–55% of edges per
+  image.
+- **Everything is in pixels.** Converting to µm happens in the exporter.
+- **Tests**: `tests/test_skeleton.py` (8 tests):
+  - width ramps are flagged; flat and noisy widths and short branches are not
+  - a synthetic wedge is pruned only when the corner test is on
+  - small holes are filled and large ones aren't Many other test files use `spur_px=3` instead of 15, so the default value
+  itself isn't validated.

@@ -11,6 +11,13 @@ Commit IDs link each entry to its full details in `git log`. Findings are number
 
 ## 2026-11-11
 
+### Added: code walkthrough
+
+**No change to results** (documentation only).
+
+[`docs/walkthrough/`](docs/walkthrough/README.md): a 14-page, plain-language tour of every part of
+the code, in the order data flows through it, function by function with line references.
+
 ### Added: sensitivity check for the T/Y junction cut-offs
 
 **No change to results** (adds an analysis). Review finding 12.

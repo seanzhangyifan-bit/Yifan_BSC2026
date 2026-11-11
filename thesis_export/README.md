@@ -11,6 +11,7 @@ partial order of crack growth rather than a full chronology — read that before
 below make full sense. [`GLOSSARY.md`](GLOSSARY.md) has one-line term definitions;
 [`CALIBRATION.md`](CALIBRATION.md) has the calibration status of every tunable constant.
 [`CHANGELOG.md`](CHANGELOG.md) lists every fix and change, and whether it affects reported results.
+[`docs/walkthrough/`](docs/walkthrough/README.md) is a plain-language, file-by-file tour of the code.
 
 ## Setup
 

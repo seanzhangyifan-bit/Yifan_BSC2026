@@ -1,0 +1,98 @@
+# 11. The per-image command
+
+**File**: `src/analyze_image.py` (726 lines)
+
+**What it does.** It's the one command that runs the **whole** ordering analysis on one image:
+
+```
+python3 -m src.analyze_image path/to/image.jpg
+```
+
+It prints a long report with an evidence label on every number, and writes:
+- overlay pictures
+- a precedence picture
+- a per-segment CSV
+- optionally, a spreadsheet row
+
+It's mostly *wiring*: almost every calculation happens in the modules from pages 1–10.
+
+**By default it analyses only a corner crop**: a square 1/8 of the image width, inset 2% from
+the top-left corner (`region.py`). The ordering analysis was validated at that size; full-image
+runs (`--full-image`) are allowed but not validated yet.
+
+---
+
+## Settings, lines 57–63
+
+`EXPECTED_WIDTH_PX_RANGE` / `EXPECTED_HEIGHT_PX_RANGE`: the size of a normal 5 mm mosaic capture.
+A different size prints a warning, because it's probably the wrong kind of image.
+
+## `parse_args()`, line 66: the options
+
+Every tunable setting from earlier pages can be overridden from the command line, for example
+`--spur-px`, `--annulus-outer-px` or `--y-angle-tol-deg`, with defaults taken from the modules.
+Notable switches:
+
+| Option | Effect |
+|---|---|
+| `--full-image` | Analyse the whole image, not the corner crop. |
+| `--show-fit-detail` | Also draw a diagnostic overlay showing each fitted arm curve. |
+| `--hide-corner-check` | Hide corner markers from the overlay; the check still runs. |
+| `--skip-curvature`, `--skip-anisotropy` | Skip those measurements. |
+| `--skip-junctions` | Skip junctions, which also skips the corner check and precedence (both need it). |
+| `--skip-corner-cross-check`, `--skip-precedence` | Skip just those. |
+| `--xlsx-out FILE` | Append a summary row to a workbook. Refuses to combine with any `--skip-*`. |
+
+## `main()`, line 170
+
+It's about 550 lines. Splitting it into "run" and "print" parts is review item R1. In order:
+
+### 1. Load and crop, lines 171–205
+Load the image, warn if it's an unusual size, and cut out the corner crop unless `--full-image`.
+
+### 2. Run the pipeline, lines 207–301
+| Lines | Step | Page |
+|---|---|---|
+| 207 | Binarize | 1 |
+| 212–237 | Scout skeleton → flaking → second skeleton if flakes were found | 2, 3 |
+| 238 | Graph | 4 |
+| 240–252 | Curvature and anisotropy (unless skipped) | 10 |
+| 253–260 | Per-segment metrics (always) | 6 |
+| 262–272 | Junction classification, passing the width map so the ring widens on thick cracks | 7 |
+| 275–288 | Corner cross-check (needs junctions) | 8 |
+| 292–301 | Precedence graph (needs junctions; works with or without the corner check) | 9 |
+
+### 3. Write files, lines 303–348
+Outputs go to `outputs/<image's folder name>/`. Files are named `<image>_<corner|full>_...`:
+- `..._edge_metrics.csv`: per-segment table.
+- `..._precedence.png`: segments coloured by generation.
+- `..._overlay.png`: skeleton, endpoints and T/Y markers.
+- `..._overlay_detail.png`: with fitted curves, if `--show-fit-detail`.
+
+### 4. Print the report, lines 350–703
+One section per stage, each number tagged `[measured]`, `[interpreted]` or `[PLACEHOLDER]`:
+- every option value used, plus library versions, so the run can be reproduced exactly
+- binarize threshold and sanity check
+- flaking candidates
+- pruning counts
+- node counts
+- curvature and tortuosity
+- anisotropy with a text histogram
+- the four area estimates and widths per segment
+- every junction's label and gaps
+- corner-check agreement
+- precedence arrows, conflicts and cycles
+
+The app's progress bar (page 13) watches for these section headers to know how far along the run
+is.
+
+### 5. Optional spreadsheet row, lines 705–722
+With `--xlsx-out`, it appends a summary row through `xlsx_report.append_chunk_to_workbook`
+(page 12).
+
+## Worth knowing
+
+- **Edge metrics here don't drop segments next to a flaking cut**, unlike the batch exporter
+  (review finding 15).
+- **Nothing in `tests/` runs this file** (review finding 16). The pieces it calls are tested
+  individually.
