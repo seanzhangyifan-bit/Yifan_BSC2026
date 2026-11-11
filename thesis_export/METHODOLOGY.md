@@ -31,7 +31,7 @@ Model the network as a planar graph: nodes = junctions/endpoints, edges = crack 
 ## Pipeline stages
 
 1. Binarise micrograph (adaptive threshold).
-   - **Flaking/delamination exclusion, between stages 1 and 2** (`src/crackgraph/flaking.py`): some samples (seen so far on membrane-substrate T2/T3/T4) have patches where the catalyst layer has physically flaked off, exposing substrate — bright under Otsu like a crack, but it's missing material, not a fracture, and there's zero evidence what crack pattern (if any) existed under it. A scout skeletonize pass gets a width signal; pixels far wider than the image's own typical crack width are grown back out to their true boundary and excluded from the mask *before* the real skeletonize runs — treated as background, not specially handled downstream. Width is the single identification criterion, deliberately — a solidity-based second criterion was tried and dropped after it excluded a confirmed real (elongated) delamination case; see the module docstring. Edges whose path comes within one reference-crack-width of the exclusion boundary at any point (not just their endpoints) are flagged and dropped from length/width stats (kept in the connectivity graph — the topology is real, only the reported length isn't). See the module docstring for why a "smooth the boundary to look natural" approach was considered and rejected (shapes the output, doesn't measure anything) in favor of this stats-level exclusion.
+   - **Flaking/delamination exclusion, after stage 2** (`src/crackgraph/flaking.py`): some samples (seen so far on membrane-substrate T2/T3/T4) have patches where the catalyst layer has physically flaked off, exposing substrate — bright under Otsu like a crack, but it's missing material, not a fracture, and there's zero evidence what crack pattern (if any) existed under it. The mask is skeletonized once; pixels far wider than the image's own typical crack width are grown back out to their true boundary, and every skeleton edge with a pixel inside that region is omitted from the stats and from the connectivity graph, so nothing connects through a flaked patch. Width is the single identification criterion, deliberately — a solidity-based second criterion was tried and dropped after it excluded a confirmed real (elongated) delamination case; see the module docstring. See the module docstring for why a "smooth the boundary to look natural" approach was considered and rejected (shapes the output, doesn't measure anything).
 2. Skeletonise (homotopy-preserving thinning). Prune spurs/hairs shorter than ~film-thickness equivalent.
 3. Extract attributed planar graph: nodes, edges, and **the full pixel polyline per edge** (needed for angle/curvature/width).
 4. Measure per junction on an **annulus** around the vertex: inner radius a few px (skeleton jitter near vertices is severe), outer radius ~h/2 (local approach direction, not far-field). Classify T vs Y; for each T emit `abutter ≺ host` (read the open side of `≺` as pointing to the *older* crack: host is older, abutter is younger).
@@ -122,10 +122,8 @@ they're not duplicated here:
 - `docs/design_notes.md` — the full design rationale for `skeleton.py` and `flaking.py`,
   relocated verbatim from what used to be their opening docstrings.
 - `docs/batch_stats/crack_stats_schema.md` — column-by-column reference for `outputs/crack_stats.xlsx`
-  (the standalone batch export, see "Standalone crack-stats export" above), plus the two follow-on
-  batch-export methodologies built on top of it: a 19-image re-run with flaking-aware caching and
-  thesis-notation columns, and an independent single-pass methodology cross-validated against it —
-  both remain runnable side by side.
+  (the standalone batch export, see "Standalone crack-stats export" above), including the
+  thesis-notation column mapping.
 - `docs/experimental/dynamic_tracking_hypothetical.md` — a design discussion (not implemented, not
   tested) on whether/how this pipeline could extend to in-situ drying video instead of static
   micrographs; `scripts/experimental/tracing_poc.py` is a throwaway, unintegrated proof-of-concept

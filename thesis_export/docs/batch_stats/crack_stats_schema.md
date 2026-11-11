@@ -11,17 +11,15 @@ junction classification (T/Y census), no anisotropy, no curvature, no crack-orde
 data. Those exist for a different purpose (reconstructing a partial order of crack growth from
 junction geometry) and are out of scope here on purpose.
 
-`compute_row()` backs three outputs today, all sharing the same column definitions (§4) unless a
-section below says otherwise:
+`compute_row()` backs two scripts, both writing the columns in §4:
 
-- **`crack_stats.xlsx`** — a 39-row snapshot, one row per raw micrograph in `data/raw/`. §2-§8
-  describe this file specifically. Not a live feed; regenerate via
-  `python3 -m scripts.batch_stats.export_crack_stats` to pick up any code changes.
-- **`outputs/crack_stats_v2/`** — a 19-image re-run adding flaking-aware per-image caching and a
-  thesis-notation column mapping. §9 describes it.
-- **`outputs/crack_stats_v3_batch_bcd.xlsx`** — an independent, single-pass methodology
-  (`scripts/batch_stats/export_crack_stats_v3.py`), cross-validated against v1/v2 rather than
-  replacing them. §10 describes the methodology difference and validation result.
+- **`python3 -m scripts.batch_stats.export_crack_stats`** — every raw micrograph selected per §2,
+  one row each, written to `crack_stats.xlsx`. Not a live feed; re-run to pick up code changes.
+- **`python3 -m scripts.batch_stats.export_crack_stats_batch_bcd`** — the same rows for three
+  fixed thesis batches (B: T5 gap height on PTFE, C: T5 dew point on membrane, D: T2/T3/T4
+  membrane), with an extra `batch` column.
+
+§9 maps eight of the columns to the notation used in the thesis.
 
 ## 2. How images are selected
 
@@ -117,25 +115,26 @@ see §4.
 | 5 | `scale_bar_check` | `no blue bar (visually confirmed)` only when the run was started with `--scale-bars-checked`, i.e. someone did the direct per-image visual check described in §2 (not the naming-convention inference). Otherwise `not checked`, which is also what the GUI always writes. | text | — |
 | 6 | `crack_area_pct` | `corrected_mask.sum() ÷ (image_width_px × image_height_px) × 100` — share of image pixels classified as crack by Otsu thresholding, after flaking exclusion (§4b) and mask cleaning: bright spots below `min_object_px` (light shining through the catalyst layer) filled, and dark specks inside cracks below `DARK_SPECK_AREA_PX` (pieces of catalyst layer or dust) removed. | % of image area | `measured` |
 | 7 | `crack_area_mm2` | `crack_area_px² × (0.6098 µm/px)² ÷ 1e6` | mm² | `calibrated` |
-| 8 | `avg_width_px` | `crack_area_px² ÷ total_skeleton_length_px` (length excluding cut-adjacent edges, §4b) — an area-based width estimate, **not** the distance-transform-sampled width used elsewhere in this pipeline. See §caveat below. | px | `interpreted` |
+| 8 | `avg_width_px` | `crack_area_px² ÷ total_skeleton_length_px` (length excluding omitted edges, §4b) — an area-based width estimate, **not** the distance-transform-sampled width used elsewhere in this pipeline. See §caveat below. | px | `interpreted` |
 | 9 | `avg_width_um` | `avg_width_px × 0.6098` | µm | `calibrated` |
-| 10 | `avg_edge_length_px` | `total_skeleton_length_px ÷ n_edges`, both excluding cut-adjacent edges (§4b) — mean distance between one graph node (junction or endpoint) and the next. **Not** "average crack length" — see §caveat below. | px | `measured` |
+| 10 | `avg_edge_length_px` | `total_skeleton_length_px ÷ n_edges`, both excluding omitted edges (§4b) — mean distance between one graph node (junction or endpoint) and the next. **Not** "average crack length" — see §caveat below. | px | `measured` |
 | 11 | `avg_edge_length_um` | `avg_edge_length_px × 0.6098` | µm | `calibrated` |
-| 12 | `n_components` | Number of disconnected pieces in the crack network (graph connected-components count). Uses the full graph including cut-adjacent edges — they're real topology, only their reported length is untrustworthy. | count | `measured` |
-| 13 | `giant_component_fraction` | (total crack length in the single largest connected piece) ÷ (total crack length, all pieces) — 1.0 means one fully connected web; well below 1 means fragmented into separate islands. Also uses the full graph. Every segment counts, including two segments that join the same pair of junctions; exports made before 2026-11-11 dropped one of each such pair and read slightly low (see `CHANGELOG.md`). | fraction, 0–1 | `measured` |
+| 12 | `n_components` | Number of disconnected pieces in the crack network (graph connected-components count). The graph is built from the kept edges only: edges touching a flaked region are omitted (§4b), so nothing connects through a flaked patch. | count | `measured` |
+| 13 | `giant_component_fraction` | (total crack length in the single largest connected piece) ÷ (total crack length, all pieces) — 1.0 means one fully connected web; well below 1 means fragmented into separate islands. Uses the same kept-edge graph as column 12. Every segment counts, including two segments that join the same pair of junctions; exports made before 2026-11-11 dropped one of each such pair and read slightly low (see `CHANGELOG.md`). | fraction, 0–1 | `measured` |
 | 14 | `flaking_excluded_area_pct` | Share of image area excluded as flaking/delamination — see §4b | % of image area | `measured` |
 | 15 | `flaking_n_candidates` | Number of flaking regions identified (width-flagged, grown to their true boundary) — see §4b | count | `interpreted` |
-| 16 | `flaking_n_edges_excluded_near_cut` | Number of graph edges touching the flaking-exclusion boundary, dropped from the length/width stats above (columns 8-11) — see §4b | count | `measured` |
+| 16 | `flaking_n_edges_omitted` | Number of skeleton edges with at least one pixel inside a flaked region, omitted from every statistic and from the connectivity graph — see §4b | count | `measured` |
 | 17 | `n_host_stubs_pruned` | Number of dead-end skeleton branches removed during stage 2 pruning because less than 15 px (9.1 µm) of their length lies outside the crack they branch from, rather than because they were short overall — see §4c. Named `n_corner_artifacts_pruned` (a different, correlation-based rule) in exports made before 2026-11-11 | count | `interpreted` |
 | 18 | `crack_area_pct_excl_flakes` | `crack_area_px² ÷ (image_width_px × image_height_px × (1 − flaking_excluded_area_pct ÷ 100)) × 100` — same numerator as column 6, but the denominator excludes the flaking-exclusion area (column 14, converted back to pixels) instead of counting the whole image, since that region is missing material, not confirmed non-crack, and there's zero evidence what (if anything) was under it before it flaked off. Equals column 6 exactly wherever `flaking_excluded_area_pct` is 0. | % of non-excluded image area | `measured` |
-| 19 | `median_width_px` | Median of `2 × medial_radius` sampled at every pixel of every skeleton edge NOT touching the flaking-exclusion cut (same exclusion columns 8-11 use) — a genuine per-pixel distance-transform measurement, unlike column 8's area/length ratio. | px | `interpreted` |
+| 19 | `median_width_px` | Median of `2 × medial_radius` sampled at every pixel of every skeleton edge not omitted for touching a flaked region (same exclusion columns 8-11 use) — a genuine per-pixel distance-transform measurement, unlike column 8's area/length ratio. | px | `interpreted` |
 | 20 | `median_width_um` | `median_width_px × 0.6098` | µm | `calibrated` |
-| 21 | `median_edge_length_px` | Median `branch_distance` over edges NOT touching the flaking-exclusion cut — median rather than column 10's mean, same reasoning as column 19. | px | `interpreted` |
+| 21 | `median_edge_length_px` | Median `branch_distance` over edges not omitted for touching a flaked region — median rather than column 10's mean, same reasoning as column 19. | px | `interpreted` |
 | 22 | `median_edge_length_um` | `median_edge_length_px × 0.6098` | µm | `calibrated` |
 | 23 | `median_edge_length_gc_px` | Same as column 21, restricted to edges whose both endpoints lie in the giant component (column 13's component, chosen by summed edge length). | px | `interpreted` |
 | 24 | `median_edge_length_gc_um` | `median_edge_length_gc_px × 0.6098` | µm | `calibrated` |
 | 25 | `giant_component_span_px` | Straight-line distance between the two farthest-apart points on the giant component's own skeleton pixel path (every pixel of every edge inside it, not just its junction/endpoint nodes) — physical spatial reach, distinguishing a large multi-crack network from a single long crack. `NaN` only when the graph is entirely empty (no edges at all) — see the closed-loop caveat below for why sampling the full pixel path, not just node coordinates, matters. | px | `interpreted` |
 | 26 | `giant_component_span_um` | `giant_component_span_px × 0.6098` | µm | `calibrated` |
+| 27–32 | `runtime_binarize_s`, `runtime_skeletonize_s`, `runtime_flaking_s`, `runtime_graph_extract_s`, `runtime_stats_s`, `runtime_total_s` | Wall-clock time per stage. `runtime_total_s` is timed separately for the whole image, so it can exceed the sum of the others. | s | `measured` |
 
 **Caveats that matter for correct use:**
 
@@ -184,24 +183,24 @@ flaked blob's filled interior produces a genuinely multi-branched medial axis).
 `src/crackgraph/flaking.py` identifies candidate regions by local width alone (far exceeding the
 image's own typical crack width) — a solidity-based second criterion was tried and dropped after
 it excluded a real elongated delamination case (solidity 0.674, confirmed genuine by inspection)
-— grows each candidate back out to its true boundary via mask-constrained dilation, and excludes
-the result from the mask before skeletonization runs, so flaked pixels never contribute a
-spurious skeleton at all.
+— and grows each candidate back out to its true boundary via mask-constrained dilation.
+
+The mask is skeletonized **once**, flaked regions included. Any skeleton edge with at least one
+pixel inside a flaked region is then **omitted** — from every statistic and from the connectivity
+graph (`flaking_n_edges_omitted`). Omitting it from the graph matters: a flaked blob's own
+skeleton is a multi-branched mesh that ordinary spur pruning can't remove, and left in, it would
+falsely connect two real crack networks through a region with no evidence about what was there.
+Crack area (`crack_area_pct`, columns 6–7 and 18) counts the cleaned mask minus the flaked
+regions.
 
 **Known gap, not yet fixed**: small, compact false positives from ordinary junction-blob
 widening (not real flaking) can still pass the width+area test alone — see `flaking.py`'s module
 docstring. `flaking_n_candidates` should be read as "candidates passing the current width test,"
 not a confirmed count of real flaking regions.
 
-**Two ways an edge near a flaked region gets handled — v1 vs. v3, see §10**: `scripts/batch_stats/export_crack_stats.py`
-(v1, the version §2-§9 describe) re-skeletonizes the corrected mask a second time, then drops any
-edge whose path comes within one reference-crack-width of the exclusion boundary
-(`flaking_n_edges_excluded_near_cut`) from the length/width stats only — it stays in the
-connectivity graph, since it's a real truncated stub at an actual mask boundary. `scripts/batch_stats/export_crack_stats_v3.py`
-(v3) instead skeletonizes once on the uncorrected mask and drops any edge with even one pixel
-inside the excluded region from the connectivity graph itself, not just the stat columns — see
-§10 for why (a single-pass graph would otherwise let a flaked blob's own interior mesh falsely
-bridge two real crack networks).
+**Two consequences of skeletonizing once.** `n_host_stubs_pruned` counts pruning over the whole
+mask, so it includes branches pruned inside flaked blobs. And a `--cache-dir`'s
+`mask_corrected.npz` (the mask minus flaked regions) is not the mask that was skeletonized.
 
 ### 4c. Host-stub pruning (column 17)
 
@@ -266,6 +265,8 @@ this file turns up a filename that looks like it could be that second bad frame,
 
 ## 7. Data quality note: 23 of 39 rows fall outside the old 1–15% crack-fraction band
 
+*The numbers in this section come from an export made before 2026-11-11, with the earlier flaking and pruning methods (see `CHANGELOG.md`). Re-export before quoting them.*
+
 The Otsu-threshold step used to carry a built-in sanity check: `crack_area_pct` was expected to
 fall roughly between 1% and 15% (a band read off a small non-PTFE sample set, never derived).
 **23 of the 39 rows in this workbook fall outside that band** — a plain majority. The band did
@@ -326,6 +327,8 @@ row uses a standard-sized mosaic capture like the rest.
 
 ## 8. Worked example — one full row, by hand
 
+*The numbers in this section come from an export made before 2026-11-11, with the earlier flaking and pruning methods (see `CHANGELOG.md`). Re-export before quoting them.*
+
 `T5-M_H190_v1_mm000001.jpg`, image size 7328 × 7612 px (full image = 55,777,536 px):
 
 ```
@@ -348,22 +351,18 @@ giant_component_fraction    = 0.9967   -- 27 separate crack fragments exist, but
                                           this sample reads as essentially fully percolated.
 ```
 
-All figures above match the corresponding cells in `crack_stats.xlsx` to within rounding.
+All figures above matched the corresponding cells of that export to within rounding.
 
-## 9. v2: 19-image re-run with flaking-aware caching and thesis notation
+## 9. Thesis notation
 
-A separate 19-image batch (not the 39-row set above), re-run with a per-image analysis cache
-(`outputs/crack_stats_v2/<image_stem>/`: `stats.json`, `mask_corrected.npz`,
-`skeleton_final.npz`, `excluded_mask.npz`, `flaking_candidates.json`, `pruned_branches.npz`,
-`overlay.png`) and a thesis-notation column mapping. `outputs/crack_stats_v2/crack_stats.xlsx`
-keeps every internal column (same as §4); `outputs/crack_stats_v2/thesis_stats.xlsx` has just the
-8 renamed/reworked columns below plus `image_filename`/`source_folder`.
+The thesis tables use eight of the columns above under shorter names (`thesis_stats.xlsx`: these
+eight plus `image_filename`/`source_folder`). The mapping:
 
 | thesis name | source column | notes |
 |---|---|---|
 | `crack` (%) | `crack_area_pct_excl_flakes` | a real methodology correction over the legacy `crack_area_pct`, not a rename — the denominator excludes the flaking-excluded area |
 | `flaking` (%) | `flaking_excluded_area_pct` | direct rename, no formula change |
-| `wcrack` (µm) | `median_width_um` | a real methodology correction over the legacy `avg_width_px` — a true per-pixel median, not a global area/length ratio; excludes cut-adjacent edges same as the legacy width/length stats |
+| `wcrack` (µm) | `median_width_um` | a real methodology correction over the legacy `avg_width_px` — a true per-pixel median, not a global area/length ratio; excludes omitted edges, as the other width/length stats do |
 | `N` (-) | `n_components` | direct rename |
 | `fgc` (-) | `giant_component_fraction` | direct rename, formula unchanged |
 | `ledge` (µm) | median (not mean) edge length, whole image | |
@@ -374,40 +373,3 @@ keeps every internal column (same as §4); `outputs/crack_stats_v2/thesis_stats.
 (0.02%-0.13%, already flagged in §7) and the largest `median_width_px`/`avg_width_px` divergence
 in the batch (-27%) — worth a direct visual check before trusting, since a network this sparse is
 exactly where a global area/length ratio and a true per-pixel median are expected to diverge most.
-
-## 10. v3: independent single-pass methodology
-
-`scripts/batch_stats/export_crack_stats_v3.py` is a second, independent implementation of the crack-stats
-export, alongside `scripts/batch_stats/export_crack_stats.py` ("v1" by contrast) — both remain
-runnable, neither replaces the other. The methodology difference is in how a flaked/delaminated
-region gets excluded (see §4b):
-
-- **v1** scout-skeletonizes once to get a reference crack width, grows a detected flake back to
-  its true boundary, subtracts it from the mask, and skeletonizes a **second time** on the
-  corrected mask. Edges within one reference-width of the flake boundary are dropped from
-  length/width stats but kept in the connectivity graph, since in this two-pass design they're
-  real truncated stubs at an actual mask boundary.
-- **v3** skeletonizes **once**, on the uncorrected mask, then omits any edge with even one pixel
-  inside the excluded region from the graph itself — not just the stat columns. This matters
-  because a single-pass graph's flaked-blob interior is inherently multi-branched and
-  structurally un-prunable by ordinary spur/fragment pruning; left in the connectivity graph, it
-  would falsely bridge two real crack networks that only "connect" through a region with zero
-  evidence about what was actually there.
-
-**Disclosed semantic gaps versus v1 (not bugs, not being fixed)**: `crack_area_px2` isn't
-re-cleaned after subtraction (v1's second skeletonize pass re-cleans the mask; v3 reuses the mask
-directly), so v1/v3 area numbers on flaked images differ in the 5th significant figure, not
-bit-identical. A v3 `--cache-dir`'s `mask_corrected.npz` does not correspond to what was actually
-skeletonized (v3's skeleton comes from the uncorrected mask) — don't point a v3 cache directory
-at a v1/v2 one. `n_host_stubs_pruned` reflects pruning on the flake-inclusive mask, so it
-mixes real-crack pruning with however much of the blob's interior noise got pruned along the way.
-v3 adds six per-stage timing columns (`runtime_binarize_s`, `runtime_skeletonize_s`,
-`runtime_flaking_s`, `runtime_graph_extract_s`, `runtime_stats_s`, `runtime_total_s`).
-
-**Validation**: on the 13 images the v2 and v3 batches happen to share, area/width/length columns
-agree closely (`crack_area_pct_excl_flakes`/`flaking_excluded_area_pct` match to within 0.01%
-everywhere — same flaking-detection call in both). Connectivity columns
-(`n_components`/`giant_component_span_um`/width) show mean absolute differences of 2-4.5% (max
-30-37%, concentrated on the images with the most flaking) — tracking the disclosed methodology
-difference above exactly, and nowhere else. Full numeric comparison and per-column charts:
-https://claude.ai/code/artifact/94529aca-a2a9-4d6f-b24d-459f58a7e690

@@ -1,4 +1,4 @@
-"""Pipeline-stage walkthrough figures for crack_stats_v3.
+"""Pipeline-stage walkthrough figures for the crack-stats export.
 
 Two modes:
 
@@ -12,7 +12,7 @@ Two modes:
   mask cleaning + skeletonize + prune consolidated into one panel, flake
   identification, and the final graph.
 
-Reuses scripts/batch_stats/export_crack_stats_v3.py's exact stage functions (binarize,
+Reuses scripts/batch_stats/export_crack_stats.py's exact stage functions (binarize,
 skeletonize_and_prune, exclude_flaking_regions, extract_graph,
 flake_touching_path_indices) in the same order compute_row() calls them --
 this script only adds a render step after each stage instead of proceeding
@@ -30,7 +30,7 @@ way compute_row()'s own connectivity graph G is: a node is "kept" if it has
 at least one non-omitted edge, "excluded" otherwise.
 
 Usage:
-    python3 -m scripts.validation.pipeline_stage_figures <image_path> [--out-dir outputs/crack_stats_v3/pipeline_walkthrough] [--compact]
+    python3 -m scripts.validation.pipeline_stage_figures <image_path> [--out-dir outputs/crack_stats/pipeline_walkthrough] [--compact]
 """
 
 import argparse
@@ -240,7 +240,7 @@ def _save_combined(panels, out_dir, image_path, crop_mode, n_rows, n_cols):
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("image_path", type=str)
-    p.add_argument("--out-dir", type=str, default="outputs/crack_stats_v3/pipeline_walkthrough")
+    p.add_argument("--out-dir", type=str, default="outputs/crack_stats/pipeline_walkthrough")
     p.add_argument("--compact", action="store_true",
                     help="4-panel mode (raw / clean+skeletonize+prune / flaking / final graph) "
                          "for external hand-off, instead of the full 8-panel breakdown")

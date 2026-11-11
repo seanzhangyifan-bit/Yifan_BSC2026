@@ -1,5 +1,5 @@
-"""Correctness checks for the per-pixel median-width helper added on top of
-scripts/batch_stats/export_crack_stats.py's existing area/length avg_width_px -- see
+"""Correctness checks for the per-pixel median-width helper in
+scripts/batch_stats/export_crack_stats.py, next to its area/length avg_width_px -- see
 docs/batch_stats/crack_stats_schema.md section 4 and the module docstring on
 median_pixelwise_width_px for why this exists alongside, not instead of,
 the older ratio-based estimate. Also covers the thesis-notation additions
@@ -38,19 +38,18 @@ def test_median_width_matches_known_band_thickness():
     medial_radius = distance_transform_edt(result.mask_clean)
 
     median_width_px = median_pixelwise_width_px(
-        result.skeleton, graph_result, cut_adjacent=set(), medial_radius=medial_radius
+        result.skeleton, graph_result, omitted=set(), medial_radius=medial_radius
     )
     assert abs(median_width_px - 10.0) < 1.5
 
 
-def test_cut_adjacent_exclusion_drops_the_flagged_edge():
+def test_omitted_edge_is_left_out_of_the_median_width():
     # A short, thin host line (8px) feeding into a much longer, much wider
     # stub (40px) at a T-junction -- the stub's own path pixels dominate
     # the total pixel count, so an unfiltered median reads the stub's
-    # width. Excluding the stub's own path index from cut_adjacent (the
-    # same exclusion set cut_adjacent_path_indices would produce for a
-    # real flaking-boundary cut) must pull the median back down to the
-    # host's own width.
+    # width. Omitting the stub's own path index (as
+    # flake_touching_path_indices would for an edge running into a flaked
+    # region) must pull the median back down to the host's own width.
     mask = np.zeros((350, 200), dtype=bool)
     mask[100:108, 10:110] = True  # host, width 8
     mask[108:300, 50:90] = True  # stub, width 40, dominates total pixel count
@@ -70,10 +69,10 @@ def test_cut_adjacent_exclusion_drops_the_flagged_edge():
     assert len(stub_indices) == 1, "expected exactly one edge running into the stub"
 
     median_with_stub = median_pixelwise_width_px(
-        result.skeleton, graph_result, cut_adjacent=set(), medial_radius=medial_radius
+        result.skeleton, graph_result, omitted=set(), medial_radius=medial_radius
     )
     median_without_stub = median_pixelwise_width_px(
-        result.skeleton, graph_result, cut_adjacent=stub_indices, medial_radius=medial_radius
+        result.skeleton, graph_result, omitted=stub_indices, medial_radius=medial_radius
     )
 
     assert abs(median_with_stub - 40.0) < 1.5
@@ -93,7 +92,7 @@ def test_no_edges_returns_nan():
         summary = _EmptySummary()
 
     median_width_px = median_pixelwise_width_px(
-        skel=None, graph_result=_FakeGraphResult(), cut_adjacent=set(),
+        skel=None, graph_result=_FakeGraphResult(), omitted=set(),
         medial_radius=np.zeros((10, 10)),
     )
     assert np.isnan(median_width_px)
@@ -107,18 +106,18 @@ def test_median_edge_length_is_median_not_mean():
         "node_id_dst": [1, 2, 3, 4],
         "branch_distance": [10.0, 10.0, 100.0, 5.0],
     })
-    assert median_edge_length_px(summary, cut_adjacent=set()) == 10.0
+    assert median_edge_length_px(summary, omitted=set()) == 10.0
 
 
-def test_median_edge_length_excludes_cut_adjacent():
+def test_median_edge_length_excludes_omitted_edges():
     summary = pd.DataFrame({
         "node_id_src": [0, 1, 2, 3],
         "node_id_dst": [1, 2, 3, 4],
         "branch_distance": [10.0, 10.0, 100.0, 5.0],
     })
-    # Drop the 100.0 outlier (as if it were flagged cut-adjacent) -- median
+    # Drop the 100.0 outlier (as if it touched a flaked region) -- median
     # of the remaining [10, 10, 5] is 10.
-    result = median_edge_length_px(summary, cut_adjacent={2})
+    result = median_edge_length_px(summary, omitted={2})
     assert result == 10.0
 
 
@@ -130,7 +129,7 @@ def test_median_edge_length_node_filter_isolates_giant_component():
     })
     # Edges 0 (0-1) and 1 (1-2) have both endpoints in {0, 1, 2}; edges 2
     # and 3 each touch a node outside the filter and must be dropped.
-    result = median_edge_length_px(summary, cut_adjacent=set(), node_filter={0, 1, 2})
+    result = median_edge_length_px(summary, omitted=set(), node_filter={0, 1, 2})
     assert result == 10.0
 
 
@@ -140,7 +139,7 @@ def test_median_edge_length_no_matching_edges_returns_nan():
         "node_id_dst": [1],
         "branch_distance": [10.0],
     })
-    assert np.isnan(median_edge_length_px(summary, cut_adjacent={0}))
+    assert np.isnan(median_edge_length_px(summary, omitted={0}))
 
 
 def test_giant_component_nodes_picks_largest_total_length_not_largest_node_count():

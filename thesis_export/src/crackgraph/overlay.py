@@ -348,16 +348,17 @@ def render_crack_stats_overlay(
     skel: skan.Skeleton,
     graph_result: GraphResult,
     excluded_mask: np.ndarray,
-    cut_adjacent_path_indices: set[int],
+    omitted_path_indices: set[int],
     out_path: str | Path,
     *,
     max_overlay_dim: int = 2500,
     grid_cell_px: int | None = None,
 ) -> float:
     """Save a crack-stats-scoped overlay PNG: the final pruned skeleton,
-    the flaking-exclusion region tinted, and cut-adjacent edges (from
-    flaking.cut_adjacent_path_indices) highlighted -- i.e. exactly the
-    corrections crack_stats numbers already reflect, made visible. No
+    the flaking-exclusion region tinted, and edges touching it (from
+    flaking.flake_touching_path_indices, omitted from the stats and the
+    connectivity graph) highlighted -- the corrections the crack-stats
+    numbers already reflect, made visible. No
     junction/corner-cross-check layer -- this whole effort is scoped
     to stage 1-3 (see docs/batch_stats/crack_stats_schema.md). Same downsampling
     convention as render_overlay: only the background is resampled
@@ -403,7 +404,7 @@ def render_crack_stats_overlay(
         for path_index in graph_result.summary.index:
             coords = skel.path_coordinates(int(path_index)) * scale  # (row, col)
             seg = coords[:, ::-1]  # -> (col, row) == (x, y)
-            if int(path_index) in cut_adjacent_path_indices:
+            if int(path_index) in omitted_path_indices:
                 cut_segments.append(seg)
             else:
                 kept_segments.append(seg)
@@ -412,7 +413,7 @@ def render_crack_stats_overlay(
             ax.add_collection(LineCollection(kept_segments, colors="lime", linewidths=0.6, zorder=2))
         if cut_segments:
             ax.plot([], [], color="magenta", linewidth=1.4,
-                     label="cut-adjacent (dropped from length/width stats)")
+                     label="touches flaking region (omitted from stats and connectivity)")
             ax.add_collection(
                 LineCollection(cut_segments, colors="magenta", linewidths=1.4, zorder=3)
             )
@@ -450,7 +451,7 @@ def render_crack_stats_overlay(
             mid_y = (y_bounds[r] + y_bounds[r + 1]) / 2 * scale
             ax.annotate(_spreadsheet_col_label(r), xy=(10, mid_y), xycoords="data", **label_style)
 
-    if display_excluded.any() or cut_adjacent_path_indices:
+    if display_excluded.any() or omitted_path_indices:
         ax.legend(
             loc="upper center", bbox_to_anchor=(0.5, -0.02), ncol=2,
             fontsize=7, framealpha=0.9,

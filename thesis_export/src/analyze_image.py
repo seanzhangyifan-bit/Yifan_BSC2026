@@ -9,6 +9,7 @@ runs are deferred until this corner check is validated (see README).
 """
 
 import argparse
+import dataclasses
 from pathlib import Path
 
 import numpy as np
@@ -31,7 +32,7 @@ from .crackgraph.edge_metrics import (
     compute_edge_metrics,
     write_edge_metrics_csv,
 )
-from .crackgraph.flaking import cut_adjacent_path_indices, exclude_flaking_regions
+from .crackgraph.flaking import exclude_flaking_regions, remove_flake_touching_edges
 from .crackgraph.graph import extract_graph
 from .crackgraph.io_utils import load_image
 from .crackgraph.junctions import (
@@ -211,10 +212,11 @@ def main():
 
     binarize_result = binarize(gray)
 
-    # Scout pass: skeletonize the raw mask only to get a width signal
-    # (medial_radius) for flaking identification -- not necessarily the
-    # final skeleton used below. See crackgraph/flaking.py.
-    scout_skeleton_result = skeletonize_and_prune(
+    # Single pass: skeletonize once, find flaked regions from that skeleton's
+    # width map, then remove every edge touching a flaked region from the
+    # skeleton and rebuild the graph, so no analysis below runs through a
+    # region we have no evidence about. See crackgraph/flaking.py.
+    skeleton_result = skeletonize_and_prune(
         binarize_result.mask,
         source_image=gray,
         min_object_px=args.min_object_px,
@@ -222,25 +224,23 @@ def main():
         prune_host_stubs=not args.no_host_stub_pruning,
     )
     flaking_result = exclude_flaking_regions(
-        scout_skeleton_result.mask_clean,
-        scout_skeleton_result.skel_image,
-        scout_skeleton_result.medial_radius,
+        skeleton_result.mask_clean,
+        skeleton_result.skel_image,
+        skeleton_result.medial_radius,
     )
-    if flaking_result.candidates:
-        # Real pass: re-skeletonize on the corrected mask so flaked
-        # regions never reach the thinning step at all -- not "ignored",
-        # genuinely treated as dark/background, same as any other pixel
-        # skeletonize_and_prune was never told is foreground.
-        skeleton_result = skeletonize_and_prune(
-            flaking_result.mask_corrected,
-            source_image=gray,
-            min_object_px=args.min_object_px,
-            spur_px=args.spur_px,
-            prune_host_stubs=not args.no_host_stub_pruning,
+    kept_skeleton, graph_result, flake_omitted = remove_flake_touching_edges(
+        skeleton_result.skeleton, extract_graph(skeleton_result.skeleton), flaking_result.excluded_mask,
+    )
+    if flake_omitted:
+        # Downstream stages read the skeleton and the crack mask from
+        # skeleton_result: give them the flake-free versions. medial_radius
+        # stays the width map of the whole cleaned mask, as in the batch export.
+        skeleton_result = dataclasses.replace(
+            skeleton_result,
+            skeleton=kept_skeleton,
+            skel_image=kept_skeleton.skeleton_image,
+            mask_clean=flaking_result.mask_corrected,
         )
-    else:
-        skeleton_result = scout_skeleton_result
-    graph_result = extract_graph(skeleton_result.skeleton)
     curvature_result = None
     if not args.skip_curvature:
         curvature_result = compute_edge_curvature(
@@ -255,13 +255,6 @@ def main():
             graph_result,
             window_px=args.orientation_window_px,
         )
-    # Edges next to the flaking cut were truncated by our own correction, so
-    # their length/width aren't real measurements. Leave them out of the
-    # length/width totals, as the batch crack-stats export does.
-    cut_adjacent = cut_adjacent_path_indices(
-        skeleton_result.skeleton, graph_result, flaking_result.excluded_mask,
-        flaking_result.reference_width_px,
-    )
     edge_metrics_result = compute_edge_metrics(
         skeleton_result.skeleton,
         graph_result,
@@ -269,7 +262,6 @@ def main():
         skeleton_result.medial_radius,
         width_trim_inner_px=args.width_trim_inner_px,
         area_ambiguity_radius_px=args.area_ambiguity_radius_px,
-        exclude_from_stats=cut_adjacent,
     )
     junction_result = None
     if not args.skip_junctions:
@@ -392,8 +384,8 @@ def main():
     )
     if flaking_result.candidates:
         print(
-            "Mask corrected and re-skeletonized (second pass) -- excluded pixels treated as "
-            "background, not folded into crack area/width/length."
+            f"Skeleton edges touching a flaked region, removed before graph analysis: "
+            f"{len(flake_omitted)}    [measured] -- excluded pixels are not counted as crack area."
         )
     print()
     print("-- Stage 2: Skeletonize + prune --")
@@ -504,13 +496,8 @@ def main():
     )
     print(
         f"Total length: {em.total_length_px:.1f} px    [measured] (= sum of branch_distance, "
-        "excluding edges next to the flaking cut)"
+        "edges touching a flaked region already removed)"
     )
-    if em.n_edges_near_flaking_cut:
-        print(
-            f"Edges next to the flaking cut, left out of length/width totals: "
-            f"{em.n_edges_near_flaking_cut} ({em.length_near_flaking_cut_px:.1f} px)    [measured]"
-        )
     print("Area estimate bracket (px2), all four methods cross-checked, not collapsed to one number:")
     print(f"  core (junction-disk-excluded): {em.total_area_core_px2}    [interpreted -- PROVEN lower bound]")
     print(f"  exact (watershed partition):   {em.total_area_px2}    [interpreted]")

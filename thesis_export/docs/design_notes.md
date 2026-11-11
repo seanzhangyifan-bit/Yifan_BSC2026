@@ -169,10 +169,10 @@ Deliberately not built here: any attempt to reshape the exclusion boundary
 to look more like a natural crack tip (a "meniscus", considered and
 rejected in favour of the approach below) -- that would be shaping the
 output to look right rather than measuring anything, which this project's
-own evidence-level discipline rules out. Instead, edges that end up
-touching the exclusion boundary are meant to be flagged and dropped from
-downstream length/width statistics (see cut_adjacent_path_indices) rather
-than having their geometry cosmetically smoothed.
+own evidence-level discipline rules out. Instead, the mask is skeletonized
+once and every edge touching the excluded region is omitted from the stats
+and the connectivity graph (flake_touching_path_indices), rather than having
+its geometry cosmetically smoothed.
 
 Every constant below is 🔴 assumed (chosen by inspection this session, no
 independent sweep) except where noted -- see CALIBRATION.md's convention.

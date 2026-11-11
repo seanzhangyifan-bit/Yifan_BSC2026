@@ -98,9 +98,8 @@ One CSV row per segment.
 
 ## Worth knowing
 
-- **Segments next to a flaking cut**: pass them as `exclude_from_stats`. They keep their row,
-  marked `near_flaking_cut`, but stay out of total length, the width counts and the mean width,
-  the same rule as the batch exporter. `analyze_image.py` does this.
-- **Tests**: `tests/test_edge_metrics.py` (12 tests) checks widths on bands of known thickness
+- **Flaked regions**: remove segments touching them first (`flaking.remove_flake_touching_edges`),
+  as `analyze_image.py` does. This module doesn't filter anything itself.
+- **Tests**: `tests/test_edge_metrics.py` (11 tests) checks widths on bands of known thickness
   and that the four area estimates bracket correctly. To see the four methods side by side, run
   `scripts/validation/render_area_method_viewer.py`.

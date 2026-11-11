@@ -1,10 +1,10 @@
 """Smoke tests for the entry points (review finding 16): each one runs end to
 end on a small synthetic image and writes what it promises. They check that
 the code runs, not the numbers -- the library tests cover those. The broken
-v3 import of October 2026 would have failed here.
+exporter import of October 2026 would have failed here.
 
 The test image is a 3x3 grid with one flaked disk on its centre junction, so
-the flaking path (second skeletonize pass, edges next to the cut) runs too.
+the flaking path (edges touching the flaked region are omitted) runs too.
 """
 
 import math
@@ -15,7 +15,7 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from scripts.batch_stats import export_crack_stats, export_crack_stats_v3
+from scripts.batch_stats import export_crack_stats
 from src.crackgraph.region import default_corner_crop
 from src.crackgraph.synthetic import generate_grid_with_flakes
 
@@ -39,16 +39,14 @@ def _check_row(row: dict) -> None:
     assert not math.isnan(row["median_width_px"])
 
 
-def test_export_v1_compute_row_runs(flaked_grid_image: Path, tmp_path: Path):
-    row = export_crack_stats.compute_row(flaked_grid_image, cache_dir=tmp_path / "cache")
+def test_export_compute_row_runs(flaked_grid_image: Path, tmp_path: Path):
+    stages = []
+    row = export_crack_stats.compute_row(flaked_grid_image, cache_dir=tmp_path / "cache", on_stage=stages.append)
     _check_row(row)
-    assert (tmp_path / "cache" / "synthetic_grid" / "overlay.png").exists()
-
-
-def test_export_v3_compute_row_runs(flaked_grid_image: Path):
-    row = export_crack_stats_v3.compute_row(flaked_grid_image)
-    _check_row(row)
+    assert row["flaking_n_edges_omitted"] >= 1
     assert row["runtime_total_s"] > 0
+    assert stages == export_crack_stats.COMPUTE_ROW_STAGES
+    assert (tmp_path / "cache" / "synthetic_grid" / "overlay.png").exists()
 
 
 def test_analyze_image_full_pipeline_runs(flaked_grid_image: Path, tmp_path: Path, monkeypatch, capsys):
@@ -69,9 +67,9 @@ def test_analyze_image_full_pipeline_runs(flaked_grid_image: Path, tmp_path: Pat
         assert (sub / f"synthetic_grid_full_{suffix}").exists(), suffix
     assert xlsx.exists()
     assert "Stage 4: Junction classification" in report
-    # The flake sits on a junction, so some edges run next to the cut and must
-    # be reported as left out of the totals (review finding 15).
-    assert "Edges next to the flaking cut" in report
+    # The flake sits on a junction, so some edges touch it and must be reported
+    # as removed before the graph analysis.
+    assert "Skeleton edges touching a flaked region" in report
 
 
 def test_overview_figure_runs(flaked_grid_image: Path, tmp_path: Path, monkeypatch):

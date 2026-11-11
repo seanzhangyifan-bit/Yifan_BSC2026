@@ -65,14 +65,14 @@ The rest handles Excel's sheet-name rules (31 characters, no `[]:*?/\`).
 
 - **`save_analysis_cache(...)`** (line 83) writes six files per image into `cache_dir/<image>/`:
   - the stats row (`stats.json`)
-  - the corrected mask, final skeleton and excluded-flake mask, as compressed arrays
+  - the crack mask minus flakes (`mask_corrected`), final skeleton and excluded-flake mask, as
+    compressed arrays
   - the flake candidates
   - every pruned branch with its reason and pixel path
 - **`load_analysis_cache(...)`** (line 130) reads them back.
 
-The width map isn't saved, because it's big and quick to recompute. On a v1 run that found
-flakes, recompute it after re-running the skeleton step's small-object/small-hole cleanup on
-`mask_corrected`, or it can differ by a few pixels (the module description explains).
+The width map isn't saved, because it's big and quick to recompute. Recompute it from the whole
+cleaned mask, flaked regions included, not from `mask_corrected`: that's the map the stats used.
 
 ## `summary_plots.py`
 

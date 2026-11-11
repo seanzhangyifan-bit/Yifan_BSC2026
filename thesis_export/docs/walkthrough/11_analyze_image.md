@@ -56,7 +56,7 @@ Load the image, warn if it's an unusual size, and cut out the corner crop unless
 | Lines | Step | Page |
 |---|---|---|
 | 212 | Binarize | 1 |
-| 217–242 | Scout skeleton → flaking → second skeleton if flakes were found | 2, 3 |
+| 217–242 | Skeleton → flaking → remove edges touching a flaked region, rebuild the graph | 2, 3 |
 | 243 | Graph | 4 |
 | 245–257 | Curvature and anisotropy (unless skipped) | 10 |
 | 265–273 | Per-segment metrics (always) | 6 |
@@ -94,8 +94,8 @@ With `--xlsx-out`, it appends a summary row through `xlsx_report.append_chunk_to
 
 ## Worth knowing
 
-- **Segments next to a flaking cut** are left out of the length/width totals, as in the batch
-  exporter. The report says how many and how long.
+- **Segments touching a flaked region** are removed from the skeleton before any analysis, so
+  junctions, curvature and the per-segment metrics never see them. The report says how many.
 - **Tests**: `tests/test_entry_points.py` runs `main()` on a small synthetic flaked grid. It checks
   the files appear and the report has its sections, not the numbers. The pieces it calls are
   tested individually.

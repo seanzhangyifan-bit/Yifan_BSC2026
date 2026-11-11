@@ -1,5 +1,5 @@
-"""One-off crack_stats_v3 run over three specific thesis batches (B/C/D),
-not the full default dataset scripts/batch_stats/export_crack_stats_v3.py's own main()
+"""One-off crack-stats run over three specific thesis batches (B/C/D),
+not the full default dataset scripts/batch_stats/export_crack_stats.py's own main()
 covers.
 
 Batch B -- T5 gap-height variation, PTFE (8 files, characterization2_ptfe/):
@@ -16,8 +16,8 @@ Batch D -- T2/T3/T4, membrane, low-gap-height variant (6 files): T2-M_H90_v1/v2,
     the same T2 series.
 
 Usage:
-    python3 -m scripts.batch_stats.export_crack_stats_v3_batch_bcd [--data-dir data/raw]
-        [--out outputs/crack_stats_v3_batch_bcd.xlsx] [--scale-bars-checked]
+    python3 -m scripts.batch_stats.export_crack_stats_batch_bcd [--data-dir data/raw]
+        [--out outputs/crack_stats_batch_bcd.xlsx] [--scale-bars-checked]
 
 File paths below are relative to --data-dir. See export_crack_stats.py's
 docstring for --data-dir and --scale-bars-checked.
@@ -28,8 +28,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from scripts.batch_stats.export_crack_stats import SCALE_BAR_CHECKED, SCALE_BAR_NOT_CHECKED, add_batch_args
-from scripts.batch_stats.export_crack_stats_v3 import compute_row
+from scripts.batch_stats.export_crack_stats import SCALE_BAR_CHECKED, SCALE_BAR_NOT_CHECKED, add_batch_args, compute_row
 
 BATCH_B_T5_GAP_HEIGHT_PTFE = [
     "characterization2_ptfe/T5-PTFE_H50_v1_mm000001.jpg",
@@ -62,7 +61,7 @@ BATCH_D_T2_T3_T4_MEMBRANE_H95 = [
 
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--out", type=str, default="outputs/crack_stats_v3_batch_bcd.xlsx")
+    p.add_argument("--out", type=str, default="outputs/crack_stats_batch_bcd.xlsx")
     p.add_argument("--cache-dir", type=str, default=None)
     add_batch_args(p)
     args = p.parse_args()
@@ -96,7 +95,7 @@ def main():
     out_path = repo_root / args.out
     out_path.parent.mkdir(parents=True, exist_ok=True)
     df = pd.DataFrame(rows)
-    df.to_excel(out_path, index=False, sheet_name="crack_stats_v3_bcd")
+    df.to_excel(out_path, index=False, sheet_name="crack_stats_bcd")
     print(f"\nWrote {len(rows)} rows to {out_path}")
 
 

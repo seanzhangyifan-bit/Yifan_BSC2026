@@ -1,4 +1,4 @@
-"""One-off: add a `definitions` sheet to a crack_stats_v3 workbook.
+"""One-off: add a `definitions` sheet to a crack-stats workbook.
 
 Short, one-line definitions for the substantive stats columns (crack area,
 width, edge length, connectivity, flaking, pruning-count), condensed from
@@ -10,17 +10,8 @@ columns (`image_filename`, `source_folder`, `image_width_px`/`image_height_px`,
 is about what the crack-pattern measurements *mean*, not about row
 identity or how long a row took to compute.
 
-Two columns' definitions are written fresh here rather than copied verbatim
-from the schema doc, because crack_stats_v3's semantics genuinely differ
-from the crack_stats.xlsx/v2 lineage that doc describes: `flaking_n_edges_omitted`
-(v3 omits touching edges from the connectivity graph G entirely, whereas v1's
-`flaking_n_edges_excluded_near_cut` keeps them in G and only drops them from
-length/width stats) and `n_components`/`giant_component_fraction` (v3's version
-of "the full graph" already has flaking-touching edges removed, so these counts
-are computed on a stricter graph than v1's).
-
 Usage:
-    python3 -m scripts.batch_stats.add_definitions_sheet [--xlsx outputs/crack_stats_v3_batch_bcd.xlsx]
+    python3 -m scripts.batch_stats.add_definitions_sheet [--xlsx outputs/crack_stats_batch_bcd.xlsx]
 """
 
 import argparse
@@ -73,7 +64,7 @@ DEFINITIONS = [
      "median_edge_length_gc_px converted to microns via the 0.6098 um/px calibration factor.",
      "um", "calibrated"),
     ("n_components",
-     "Number of disconnected pieces in the crack-network graph, after crack_stats_v3's omit-by-membership flaking exclusion has already been applied to the graph itself (stricter than crack_stats v1, which keeps flaking-touching edges in the graph and only drops them from length/width stats).",
+     "Number of disconnected pieces in the crack-network graph. Edges touching a flaked region are omitted from the graph first, so nothing connects through a flaked patch.",
      "count", "measured"),
     ("giant_component_fraction",
      "Share of total crack length belonging to the single largest connected component. 1.0 means one fully connected network; well below 1 means the crack pattern is still fragmented into separate islands.",
@@ -85,13 +76,13 @@ DEFINITIONS = [
      "giant_component_span_px converted to microns via the 0.6098 um/px calibration factor.",
      "um", "calibrated"),
     ("flaking_excluded_area_pct",
-     "Share of image area identified as flaking/delamination (catalyst layer physically missing, not fractured). crack_stats_v3 skeletonizes once on the uncorrected mask, then omits every edge touching this area (see flaking_n_edges_omitted).",
+     "Share of image area identified as flaking/delamination (catalyst layer physically missing, not fractured). The mask is skeletonized once, then every edge touching this area is omitted (see flaking_n_edges_omitted).",
      "% of image area", "measured"),
     ("flaking_n_candidates",
      "Number of flaking/delamination regions identified (local width far exceeding the image's own typical crack width, grown back out to their true boundary). Read as 'candidates passing the width test', not a confirmed count -- see docs/batch_stats/crack_stats_schema.md Sec. 4b for a known false-positive gap.",
      "count", "interpreted"),
     ("flaking_n_edges_omitted",
-     "Number of graph edges with any pixel inside a flaking-exclusion region, omitted entirely -- from both the stats columns above AND the connectivity graph itself (n_components/giant_component_fraction). This is crack_stats_v3's key methodology difference from v1, which keeps these edges in the graph and only drops them from length/width stats.",
+     "Number of graph edges with any pixel inside a flaking-exclusion region, omitted entirely -- from both the stats columns above AND the connectivity graph itself (n_components/giant_component_fraction).",
      "count", "measured"),
     ("n_host_stubs_pruned",
      "Number of dead-end skeleton branches removed during pruning because less than spur_px (15 px = 9.1 um) of their length lies outside the crack they branch from -- stubs from a crack's centre line to bumps and corners on its wall -- rather than because they were short overall.",
@@ -121,7 +112,7 @@ def add_definitions_sheet(xlsx_path: Path, sheet_name: str = "definitions") -> N
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--xlsx", type=str, default="outputs/crack_stats_v3_batch_bcd.xlsx")
+    p.add_argument("--xlsx", type=str, default="outputs/crack_stats_batch_bcd.xlsx")
     args = p.parse_args()
     xlsx_path = Path(args.xlsx)
     add_definitions_sheet(xlsx_path)

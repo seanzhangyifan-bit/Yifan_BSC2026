@@ -7,22 +7,16 @@ spreadsheets and never hand-edits them. This is stage 1-3 only (binarize → ske
 extraction) — no junctions, no ordering, no timing claims. See
 `../../docs/batch_stats/crack_stats_schema.md` for the full column reference.
 
-**Two independent methodologies, not one script with a version flag** — both remain runnable,
-neither replaces the other:
+**Flaked regions** are handled in a single pass: the mask is skeletonized once, and any edge
+with a pixel inside a flaked/delaminated region is omitted from the stats and the connectivity
+graph.
 
-- **`export_crack_stats.py`** ("v1"/"v2" in the docs — same script, different scope/flags): the
-  original, exercised over the full 39-image dataset. Excludes flaked/delaminated regions with a
-  two-pass skeletonize (scout for reference width → grow the excluded region back to its true
-  boundary → re-skeletonize the corrected mask). Run: `python3 -m scripts.batch_stats.export_crack_stats --data-dir <your image folder> [--out outputs/crack_stats.xlsx] [--scale-bars-checked]`. `--data-dir` defaults to `data/raw` inside this folder, which isn't bundled. Pass `--scale-bars-checked` only if you have looked at every image for a burned-in scale bar; otherwise the `scale_bar_check` column says `not checked`. The v3 scripts take the same two options.
-- **`export_crack_stats_v3.py`** + **`export_crack_stats_v3_batch_bcd.py`**: an alternate,
-  single-pass methodology — skip the second skeletonize, and instead of a distance-buffer cut,
-  omit any edge with a pixel physically inside the excluded region. ~2x faster per image.
-  **Validation status**: cross-checked against v1/v2 on the 13 images both cover — batch images
-  with zero flaking match to 0.0% on every column; images that do have flaking show differences
-  of 2-4.5% mean (up to 30-37% on the sparsest/most-flaked images), and those differences track
-  the disclosed methodology change exactly, nowhere else (`../../docs/batch_stats/crack_stats_schema.md`
-  §10 has the full comparison). `add_definitions_sheet.py` appends a plain-language definitions sheet
-  to a v3 workbook.
-
-**Not run against the full dataset**: v3 has only been run on a 19-image scoped batch so far, not
-the full 39-image set v1 covers.
+- **`export_crack_stats.py`**: every `*_mm000001.jpg` under `--data-dir`, one row each. Run:
+  `python3 -m scripts.batch_stats.export_crack_stats --data-dir <your image folder> [--out outputs/crack_stats.xlsx] [--cache-dir DIR] [--scale-bars-checked]`.
+  `--data-dir` defaults to `data/raw` inside this folder, which isn't bundled. Pass
+  `--scale-bars-checked` only if you have looked at every image for a burned-in scale bar;
+  otherwise the `scale_bar_check` column says `not checked`.
+- **`export_crack_stats_batch_bcd.py`**: the same export on three fixed thesis batches (B, C, D;
+  19 images), with a `batch` column. Takes the same `--data-dir` and `--scale-bars-checked`.
+- **`add_definitions_sheet.py`**: appends a plain-language definitions sheet to a finished
+  workbook.

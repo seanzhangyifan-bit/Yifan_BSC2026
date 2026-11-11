@@ -168,20 +168,3 @@ def test_core_area_clamps_on_short_inter_junction_edge():
         assert m.area_core_px2 <= m.area_px2
     assert result.n_zero_core_edges >= 1
     assert any(m.core_was_clamped for m in result.per_edge.values())
-
-
-def test_excluded_edges_keep_their_row_but_leave_the_totals():
-    # Review finding 15: analyze_image now passes the edges next to a flaking
-    # cut here, matching the batch export. Their own rows stay (marked); their
-    # length and width drop out of the totals. Area totals are unchanged.
-    gray = generate_t_junction(angle_deg=90.0)
-    base, _, graph_result = _run(gray)
-    excluded = int(graph_result.summary.index[0])
-    result, _, _ = _run(gray, exclude_from_stats={excluded})
-    m = result.per_edge[excluded]
-    assert m.near_flaking_cut
-    assert result.n_edges_near_flaking_cut == 1
-    assert result.length_near_flaking_cut_px == m.length_px
-    assert abs(result.total_length_px - (base.total_length_px - m.length_px)) < 1e-9
-    assert result.n_width_ok + result.n_width_failed == base.n_width_ok + base.n_width_failed - 1
-    assert result.total_area_px2 == base.total_area_px2

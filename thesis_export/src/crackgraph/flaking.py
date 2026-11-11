@@ -7,9 +7,10 @@ not a fracture, and hides whatever crack pattern was underneath.
   crack width, in regions of at least MIN_CANDIDATE_AREA_PX2. Width is the only
   criterion; a solidity criterion was tried and dropped.
 - Exclude: grow each region back out to its true edge (GROWTH_MULTIPLIER),
-  staying inside the mask, and remove it.
-- Edges that pass near the cut have untrustworthy lengths, so they are dropped
-  from length/width stats (cut_adjacent_path_indices), not reshaped.
+  staying inside the mask.
+- Edges: the mask is skeletonized once; any skeleton edge with a pixel inside
+  the excluded region is omitted from the stats and the connectivity graph
+  (flake_touching_path_indices).
 
 Constants are 🔴 assumed unless noted. Full rationale:
 docs/design_notes.md, section "flaking.py".
@@ -18,11 +19,10 @@ docs/design_notes.md, section "flaking.py".
 from dataclasses import dataclass, field
 
 import numpy as np
-from scipy.ndimage import distance_transform_edt
 from skimage.measure import label, regionprops
 from skimage.morphology import binary_dilation, disk
 
-from .graph import path_pixel_indices
+from .graph import GraphResult, extract_graph, path_pixel_indices
 
 # How many multiples of this image's own reference crack width a pixel's
 # local width must exceed to be flagged as a candidate-blob pixel. Chosen
@@ -49,17 +49,6 @@ GROWTH_MULTIPLIER = 2.2
 # "has growth converged yet" gets checked, not how far growth is allowed to
 # go (that's GROWTH_MULTIPLIER).
 GROWTH_STEP_PX = 3
-
-# Buffer distance, in multiples of this image's own reference crack width,
-# within which an edge's path is treated as "cut-adjacent" and dropped from
-# length/width statistics -- see cut_adjacent_path_indices. A flat pixel
-# value (originally 10px) was tried first and measured too small: on
-# T2-A_membran_v2 it flagged only 46 edges and visibly missed most of the
-# boundary perimeter, while 1.0x reference width flagged 86 and covered the
-# whole perimeter. 🟡 empirical -- verified by inspection on one real image,
-# not swept.
-CUT_ADJACENT_BUFFER_WIDTH_MULTIPLIER = 1.0
-
 
 @dataclass
 class FlakingCandidate:
@@ -175,13 +164,13 @@ def exclude_flaking_regions(
     growth_multiplier: float = GROWTH_MULTIPLIER,
     step_px: int = GROWTH_STEP_PX,
 ) -> FlakingResult:
-    """Top-level orchestrator: identify candidates from a scout
-    skeletonization pass (mask_clean/skel_image/medial_radius, i.e.
-    skeletonize_and_prune's own output -- no separate extract_graph() call
-    needed for this), grow them to recover their true boundary, and return
-    the corrected mask ready for a second, real skeletonize_and_prune call.
-    If no candidates are found, mask_corrected == mask_clean and the caller
-    can skip the second pass entirely."""
+    """Top-level orchestrator: identify candidates from skeletonize_and_prune's
+    own output (mask_clean/skel_image/medial_radius -- no extract_graph() call
+    needed), grow them to recover their true boundary, and return the excluded
+    region. mask_corrected (mask_clean minus the excluded region) is the crack
+    area outside flakes; the skeleton itself is not rebuilt -- callers drop
+    flake-touching edges with flake_touching_path_indices. If no candidates are
+    found, mask_corrected == mask_clean."""
     reference_width_px = compute_reference_width_px(skel_image, medial_radius)
     candidates, labeled_wide_mask = identify_candidates(
         mask_clean, medial_radius, reference_width_px,
@@ -210,83 +199,19 @@ def exclude_flaking_regions(
     )
 
 
-def cut_adjacent_path_indices(
-    skeleton,
-    graph_result,
-    excluded_mask: np.ndarray,
-    reference_width_px: float,
-    *,
-    buffer_width_multiplier: float = CUT_ADJACENT_BUFFER_WIDTH_MULTIPLIER,
-) -> set[int]:
-    """Path indices of edges whose skeleton path comes within
-    buffer_width_multiplier * reference_width_px of excluded_mask at ANY
-    point along the path -- not just at an endpoint node. A truncated
-    stub's endpoint will always be close, but a
-    disk-dilation growth frontier is rounded, not a straight guillotine
-    cut, so it can graze alongside a corridor's wall for a stretch without
-    fully severing it -- in that case the edge survives as one piece with
-    both real endpoints far away, but its *path* still runs right next to
-    an artificial, algorithm-introduced boundary partway along. Checking
-    only the endpoints would miss exactly that case.
-
-    Flagged edges' length/width are not real measurements and should be
-    dropped from those statistics.
-
-    Deliberately geometric (distance to a mask we already computed), not
-    based on junction type/angle classification -- topology right at a cut
-    can be genuinely irregular, so classifying it first and trusting that
-    classification would be asking the least reliable part of the pipeline
-    to police itself. See flaking.py module docstring and METHODOLOGY.md's
-    "emit no constraint rather than a low-confidence guess" principle.
-
-    The buffer mask is built via distance_transform_edt thresholded at
-    buffer_px, not skimage's binary_dilation(disk(...)) -- "within radius R
-    of excluded_mask" is exactly what a disk-footprint dilation computes
-    too, but large-footprint morphological dilation over a full-resolution
-    (~7250x7600px) image is dramatically slower than EDT for the same
-    result: measured on T2-A_membran_v2, 242.8s (dilation) vs 6.6s (EDT),
-    with the output mask and flagged-edge set coming out 100% pixel- and
-    set-identical -- not an approximation, the same computation done
-    faster. This was the single largest cost in the whole crack-stats
-    pipeline before this change (~80% of one image's total runtime).
-    """
-    if not excluded_mask.any() or len(graph_result.summary) == 0:
-        return set()
-
-    buffer_px = buffer_width_multiplier * reference_width_px
-    buffer_px_int = max(1, int(np.ceil(buffer_px)))
-    buffer_mask = distance_transform_edt(~excluded_mask) <= buffer_px_int
-
-    flagged = set()
-    for path_index in graph_result.summary.index:
-        rr, cc = path_pixel_indices(skeleton.path_coordinates(int(path_index)), excluded_mask.shape)
-        if buffer_mask[rr, cc].any():
-            flagged.add(int(path_index))
-
-    return flagged
-
-
 def flake_touching_path_indices(
     skeleton,
     graph_result,
     excluded_mask: np.ndarray,
 ) -> set[int]:
-    """crack_stats_v3's replacement for cut_adjacent_path_indices: path
-    indices of edges with AT LEAST ONE pixel physically inside
-    excluded_mask -- no distance buffer beyond the mask itself. Exists
-    alongside cut_adjacent_path_indices, not instead of it -- v1
-    (scripts/batch_stats/export_crack_stats.py) keeps using the buffer version
-    unchanged; v3 (scripts/batch_stats/export_crack_stats_v3.py) uses this one. See
-    docs/batch_stats/crack_stats_schema.md section 10 for why v3 needs no buffer at all: it
-    never re-skeletonizes on a corrected mask, so excluded_mask itself (not
-    a margin around it) is the only region whose skeleton pixels are
-    known to be flaking noise rather than real crack.
+    """Path indices of edges with at least one pixel inside excluded_mask.
 
-    Same early-return guard and coordinate clip/round handling as
-    cut_adjacent_path_indices, for parity and to avoid an out-of-bounds
-    index on a path that touches the image border -- direct mask
-    membership is otherwise all that's needed, so no
-    distance_transform_edt/reference_width_px/buffer multiplier here.
+    Callers omit these edges from both the stats and the connectivity graph.
+    No distance buffer is needed: the skeleton is built once from the
+    uncorrected mask, so the excluded region itself (not a margin around it)
+    is exactly where the skeleton is flaking noise rather than real crack.
+    Coordinates are clipped/rounded (path_pixel_indices) so a path touching
+    the image border can't index out of bounds.
     """
     if not excluded_mask.any() or len(graph_result.summary) == 0:
         return set()
@@ -298,3 +223,19 @@ def flake_touching_path_indices(
             flagged.add(int(path_index))
 
     return flagged
+
+
+def remove_flake_touching_edges(skeleton, graph_result: GraphResult, excluded_mask: np.ndarray):
+    """Remove flake-touching edges from the skeleton itself and rebuild the graph.
+
+    For tools that analyse the graph (junctions, curvature, anisotropy) rather
+    than only summing stats over it: "omitted from the connectivity graph" then
+    has to mean the edges are gone. Their neighbours merge where a junction
+    loses a branch. Returns (skeleton, graph_result, omitted path indices of the
+    input graph). Unchanged if nothing touches a flake.
+    """
+    omitted = flake_touching_path_indices(skeleton, graph_result, excluded_mask)
+    if not omitted:
+        return skeleton, graph_result, omitted
+    pruned = skeleton.prune_paths(np.array(sorted(omitted)))
+    return pruned, extract_graph(pruned), omitted

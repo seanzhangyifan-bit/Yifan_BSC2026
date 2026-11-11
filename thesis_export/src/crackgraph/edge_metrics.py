@@ -119,10 +119,6 @@ class EdgeMetrics:
     core_was_clamped: bool  # True if the two endpoint disks' claims exceeded area_px2
     area_ribbon_px2: float  # [interpreted] EXPECTED (not proven) upper bound
     ribbon_minus_watershed_px2: float
-    # True if the caller listed this edge in exclude_from_stats (it runs next to
-    # the flaking cut, so its length/width were truncated by our own
-    # correction). Its row is kept; it is left out of the totals.
-    near_flaking_cut: bool = False
 
 
 @dataclass
@@ -147,8 +143,6 @@ class EdgeMetricsResult:
     crack_length_density_per_px: float  # [interpreted] px-space only, see module docstring
     width_trim_inner_px: float  # [PLACEHOLDER]
     area_ambiguity_radius_px: float  # [PLACEHOLDER]
-    n_edges_near_flaking_cut: int = 0  # [measured] left out of length/width totals
-    length_near_flaking_cut_px: float = 0.0  # [measured] their summed length
 
 
 def _node_coord_map(graph_result: GraphResult) -> dict[int, tuple[float, float]]:
@@ -433,17 +427,11 @@ def compute_edge_metrics(
     *,
     width_trim_inner_px: float = WIDTH_TRIM_INNER_PX_PLACEHOLDER,
     area_ambiguity_radius_px: float = AREA_JUNCTION_BLOB_RADIUS_PLACEHOLDER,
-    exclude_from_stats: set[int] | frozenset[int] = frozenset(),
 ) -> EdgeMetricsResult:
     """Per-edge length, width and area, plus image totals.
 
-    exclude_from_stats: path indices whose length and width are not real
-    measurements (edges next to a flaking cut, see
-    flaking.cut_adjacent_path_indices). They still get a per-edge row, marked
-    near_flaking_cut, but are left out of total length, the width counts,
-    the length-weighted mean width and the length density -- the same rule
-    the batch crack-stats export applies. Area totals still include them:
-    their pixels are real crack.
+    Edges touching a flaked region should already be removed from `skel`
+    (flaking.remove_flake_touching_edges) before this is called.
     """
     summary = graph_result.summary
     node_coord = _node_coord_map(graph_result)
@@ -473,8 +461,6 @@ def compute_edge_metrics(
     n_ribbon_high = 0
     n_ribbon_low_eq = 0
     total_ribbon = 0.0
-    n_near_cut = 0
-    length_near_cut = 0.0
 
     for path_index, src_id, dst_id, length_px in zip(
         summary.index,
@@ -486,7 +472,6 @@ def compute_edge_metrics(
         src_id = int(src_id)
         dst_id = int(dst_id)
         length_px = float(length_px)
-        near_cut = path_index in exclude_from_stats
 
         width = measure_edge_width(
             skel,
@@ -496,18 +481,14 @@ def compute_edge_metrics(
             medial_radius,
             trim_inner_px=width_trim_inner_px,
         )
-        if near_cut:
-            n_near_cut += 1
-            length_near_cut += length_px
+        total_length += length_px
+        if width.ok:
+            n_width_ok += 1
+            weighted_width_sum += width.mean_px * length_px
+            weighted_width_len += length_px
         else:
-            total_length += length_px
-            if width.ok:
-                n_width_ok += 1
-                weighted_width_sum += width.mean_px * length_px
-                weighted_width_len += length_px
-            else:
-                n_width_failed += 1
-                length_excluded += length_px
+            n_width_failed += 1
+            length_excluded += length_px
 
         area_px2 = watershed_result.area_px2.get(path_index, 0)
         area_ambiguous_px2 = ambiguous_by_edge.get(path_index, 0)
@@ -537,7 +518,6 @@ def compute_edge_metrics(
             core_was_clamped=was_clamped,
             area_ribbon_px2=area_ribbon_px2,
             ribbon_minus_watershed_px2=ribbon_diff,
-            near_flaking_cut=near_cut,
         )
 
     mask_clean_total_px2 = int(mask_clean.sum())
@@ -569,8 +549,6 @@ def compute_edge_metrics(
         crack_length_density_per_px=(total_length / region_area_px2 if region_area_px2 > 0 else 0.0),
         width_trim_inner_px=width_trim_inner_px,
         area_ambiguity_radius_px=area_ambiguity_radius_px,
-        n_edges_near_flaking_cut=n_near_cut,
-        length_near_flaking_cut_px=length_near_cut,
     )
 
 
@@ -603,7 +581,6 @@ def write_edge_metrics_csv(result: EdgeMetricsResult, out_path: Path) -> None:
                 "core_was_clamped": m.core_was_clamped,
                 "area_ribbon_px2": m.area_ribbon_px2,
                 "ribbon_minus_watershed_px2": m.ribbon_minus_watershed_px2,
-                "near_flaking_cut": m.near_flaking_cut,
             }
         )
     pd.DataFrame(rows).to_csv(out_path, index=False)

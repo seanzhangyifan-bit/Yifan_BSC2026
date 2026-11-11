@@ -30,7 +30,7 @@ from pathlib import Path
 from src.crackgraph.anisotropy import compute_anisotropy
 from src.crackgraph.binarize import binarize
 from src.crackgraph.curvature import compute_edge_curvature
-from src.crackgraph.flaking import exclude_flaking_regions
+from src.crackgraph.flaking import exclude_flaking_regions, remove_flake_touching_edges
 from src.crackgraph.graph import extract_graph
 from src.crackgraph.html_report import update_master_report
 from src.crackgraph.io_utils import load_image
@@ -62,11 +62,11 @@ def _run_pipeline_slice(gray):
     flaking_result = exclude_flaking_regions(
         skeleton_result.mask_clean, skeleton_result.skel_image, skeleton_result.medial_radius,
     )
-    if flaking_result.candidates:
-        skeleton_result = skeletonize_and_prune(flaking_result.mask_corrected, source_image=gray)
-    graph_result = extract_graph(skeleton_result.skeleton)
-    curvature_result = compute_edge_curvature(skeleton_result.skeleton, graph_result)
-    anisotropy_result = compute_anisotropy(skeleton_result.skeleton, graph_result)
+    skeleton, graph_result, _ = remove_flake_touching_edges(
+        skeleton_result.skeleton, extract_graph(skeleton_result.skeleton), flaking_result.excluded_mask,
+    )
+    curvature_result = compute_edge_curvature(skeleton, graph_result)
+    anisotropy_result = compute_anisotropy(skeleton, graph_result)
     return curvature_result, anisotropy_result
 
 

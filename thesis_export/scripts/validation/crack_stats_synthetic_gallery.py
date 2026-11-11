@@ -25,7 +25,7 @@ import numpy as np
 from skimage.draw import disk
 
 from src.crackgraph.binarize import binarize
-from src.crackgraph.flaking import cut_adjacent_path_indices, exclude_flaking_regions
+from src.crackgraph.flaking import exclude_flaking_regions, flake_touching_path_indices
 from src.crackgraph.graph import extract_graph
 from src.crackgraph.overlay import render_crack_stats_overlay
 from src.crackgraph.skeleton import skeletonize_and_prune
@@ -175,18 +175,14 @@ def case_grid_with_flakes(out_dir: Path) -> dict:
     true_flake_mask[rr, cc] = True
     true_flake_area_px2 = int(true_flake_mask.sum())
 
-    # Second, real skeletonize pass on the corrected mask -- same two-pass
-    # shape export_crack_stats.py uses -- so the overlay shows the actual
-    # post-exclusion skeleton, not the pre-exclusion scout pass.
-    _, skel_res2, graph_res2 = _run_stage123(flaking_result.mask_corrected)
-    cut_adjacent = cut_adjacent_path_indices(
-        skel_res2.skeleton, graph_res2, flaking_result.excluded_mask, reference_width_px=flaking_result.reference_width_px,
-    )
+    # Same single pass export_crack_stats.py uses: edges touching the flaked
+    # region are omitted from the stats and the connectivity graph.
+    omitted = flake_touching_path_indices(skel_res.skeleton, graph_res, flaking_result.excluded_mask)
 
     out_path = out_dir / "grid_with_flakes.png"
     render_crack_stats_overlay(
-        _to_rgb_uint8(gray), skel_res2.skeleton, graph_res2,
-        flaking_result.excluded_mask, cut_adjacent, out_path,
+        _to_rgb_uint8(gray), skel_res.skeleton, graph_res,
+        flaking_result.excluded_mask, omitted, out_path,
     )
     return {
         "name": "grid_with_flakes",
@@ -200,7 +196,7 @@ def case_grid_with_flakes(out_dir: Path) -> dict:
             _row("n candidates found", 1, len(flaking_result.candidates)),
             _row("true flake area (px^2, disk only)", true_flake_area_px2, flaking_result.excluded_area_px2),
             _row("recovery ratio", "1.00", f"{flaking_result.excluded_area_px2 / true_flake_area_px2:.3f}"),
-            _row("n edges dropped from length/width stats (cut-adjacent)", "(see overlay, magenta)", len(cut_adjacent)),
+            _row("n edges omitted (touch the flaked region)", "(see overlay, magenta)", len(omitted)),
         ],
     }
 

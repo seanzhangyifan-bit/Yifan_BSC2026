@@ -102,12 +102,12 @@ answers, or checks a fixed bug stays fixed.
 | `test_junction_angle.py` | 12 | Junction angles and labels, incl. a loop back to its own junction (page 7) |
 | `test_corners.py` | 8 | Corner cross-check, incl. west-pointing regression (page 8) |
 | `test_precedence.py` | 7 | Precedence arrows, conflicts, cycles incl. self-arcs (page 9) |
-| `test_edge_metrics.py` | 12 | Width, the four area bounds, and leaving flaking-cut edges out of totals (page 6) |
+| `test_edge_metrics.py` | 11 | Width and the four area bounds (page 6) |
 | `test_skeleton.py` | 7 | Pruning, the host-stub rule and dark-speck removal (page 2) |
 | `test_curvature.py`, `test_anisotropy.py` | 7 + 7 | Page 10 |
 | `test_grid_synthetic.py` | 9 | Topology on meshes, flaking on synthetic flakes (pages 3–4) |
-| `test_export_crack_stats.py`, `test_export_crack_stats_v3.py` | 14 + 5 | Export helpers, incl. parallel segments in the network (page 5) |
-| `test_entry_points.py` | 8 | Smoke tests: `analyze_image.py`, both `compute_row`s, the overview figure, `region.py` and the GUI each run end to end on a small synthetic flaked grid |
+| `test_export_crack_stats.py`, `test_flaking_omission.py` | 14 + 7 | Export helpers, incl. parallel segments in the network (page 5); omitting and removing edges that touch a flaked region (page 3) |
+| `test_entry_points.py` | 7 | Smoke tests: `analyze_image.py`, `compute_row`, the overview figure, `region.py` and the GUI each run end to end on a small synthetic flaked grid |
 | `test_junction_tolerance_sweep.py` | 3 | The cut-off sweep's helpers |
 | `test_synthetic*.py` | 1 + 21 + 11 | The generators, and the 9-case benchmark through the pipeline |
 | `test_cache_io.py`, `test_html_report.py`, `test_xlsx_report.py`, `test_summary_plots.py`, `test_tiling.py`, `test_validation_*.py` | 2–8 each | Outputs (page 12) and the gallery |

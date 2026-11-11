@@ -1,20 +1,18 @@
 # Examples: already-produced outputs
 
-Four files: three real spreadsheets, produced by real runs of `scripts/batch_stats/` against the
+Two files: one real spreadsheet, produced by a real run of `scripts/batch_stats/` against the
 private micrograph collection (`data/raw/` in the parent repo — not bundled here, see the root
 README's "What's not included"), and one HTML gallery that needs no private data at all.
 
 | File | Produced by | Scope |
 |---|---|---|
-| `crack_stats_v1_full_dataset.xlsx` | `export_crack_stats.py` | The full 39-image dataset (every replicate that passed the scale-bar/size checks) |
-| `crack_stats_v2_thesis_stats.xlsx` | `export_crack_stats.py`, re-scoped | 19 images, flaking-aware re-run, columns renamed to match the thesis write-up's own notation (`crack`, `flaking`, `wcrack`, `N`, `fgc`, `ledge`, `ledge,gc`, `dgc`) |
-| `crack_stats_v3_batch_bcd.xlsx` | `export_crack_stats_v3.py` | The same 19-image scope, alternate single-pass methodology — see `../docs/batch_stats/crack_stats_schema.md` §10 for the v1-vs-v3 comparison |
+| `crack_stats_batch_bcd.xlsx` | `export_crack_stats_batch_bcd.py` | The 19 images of thesis batches B, C and D, with a `definitions` sheet. Produced before the 2026-11-11 pruning changes (see `../CHANGELOG.md`): its edge and length columns predate them, and its `n_corner_artifacts_pruned` column is now `n_host_stubs_pruned`. Re-run for current numbers. |
 | `validation_gallery.html` | `scripts/validation/validation_gallery.py` | 12 synthetic ground-truth cases across 4 measurement methods (junction classification, corner cross-check, curvature, anisotropy), expected-vs-measured tables |
 
 See `../docs/batch_stats/crack_stats_schema.md` for what every crack-stats column means, exactly.
 
-**Why the three spreadsheets can't be regenerated from this export alone**: they need the private
-`data/raw/` source images. The numbers in them are real, already-produced output, not a mockup —
+**Why the spreadsheet can't be regenerated from this export alone**: it needs the private
+`data/raw/` source images. The numbers in it are real, already-produced output, not a mockup —
 that's the point of including them.
 
 **`validation_gallery.html` is different**: it needs no private data (its synthetic test images

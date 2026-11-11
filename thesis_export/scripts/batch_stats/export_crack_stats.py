@@ -1,26 +1,26 @@
-"""Export a small, standalone crack-statistics table for external consumption.
+"""Export the per-image crack-statistics table (stages 1-3 only).
 
-Deliberately stripped to stage 1-3 only (binarize -> skeletonize -> graph
-extraction) -- no junction classification, corner cross-check, anisotropy,
-or curvature. Those stages exist for this repo's own ordering/poset work;
-this export is for a different consumer (an external agent that doesn't
-know this pipeline and shouldn't need to) that only wants area, width,
-edge length, and network-connectivity summary stats. See
-docs/batch_stats/crack_stats_schema.md for the full column reference this script's
-output is documented against -- keep the two in sync if either changes.
+Binarize -> skeletonize -> flaking exclusion -> graph -> area, width, edge
+length and connectivity stats. No junction classification, curvature or
+ordering. Column reference: docs/batch_stats/crack_stats_schema.md -- keep
+the two in sync.
+
+Flaking: the mask is skeletonized once. Any edge with a pixel inside a
+flaked/delaminated region (flaking.flake_touching_path_indices) is omitted
+from both the stats and the connectivity graph, so nothing connects through
+a region we have no evidence about.
 
 Usage:
     python3 -m scripts.batch_stats.export_crack_stats [--data-dir data/raw]
-        [--out outputs/crack_stats.xlsx] [--scale-bars-checked]
+        [--out outputs/crack_stats.xlsx] [--cache-dir DIR] [--scale-bars-checked]
 
---data-dir defaults to data/raw inside this folder. The thesis images aren't
-bundled, so point it at your own copy (for example --data-dir ../data/raw).
-Pass --scale-bars-checked only if you have looked at every image and
-confirmed none carries a burned-in scale bar; otherwise each row records
-scale_bar_check = "not checked".
+--data-dir defaults to data/raw inside this folder (not bundled; for example
+--data-dir ../data/raw). Pass --scale-bars-checked only if you have looked at
+every image and confirmed none carries a burned-in scale bar.
 """
 
 import argparse
+import time
 from pathlib import Path
 from typing import Callable
 
@@ -32,7 +32,7 @@ from scipy.spatial.distance import pdist
 
 from src.crackgraph.binarize import binarize
 from src.crackgraph.cache_io import save_analysis_cache
-from src.crackgraph.flaking import cut_adjacent_path_indices, exclude_flaking_regions
+from src.crackgraph.flaking import exclude_flaking_regions, flake_touching_path_indices
 from src.crackgraph.graph import extract_graph, path_pixel_indices
 from src.crackgraph.io_utils import load_image
 from src.crackgraph.overlay import render_crack_stats_overlay
@@ -83,6 +83,11 @@ DEFAULT_DATA_DIR = "data/raw"
 SCALE_BAR_CHECKED = "no blue bar (visually confirmed)"
 SCALE_BAR_NOT_CHECKED = "not checked"
 
+# Fixed, ordered stage labels compute_row reports through on_stage -- a module-level
+# constant so callers (e.g. app.py's progress bar) can size a progress display
+# without running compute_row first.
+COMPUTE_ROW_STAGES = ["Binarizing", "Skeletonizing", "Checking for flaking", "Extracting graph", "Computing stats"]
+
 
 def find_batch_images(data_dir: Path) -> list[Path]:
     """Every *_mm000001.jpg under data_dir, plus whichever ADDITIONAL_IMAGES
@@ -111,20 +116,18 @@ def find_batch_images(data_dir: Path) -> list[Path]:
     return image_paths
 
 
-def median_pixelwise_width_px(skel, graph_result, cut_adjacent: set[int], medial_radius: np.ndarray) -> float:
-    """Median of 2 * medial_radius sampled at every skeleton pixel belonging to a
-    non-cut-adjacent edge -- a genuine per-pixel width measurement, unlike avg_width_px's
-    global area/total-length ratio. Reuses cut_adjacent_path_indices' own exclusion set
-    (rather than a second, separately-invented buffer rule) so this stays methodologically
-    consistent with avg_width_px/avg_edge_length_px's existing cut-adjacent exclusion.
-    Median, not mean, matches compute_reference_width_px's convention in flaking.py: a
-    handful of anomalously wide pixels (junction blobs, near-miss flaking) shouldn't drag a
-    single summary number around. [interpreted] -- a stated aggregation over [measured]
-    per-pixel distance-transform values.
+def median_pixelwise_width_px(skel, graph_result, omitted: set[int], medial_radius: np.ndarray) -> float:
+    """Median of 2 * medial_radius sampled at every skeleton pixel of every edge not
+    in `omitted` -- a genuine per-pixel width measurement, unlike avg_width_px's
+    global area/total-length ratio. Median, not mean, matches
+    compute_reference_width_px's convention in flaking.py: a handful of anomalously
+    wide pixels (junction blobs, near-miss flaking) shouldn't drag a single summary
+    number around. [interpreted] -- a stated aggregation over [measured] per-pixel
+    distance-transform values.
     """
     widths = []
     for path_index in graph_result.summary.index:
-        if path_index in cut_adjacent:
+        if path_index in omitted:
             continue
         rr, cc = path_pixel_indices(skel.path_coordinates(int(path_index)), medial_radius.shape)
         widths.append(2.0 * medial_radius[rr, cc])
@@ -133,17 +136,15 @@ def median_pixelwise_width_px(skel, graph_result, cut_adjacent: set[int], medial
     return float(np.median(np.concatenate(widths)))
 
 
-def median_edge_length_px(summary, cut_adjacent: set[int], node_filter: set | None = None) -> float:
-    """Median branch_distance (px) over edges not touching the flaking cut,
-    optionally restricted to edges whose endpoints both lie in node_filter
-    (used to isolate the giant component). Median rather than
-    avg_edge_length_px's mean, for the same reason median_width_px isn't a
-    mean: a handful of very long or very short segments (an artery-like
-    branch, a tiny spur that survived pruning) shouldn't dominate a single
-    summary number. [interpreted] aggregation over [measured] per-edge
+def median_edge_length_px(summary, omitted: set[int], node_filter: set | None = None) -> float:
+    """Median branch_distance (px) over edges not in `omitted`, optionally
+    restricted to edges whose endpoints both lie in node_filter (used to
+    isolate the giant component). Median rather than avg_edge_length_px's
+    mean: a handful of very long or very short segments shouldn't dominate a
+    single summary number. [interpreted] aggregation over [measured] per-edge
     lengths.
     """
-    mask = ~summary.index.isin(cut_adjacent)
+    mask = ~summary.index.isin(omitted)
     if node_filter is not None:
         mask &= summary["node_id_src"].isin(node_filter) & summary["node_id_dst"].isin(node_filter)
     lengths = summary.loc[mask, "branch_distance"]
@@ -168,12 +169,8 @@ def crack_network_graph(summary: pd.DataFrame) -> nx.MultiGraph:
 
 def giant_component_nodes(G: nx.Graph) -> set:
     """Node ids belonging to the connected component with the largest
-    total skeleton length -- the same 'giant' definition
-    giant_component_fraction already uses (by summed edge length, not node
-    count: a component with fewer, longer edges can beat one with more,
-    shorter edges). Uses the FULL graph (including cut-adjacent stub
-    edges) -- component membership is real topology even where an edge's
-    own reported length is untrustworthy.
+    total skeleton length (by summed edge length, not node count: a
+    component with fewer, longer edges can beat one with more, shorter ones).
     """
     components = list(nx.connected_components(G))
     if not components:
@@ -207,12 +204,6 @@ def giant_component_span_px(node_coords: np.ndarray) -> float:
     return float(d.max()) if len(d) > 0 else float("nan")
 
 
-#  Fixed, ordered stage labels compute_row reports through on_stage -- kept as a module-level
-# constant so callers (e.g. app.py's progress bar) can size a progress display against it
-# without having to run compute_row first.
-COMPUTE_ROW_STAGES = ["Binarizing", "Checking for flaking", "Skeletonizing", "Extracting graph", "Computing stats"]
-
-
 def compute_row(
     image_path: Path,
     *,
@@ -220,60 +211,59 @@ def compute_row(
     on_stage: Callable[[str], None] | None = None,
     scale_bar_check: str = SCALE_BAR_NOT_CHECKED,
 ) -> dict:
-    """cache_dir is optional and off by default -- when set, also writes
-    the six-file analysis cache plus an overlay.png into
-    cache_dir/image_path.stem/ (see src/crackgraph/cache_io.py and
-    docs/batch_stats/crack_stats_schema.md section 9), so a figure or a
-    number can be regenerated or re-checked later without re-running binarize/skeletonize/
-    prune on the full-resolution image. Existing callers that don't pass
-    cache_dir see no behavior change.
+    """One row of the crack-stats table for one image.
 
-    on_stage, if given, is called once per COMPUTE_ROW_STAGES entry, in order, as each
-    stage completes -- lets a caller (e.g. a GUI progress bar) show real per-stage
-    progress instead of one bump per whole image. Optional and unused by default.
-
-    scale_bar_check is written verbatim into the row. It defaults to "not
-    checked"; only a caller that has inspected the image passes
+    cache_dir (optional, off by default) also writes the analysis cache plus an
+    overlay.png into cache_dir/image_path.stem/ (see src/crackgraph/cache_io.py).
+    on_stage, if given, is called once per COMPUTE_ROW_STAGES entry, in order, as
+    each stage completes (e.g. for a GUI progress bar). scale_bar_check is written
+    verbatim into the row; only a caller that has inspected the image passes
     SCALE_BAR_CHECKED."""
     report = on_stage or (lambda _stage: None)
+    t_start = time.perf_counter()
     gray, rgb = load_image(image_path)
     full_h, full_w = gray.shape
 
+    t0 = time.perf_counter()
     binarize_result = binarize(gray)
+    t_binarize = time.perf_counter() - t0
     report("Binarizing")
 
-    # Scout pass: skeletonize the raw mask only to get a width signal for
-    # flaking identification. Real pass re-skeletonizes on the corrected
-    # mask so flaked/delaminated regions never reach the thinning step --
-    # see src/crackgraph/flaking.py.
-    scout_skeleton_result = skeletonize_and_prune(binarize_result.mask, source_image=gray)
-    flaking_result = exclude_flaking_regions(
-        scout_skeleton_result.mask_clean,
-        scout_skeleton_result.skel_image,
-        scout_skeleton_result.medial_radius,
-    )
-    report("Checking for flaking")
-    if flaking_result.candidates:
-        skeleton_result = skeletonize_and_prune(flaking_result.mask_corrected, source_image=gray)
-    else:
-        skeleton_result = scout_skeleton_result
+    # Single pass: the flaked region, if any, is skeletonized along with
+    # everything else; its interior mesh is dropped below by
+    # flake_touching_path_indices.
+    t0 = time.perf_counter()
+    skeleton_result = skeletonize_and_prune(binarize_result.mask, source_image=gray)
+    t_skeletonize = time.perf_counter() - t0
     report("Skeletonizing")
+
+    t0 = time.perf_counter()
+    flaking_result = exclude_flaking_regions(
+        skeleton_result.mask_clean, skeleton_result.skel_image, skeleton_result.medial_radius,
+    )
+    t_flaking = time.perf_counter() - t0
+    report("Checking for flaking")
+
+    t0 = time.perf_counter()
     graph_result = extract_graph(skeleton_result.skeleton)
+    t_graph_extract = time.perf_counter() - t0
+
+    # Any edge with a pixel inside the grown-out flake is dropped entirely --
+    # from the stats AND from the connectivity graph.
+    t0 = time.perf_counter()
+    omitted = flake_touching_path_indices(
+        skeleton_result.skeleton, graph_result, flaking_result.excluded_mask,
+    )
+    t_flaking += time.perf_counter() - t0
     report("Extracting graph")
 
-    # Edges touching the exclusion cut are truncated by our own correction,
-    # not by a real crack arrest -- their length/width are not real
-    # measurements, so they're dropped from those two stats specifically
-    # (but kept in the connectivity graph below: they're still real
-    # topology, just with an untrustworthy length).
-    cut_adjacent = cut_adjacent_path_indices(
-        skeleton_result.skeleton, graph_result, flaking_result.excluded_mask,
-        flaking_result.reference_width_px,
-    )
+    t0_stats = time.perf_counter()
     summary = graph_result.summary
-    length_ok_mask = ~summary.index.isin(cut_adjacent)
+    length_ok_mask = ~summary.index.isin(omitted)
 
-    crack_area_px2 = float(skeleton_result.mask_clean.sum())
+    # mask_corrected == mask_clean & ~excluded_mask (see flaking.py): the crack
+    # area outside the flaked region.
+    crack_area_px2 = float(flaking_result.mask_corrected.sum())
     total_length_px = float(summary.loc[length_ok_mask, "branch_distance"].sum())
     n_edges_for_length = int(length_ok_mask.sum())
 
@@ -282,33 +272,27 @@ def compute_row(
         total_length_px / n_edges_for_length if n_edges_for_length > 0 else float("nan")
     )
 
-    # True per-pixel width, as opposed to avg_width_px's area/length ratio -- see
-    # median_pixelwise_width_px's docstring. medial_radius is the distance transform of
-    # this same mask_clean, already computed by skeletonize_and_prune.
     median_width_px = median_pixelwise_width_px(
-        skeleton_result.skeleton, graph_result, cut_adjacent, skeleton_result.medial_radius
+        skeleton_result.skeleton, graph_result, omitted, skeleton_result.medial_radius,
     )
 
-    # crack_area_pct divides by the WHOLE image; this divides by the area we actually have
-    # evidence about (whole image minus the flaking exclusion, which could be cracked or not
-    # underneath -- we don't know, see flaking.py). Always computed, no calibration factor
-    # needed (both numerator and denominator are pixel counts).
+    # crack_area_pct divides by the WHOLE image; this divides by the area we have
+    # evidence about (whole image minus the flaking exclusion, which could be cracked
+    # or not underneath -- see flaking.py).
     valid_area_px2 = full_w * full_h - flaking_result.excluded_area_px2
     crack_area_pct_excl_flakes = (
         100.0 * crack_area_px2 / valid_area_px2 if valid_area_px2 > 0 else float("nan")
     )
 
-    # Percolation view of the same graph: how many disconnected crack
-    # fragments survived stage 2's pruning (fragments/spurs shorter than
-    # spur_px_threshold are already gone before this ever runs -- these
-    # counts are "components at least that long," not literally every
-    # mark in the raw mask), and what share of total crack length belongs
-    # to the single largest one. Uses the FULL graph (including
-    # cut-adjacent stub edges) -- they're real topology, only their
-    # reported length is untrustworthy, not their existence.
-    G = crack_network_graph(summary)
+    # Connectivity: build G from only the kept edges, so nothing routes through
+    # the flaked region's own (spurious) interior mesh. The total length must be
+    # filtered the same way, or the blob's interior mileage would deflate
+    # giant_component_fraction. Fragments/spurs shorter than spur_px are already
+    # gone before this runs: these are "components at least that long".
+    kept_summary = summary.loc[length_ok_mask]
+    G = crack_network_graph(kept_summary)
     n_components = nx.number_connected_components(G)
-    full_total_length_px = float(summary["branch_distance"].sum())
+    full_total_length_px = float(kept_summary["branch_distance"].sum())
     gc_nodes = giant_component_nodes(G)
     if n_components > 0 and full_total_length_px > 0 and gc_nodes:
         gc_length_px = sum(
@@ -318,23 +302,18 @@ def compute_row(
     else:
         giant_component_fraction = float("nan")
 
-    # Structure *within* the giant component (as opposed to just its share of
-    # total length above): median segment length on the whole image vs. just
-    # within the giant component, and the giant component's own physical
-    # spatial reach (straight-line span between its two farthest points) --
-    # distinguishes a large multi-crack network from a single long crack.
-    median_edge_length_px_val = median_edge_length_px(summary, cut_adjacent)
-    median_edge_length_gc_px = median_edge_length_px(summary, cut_adjacent, node_filter=gc_nodes)
+    median_edge_length_px_val = median_edge_length_px(summary, omitted)
+    median_edge_length_gc_px = median_edge_length_px(summary, omitted, node_filter=gc_nodes)
 
-    # dgc: sampled from every pixel on every edge INSIDE the giant component, not just
-    # its junction/endpoint node coordinates. A component made of a single closed loop
-    # with no junctions at all (skan represents it as one node with a self-loop edge) has
-    # only one node coordinate, so a node-only span is undefined there even though the
-    # loop itself has real physical extent -- its own pixel path does not have this
-    # problem. Uses the FULL graph (no cut_adjacent filtering), same policy as
-    # giant_component_nodes: a pixel's position is real even where an edge's reported
-    # length is untrustworthy from truncation at the flaking cut.
-    gc_edge_mask = summary["node_id_src"].isin(gc_nodes) & summary["node_id_dst"].isin(gc_nodes)
+    # dgc: sampled from every pixel on every kept edge inside the giant component,
+    # not just its node coordinates -- a component that is a single closed loop has
+    # one node, so a node-only span would be undefined. Omitted edges contribute no
+    # pixels even if both their endpoints are giant-component members.
+    gc_edge_mask = (
+        summary["node_id_src"].isin(gc_nodes)
+        & summary["node_id_dst"].isin(gc_nodes)
+        & length_ok_mask
+    )
     gc_coords = (
         np.concatenate([
             skeleton_result.skeleton.path_coordinates(int(idx))
@@ -357,6 +336,8 @@ def compute_row(
         median_edge_length_gc_um = median_edge_length_gc_px * UM_PER_PX_MM_TAG
         giant_component_span_um = giant_component_span_px_val * UM_PER_PX_MM_TAG
 
+    t_stats = time.perf_counter() - t0_stats
+    t_total = time.perf_counter() - t_start
     report("Computing stats")
 
     stats_row = {
@@ -384,8 +365,17 @@ def compute_row(
         "giant_component_span_um": giant_component_span_um,
         "flaking_excluded_area_pct": flaking_result.excluded_area_pct,
         "flaking_n_candidates": len(flaking_result.candidates),
-        "flaking_n_edges_excluded_near_cut": len(cut_adjacent),
+        "flaking_n_edges_omitted": len(omitted),
         "n_host_stubs_pruned": skeleton_result.n_host_stubs_pruned,
+        "runtime_binarize_s": t_binarize,
+        "runtime_skeletonize_s": t_skeletonize,
+        "runtime_flaking_s": t_flaking,
+        "runtime_graph_extract_s": t_graph_extract,
+        "runtime_stats_s": t_stats,
+        # Measured independently (whole-function wall clock), not summed from
+        # the buckets above -- load_image and dict assembly aren't separately
+        # bucketed, so this can exceed their sum by a small margin.
+        "runtime_total_s": t_total,
     }
 
     if cache_dir is not None:
@@ -396,7 +386,7 @@ def compute_row(
         )
         render_crack_stats_overlay(
             rgb, skeleton_result.skeleton, graph_result,
-            flaking_result.excluded_mask, cut_adjacent,
+            flaking_result.excluded_mask, omitted,
             cache_dir / image_stem / "overlay.png",
         )
 
@@ -425,8 +415,7 @@ def main():
         "--cache-dir", type=str, default=None,
         help=(
             "Also write the per-image analysis cache (mask/skeleton/excluded-region arrays, "
-            "pruned-branch records, stats.json, overlay.png) here -- see cache_io.py. "
-            "Off by default; existing callers see no behavior change."
+            "pruned-branch records, stats.json, overlay.png) here -- see cache_io.py. Off by default."
         ),
     )
     add_batch_args(p)

@@ -11,6 +11,36 @@ Commit IDs link each entry to its full details in `git log`. Findings are number
 
 ## 2026-11-11
 
+### Removed: the two-pass flaking method; one crack-stats exporter
+
+**Changes results**: every number from an image with flaking, in every tool. Images without
+flaking are unchanged. Re-export before quoting.
+
+The thesis export had two methods for flaked regions. The two-pass one skeletonized, removed
+flaked patches from the mask, skeletonized again, and dropped edges within one crack width of the
+cut from length/width stats only. The single-pass one skeletonizes once and omits every edge with
+a pixel inside a flaked patch from the stats **and** the connectivity graph. Only the single-pass
+method remains.
+
+- `export_crack_stats_v3.py` is now `export_crack_stats.py` (the old two-pass exporter is gone);
+  `export_crack_stats_v3_batch_bcd.py` is now `export_crack_stats_batch_bcd.py`. Default outputs
+  drop the `_v3` suffix. `compute_row` keeps the GUI's `on_stage` progress hook; the stage order
+  is now binarize, skeletonize, flaking.
+- `analyze_image.py`, the spatial overview figure and the junction cut-off sweep skeletonize once
+  and remove flake-touching edges from the skeleton before analysis
+  (`flaking.remove_flake_touching_edges`, new). `analyze_image`'s report line is now "Skeleton
+  edges touching a flaked region, removed before graph analysis".
+- Removed: `flaking.cut_adjacent_path_indices`, `CUT_ADJACENT_BUFFER_WIDTH_MULTIPLIER`, the
+  `exclude_from_stats` option and `near_flaking_cut` fields/CSV column in `edge_metrics.py`. The
+  crack-stats overlay highlights omitted edges instead of cut-adjacent ones.
+- Spreadsheet column `flaking_n_edges_excluded_near_cut` no longer exists; `flaking_n_edges_omitted`
+  replaces it. The export now always includes the six `runtime_*` columns.
+- Tests: `test_export_crack_stats_v3.py` → `test_flaking_omission.py` (+2 tests for the new
+  helper); one entry-point test and one edge-metrics test for removed features dropped.
+- Docs: schema doc §1, §4, §4b, §9 rewritten, §10 (method comparison) removed; walkthrough pages
+  3, 5, 6, 11, 12, 14; batch README; `examples/` keeps only `crack_stats_batch_bcd.xlsx`
+  (renamed) and the validation gallery.
+
 ### Terminology: dark specks are removed, bright spots are filled
 
 **No change to results**: wording only, in docs, comments, figure labels and two test names.

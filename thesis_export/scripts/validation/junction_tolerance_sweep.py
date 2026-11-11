@@ -45,7 +45,7 @@ from scipy.stats import spearmanr
 
 from scripts.batch_stats.export_crack_stats import DEFAULT_DATA_DIR, find_batch_images
 from src.crackgraph.binarize import binarize
-from src.crackgraph.flaking import exclude_flaking_regions
+from src.crackgraph.flaking import exclude_flaking_regions, remove_flake_touching_edges
 from src.crackgraph.graph import extract_graph
 from src.crackgraph.io_utils import load_image
 from src.crackgraph.junctions import (
@@ -105,7 +105,7 @@ def measure_junction_gaps(image_path: Path, *, full_image: bool) -> tuple[list, 
     """Sector-gap tuples for every degree-3 junction whose angles could be
     measured, the count of junctions that couldn't be, and the analyzed
     region's share of the image area (%). Same stage order and defaults as
-    src/analyze_image.py, including the flaking second pass."""
+    src/analyze_image.py, including removing edges that touch a flaked region."""
     gray, _ = load_image(image_path)
     full_area = gray.size
     if not full_image:
@@ -117,12 +117,10 @@ def measure_junction_gaps(image_path: Path, *, full_image: bool) -> tuple[list, 
     flaking = exclude_flaking_regions(
         skeleton_result.mask_clean, skeleton_result.skel_image, skeleton_result.medial_radius
     )
-    if flaking.candidates:
-        skeleton_result = skeletonize_and_prune(flaking.mask_corrected, source_image=gray)
-    graph_result = extract_graph(skeleton_result.skeleton)
-    junctions = classify_junctions(
-        skeleton_result.skeleton, graph_result, medial_radius=skeleton_result.medial_radius
+    skeleton, graph_result, _ = remove_flake_touching_edges(
+        skeleton_result.skeleton, extract_graph(skeleton_result.skeleton), flaking.excluded_mask
     )
+    junctions = classify_junctions(skeleton, graph_result, medial_radius=skeleton_result.medial_radius)
 
     gap_sets, n_insufficient = [], 0
     for c in junctions.classifications:
