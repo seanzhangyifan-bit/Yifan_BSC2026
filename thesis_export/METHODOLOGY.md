@@ -7,26 +7,13 @@ docs make full sense.
 
 A BSc thesis (KIT, Thin Film Technology group) on PEMFC catalyst layer ink formulation and coating, centred on comparing short-side-chain (SSC) vs long-side-chain (LSC) PFSA ionomers and their effect on catalyst layer structure, cracking, and performance. Scope: light-duty-vehicle CCMs, low Pt loading (0.2–0.4 mg/cm²), direct coating on PTFE at four Rakelspalt (doctor-blade gap) settings.
 
-The code in this repo is one component of that thesis: **a tool to analyse crack patterns in catalyst-layer micrographs and characterise how sequential vs concurrent the cracking was.** It is not a general crack-detection package.
+The code in this repo is one component of that thesis: **a tool to turn catalyst-layer crack micrographs into numbers that let crack patterns be compared across conditions** (ionomer type, Rakelspalt, substrate, humidity). It is not a general crack-detection package.
 
-## The one thing to understand before reading these results
+## What the results are
 
-The analysis reconstructs a **partial order** on crack growth, not a global chronology. This distinction is load-bearing:
+The main output is the per-image crack statistics from the batch export (`scripts/batch_stats/`): crack area fraction, flaked area, crack width, segment count and length, and network connectivity (see `docs/batch_stats/crack_stats_schema.md`). The per-image analysis (`src/analyze_image.py`) adds per-segment geometry, curvature/tortuosity and orientation anisotropy for a closer look at one image.
 
-- Input is a single micrograph (no time-lapse video). Therefore there are **no external timestamps / boundary conditions** available.
-- A T-junction (one crack meeting another at ~90°) certifies exactly one *local* fact: the crack that abuts arrived after the crack it hit, **at that point**. Nothing more.
-- The correct output is a partial order (a poset / DAG) that claims only what the geometry supports. Its **incompleteness is a measured result, not a failure.**
-- The tool deliberately does **not** fabricate a total ordering, guess missing relations, or otherwise present more temporal information than the junction geometry licenses. Where a claim would need a timestamp the data doesn't have, the gap is surfaced, not filled.
-
-The headline quantities the tool should produce are: junction-type census (T vs Y vs higher-valence), and the **width `w`** of the precedence poset (size of the largest set of mutually-undatable cracks, via a maximum-antichain / bipartite-matching computation). `w` is simultaneously (a) the count of unresolved orderings, (b) an index of how concurrent vs hierarchical the cracking was, and (c) a falsifiable check on the quasi-static sequential-cracking hypothesis. Small `w` corroborates it; large `w` is a genuine and reportable tension.
-
-## Atoms: arcs, not whole cracks
-
-Model the network as a planar graph: nodes = junctions/endpoints, edges = crack segments.
-
-- Prefer **growth-arcs** (oriented edges) as the atoms of the partial order, because cracks grow concurrently and a through-line may actually be two arrested cracks meeting head-on (en-passant / pseudo-junctions).
-- Collapsing collinear through-segments into a single "crack" is a **hypothesis that must be evidence-backed** (straight continuous path + matching width + no arrest feature at the vertex), never a default. Each collapse is a testable merge that reduces `w`, and `w` can be reported both with and without collapse.
-- Reporting how much `w` drops as collapse-licensing evidence is added is a legitimate way to show how much chronology is *earned by geometry* vs *assumed*.
+How to judge an error in the pipeline: by its effect on those numbers. Compare the shift with (a) the spread between `v1`/`v2` replicates of the same condition and (b) the gap between the conditions being compared. Errors that grow systematically with crack width or density matter more than random ones, because they can tilt a comparison between conditions.
 
 ## Pipeline stages
 
@@ -34,34 +21,28 @@ Model the network as a planar graph: nodes = junctions/endpoints, edges = crack 
    - **Flaking/delamination exclusion, after stage 2** (`src/crackgraph/flaking.py`): some samples (seen so far on membrane-substrate T2/T3/T4) have patches where the catalyst layer has physically flaked off, exposing substrate — bright under Otsu like a crack, but it's missing material, not a fracture, and there's zero evidence what crack pattern (if any) existed under it. The mask is skeletonized once; pixels far wider than the image's own typical crack width are grown back out to their true boundary, and every skeleton edge with a pixel inside that region is omitted from the stats and from the connectivity graph, so nothing connects through a flaked patch. Width is the single identification criterion, deliberately — a solidity-based second criterion was tried and dropped after it excluded a confirmed real (elongated) delamination case; see the module docstring. See the module docstring for why a "smooth the boundary to look natural" approach was considered and rejected (shapes the output, doesn't measure anything).
 2. Skeletonise (homotopy-preserving thinning). Prune spurs/hairs shorter than ~film-thickness equivalent.
 3. Extract attributed planar graph: nodes, edges, and **the full pixel polyline per edge** (needed for angle/curvature/width).
-4. Measure per junction on an **annulus** around the vertex: inner radius a few px (skeleton jitter near vertices is severe), outer radius ~h/2 (local approach direction, not far-field). Classify T vs Y; for each T emit `abutter ≺ host` (read the open side of `≺` as pointing to the *older* crack: host is older, abutter is younger).
-5. Build precedence graph → transitive closure → **DAG/cycle check** → poset. Cycles = misread junctions or genuinely near-simultaneous cracking; report minimum-feedback-arc-set size as a data-quality / simultaneity metric rather than silently deleting.
-6. Compute width `w` (Dilworth / König). Report `w`, `w-1`, junction census, generation counts.
+4. Measure per segment: length, width (from the pre-skeleton mask via distance transform) and area; per image: curvature/tortuosity and orientation anisotropy.
 
-Stages 1–4 draw on off-the-shelf image-processing libraries; stages 5–6 (the precedence graph and width computation) are purpose-built for this analysis.
-
-## Three semi-independent chronometers
-
-Junction **angle**, approach **curvature** (younger crack curls toward its T; measured at the annulus, not by average edge direction), and crack **width** (from the pre-skeleton mask via distance transform; earlier cracks tend wider due to post-crack drying shrinkage). Their **mutual agreement rate is a validation signal that needs no ground truth.** Systematic disagreement is physics (pinning, interfacial slip, late widening), logged rather than smoothed over.
+All stages draw on off-the-shelf image-processing libraries (scikit-image, skan); the code around them chooses settings, removes artefacts and labels what each number is.
 
 ## Libraries
 
 - `scikit-image` for threshold/skeleton/distance-transform.
 - `Skan` (skeleton-analysis.org) for skeleton→branch-graph — does most of stage 2–3; distinguishes junctions/endpoints, flags cycles.
 - `sknw` when per-edge pixel polylines in a NetworkX graph are wanted.
-- `networkx` for the poset work (transitive closure, matching-based max-antichain, feedback arc set).
+- `networkx` for the connectivity graph in the batch export (connected components, giant component).
 
 ## Data layout
 
 - The private raw micrograph collection this pipeline was developed against lives in `data/raw/` (not bundled in this export — see the root README's "What's not included"), organized in subfolders by experiment/condition -- currently `T5/` and `humidity_loading/`, each holding one `.jpg` per micrograph (e.g. `data/raw/T5/T5-M_H190_v1_ro000001.jpg`).
-- Analysis is currently run on a fixed top-left corner crop only, not the full image (see `src/crackgraph/region.py`'s `default_corner_crop` and `src/analyze_image.py`'s `--full-image` flag, which is deferred -- see README): crop size is 1/8 of image width (`corner_frac=0.125`), inset from the true top-left corner by a margin of 2% of image width (`edge_margin_frac=0.02`) on both axes. These are the pipeline's working CLI defaults; pass `--corner-frac`/`--edge-margin-frac` to override for a one-off run rather than changing the default. That crop is about 1.5% of the image area, so junction counts from it are a corner sample: the console report, the xlsx `region_description` column and the GUI all state the region and its area share, and they must not be read alongside the whole-image batch crack stats as if both described the same area.
+- Analysis is currently run on a fixed top-left corner crop only, not the full image (see `src/crackgraph/region.py`'s `default_corner_crop` and `src/analyze_image.py`'s `--full-image` flag, which is deferred -- see README): crop size is 1/8 of image width (`corner_frac=0.125`), inset from the true top-left corner by a margin of 2% of image width (`edge_margin_frac=0.02`) on both axes. These are the pipeline's working CLI defaults; pass `--corner-frac`/`--edge-margin-frac` to override for a one-off run rather than changing the default. That crop is about 1.5% of the image area, so numbers from it are a corner sample: the console report, the xlsx `region_description` column and the GUI all state the region and its area share, and they must not be read alongside the whole-image batch crack stats as if both described the same area.
 - `analyze_image.py` (and `scripts/spatial_overview/overview_figure.py`, below) nest their output under `outputs/<coating>/`, where `<coating>` is the image's source subfolder name (`T5`, `humidity_loading`) -- so outputs from different coatings/sample batches don't pile up flat in one directory.
 
 ## Multi-section overview figure & HTML report
 
 A second, independent entry point for a first look at spatial variation across a whole coating -- not part of `analyze_image.py`'s per-region flow.
 
-- **`scripts/spatial_overview/overview_figure.py <image_path> [--out-dir outputs]`**: times one pass of the curvature/anisotropy pipeline slice (binarize -> flaking exclusion -> skeletonize -> graph -> curvature -> anisotropy -- deliberately *not* junctions or the corner cross-check, which this doesn't need) over the whole image, then again over a 2x2 grid of non-overlapping quadrants (other grid sizes are rejected, since the layout below is 2x2-only) (`src/crackgraph/tiling.py`'s `grid_tiles`), and compiles everything into one figure (`src/crackgraph/summary_plots.py`'s `render_overview_figure`).
+- **`scripts/spatial_overview/overview_figure.py <image_path> [--out-dir outputs]`**: times one pass of the curvature/anisotropy pipeline slice (binarize -> flaking exclusion -> skeletonize -> graph -> curvature -> anisotropy) over the whole image, then again over a 2x2 grid of non-overlapping quadrants (other grid sizes are rejected, since the layout below is 2x2-only) (`src/crackgraph/tiling.py`'s `grid_tiles`), and compiles everything into one figure (`src/crackgraph/summary_plots.py`'s `render_overview_figure`).
 - **Figure layout (specific to the 2x2/quarters default, not a generic N x M layout)**: a big display of the whole raw micrograph in the center; each quadrant's rose + tortuosity-hist cluster in the figure corner matching that quadrant's actual position in the source image (top-left quadrant's cluster in the figure's top-left corner, etc.); the whole image's *own* rose/tortuosity cluster (its analysis result, distinct from the raw-image display above it) in a row below everything. An earlier flat-list-of-rows layout (one row per section) was tried first and replaced -- 16 sections (the original 4x4 default) made for a tall, scroll-heavy figure; quarters plus this spatial layout reads much faster. Curvature is currently omitted from this figure (kept only in the standalone `render_curvature_histogram`/xlsx export) -- dropped for readability; `_plot_curvature_hist_on_axes` was split so `_plot_tortuosity_hist_on_ax` could be reused alone here.
 - **Decisions already made**: the grid is a coarse, independent tiling decoupled from `region.py`'s `corner_frac` -- tiling at corner-crop size would give ~50-100+ tiles, far too many for this figure. Default is 2x2 (quarters); `render_overview_figure` asserts exactly 4 sections and assumes grid_tiles' row-major order (r0c0, r0c1, r1c0, r1c1). `grid_tiles` does **not** apply `edge_margin_frac` -- every pixel is covered, edge to edge. Per-quadrant image thumbnails were considered and dropped -- only the whole image is shown, big, once.
 - **`src/crackgraph/html_report.py`**: one master HTML report (`outputs/report.html`) covering *every* coating and image analyzed so far -- explicitly not one HTML per coating and not one per image. A small JSON registry (`outputs/report_data.json`) is the source of truth; the HTML is always regenerated in full from it (`update_master_report`), grouped by coating, one image block per image. Re-running on the same `(coating, image_stem)` replaces its existing block instead of duplicating it.
@@ -70,7 +51,7 @@ A second, independent entry point for a first look at spatial variation across a
 ## Standalone crack-stats export (for the sibling `image_visualization` repo)
 
 A fourth, independent entry point -- a stripped-down stage 1-3 only (binarize -> skeletonize ->
-graph extraction, no junctions/anisotropy/curvature/ordering) batch export, built for external
+graph extraction, no anisotropy/curvature) batch export, built for external
 consumption rather than in-repo analysis.
 
 - **`scripts/batch_stats/export_crack_stats.py`**: gives a row to every image file under `--data-dir`
@@ -97,11 +78,11 @@ consumption rather than in-repo analysis.
 
 ## Synthetic-pattern validation gallery
 
-A third independent entry point: a visual, human-reviewable companion to the numeric-tolerance pytest suite (`tests/test_junction_angle.py`, `test_corners.py`, `test_curvature.py`, `test_anisotropy.py`), not a replacement for it.
+A third independent entry point: a visual, human-reviewable companion to the numeric-tolerance pytest suite (`tests/test_curvature.py`, `test_anisotropy.py`), not a replacement for it.
 
-- **`scripts/validation/validation_gallery.py [--out-dir outputs/validation]`**: runs a fixed battery of 12 synthetic cases (`src/crackgraph/validation_cases.py`, covering 4 measurement methods) through the real pipeline, and compiles each case's overlay/rose image plus an expected-vs-measured table into one page (`src/crackgraph/validation_report.py`'s `render_validation_report`, in `outputs/validation/report.html`).
+- **`scripts/validation/validation_gallery.py [--out-dir outputs/validation]`**: runs a fixed battery of 5 synthetic cases (`src/crackgraph/validation_cases.py`, covering 2 measurement methods) through the real pipeline, and compiles each case's overlay/rose image plus an expected-vs-measured table into one page (`src/crackgraph/validation_report.py`'s `render_validation_report`, in `outputs/validation/report.html`).
 - Every tolerance used for a case's PASS/FAIL verdict is duplicated (with a cross-reference comment), not imported, from the corresponding `tests/test_*.py` constant — tests aren't a dependency of `src/`.
-- Two cases exist specifically to show a known method limitation honestly rather than hide it: `curved_t_junction_r30_corner_limitation` (corner cross-check doesn't resolve cleanly on a severely curved host at the default window, even though the tangent fit still does) and `anisotropy_orthogonal_blind_spot` (the 2nd-order orientation tensor reads an orthogonal grid as isotropic; only the rose histogram reveals the two peaks). Neither has a fabricated pass condition.
+- One case exists specifically to show a known method limitation honestly rather than hide it: `anisotropy_orthogonal_blind_spot` (the 2nd-order orientation tensor reads an orthogonal grid as isotropic; only the rose histogram reveals the two peaks). It has no fabricated pass condition.
 - Ground truth is not bundled into `synthetic.py`'s return value (image-only, matching every existing test file's convention) — each case function re-derives its own expected values from the same arguments it passes to the generator.
 
 ## Documentation map
@@ -111,8 +92,8 @@ they're not duplicated here:
 
 - `README.md` — how to run the pipeline, CLI flags, output layout, and a "Libraries and
   code architecture" overview for a reader who doesn't need the thesis framing.
-- `GLOSSARY.md` — one-line definitions of the terms used above (poset, antichain, width
-  `w`, T/Y-junction, abutter/host, annulus, generation, growth-arc).
+- `GLOSSARY.md` — one-line definitions of the terms used in the code and docs (node, degree,
+  segment, giant component, tortuosity, anisotropy).
 - `CALIBRATION.md` — status table (🟢 derived / 🟡 empirical uncalibrated / 🔴 assumed) for
   every tunable constant, with file:line pointers.
 - `docs/calibration_notes.md` — the full rationale for each constant, relocated verbatim
@@ -131,16 +112,16 @@ they're not duplicated here:
 
 ## Design principles
 
-- Every claim-bearing output is traceable to what the method can actually support. This project uses an evidence-level discipline elsewhere in the thesis (`[measured]` / `[interpreted]` / `[speculated]` / `[cited]`) that carries into the code and console output — labeling what a number is, not just what it is called. E.g. "T-fraction is `[measured]`; the inference that small `w` implies quasi-static cracking is `[interpreted]`."
+- Every claim-bearing output is traceable to what the method can actually support. This project uses an evidence-level discipline elsewhere in the thesis (`[measured]` / `[interpreted]` / `[speculated]` / `[cited]`) that carries into the code and console output — labeling what a number is, not just what it is called. E.g. "crack area fraction is `[measured]`; which segment owns a pixel inside a junction blob is `[interpreted]`."
 - Deterministic, reproducible measurement is preferred over anything that "looks about right" — hand-tuned magic constants carry a stated justification (ideally tied to `h`), tracked in `CALIBRATION.md`.
-- The tool stays honest about uncertainty: near-120° junctions carry weak/no ordering signal, so no constraint is emitted there rather than a low-confidence guess.
+- The tool stays honest about uncertainty: where a number can only be bracketed (e.g. per-segment area near junctions), it reports the bounds rather than one falsely exact value.
 
 ## Reference spine (for context, not to be re-derived in code)
 
-Thin-film fracture mechanics behind the analysis: Beuth 1992 (plane-strain channelling, defines `g(α,β)`), Xia & Hutchinson 2000 (shear-lag model, exponential stress recovery, KII=0 path selection, curvature/spiral results), Goehring 2012 (rectilinear→hexagonal evolution, annulus angle method, T-junctions as timing record). Hierarchical-division / ordering precedent: Bohn, Pauchard & Couder 2005. The math of the reconstruction is planar graph theory + order theory (posets, Dilworth's theorem); the front-half image work is homotopy-preserving skeletonisation.
+Thin-film fracture mechanics behind the analysis: Beuth 1992 (plane-strain channelling, defines `g(α,β)`), Xia & Hutchinson 2000 (shear-lag model, exponential stress recovery, curvature/spiral results), Goehring 2012 (rectilinear→hexagonal crack-network evolution), Bohn, Pauchard & Couder 2005 (hierarchical crack patterns). The image work is homotopy-preserving skeletonisation plus planar graph extraction.
 
-Anisotropy/curvature sidequest (see `crackgraph/anisotropy.py` and `crackgraph/curvature.py` docstrings for the full attribution): axial circular statistics and the doubled-angle construction — Mardia & Jupp, *Directional Statistics*, Wiley, 2000; Fisher, *Statistical Analysis of Circular Data*, Cambridge University Press, 1993 (the more common reference in earth-science fracture/joint-orientation work). The 2nd-order orientation tensor formalism (and its known insufficiency, motivating a 4th-order tensor) — Advani & Tucker, "The Use of Tensors to Describe and Predict Fiber Orientation in Short Fiber Composites", *Journal of Rheology*, 1987. Chord-angle/turning-angle discrete curvature estimation on digitized curves — Rosenfeld & Johnston, "Angle Detection on Digital Curves", *IEEE Transactions on Computers* C-22(9), 1973 (an alternative standard estimator, the 3-point circle fit / Menger curvature, was not used — chosen instead for compatibility with the existing chord-based scan already used in `corners.py`, not for a documented accuracy advantage). Tortuosity (arc/chord) is a generic, uncredited-to-one-source geometric ratio, used with the same definition in crack-path roughness work (Bouchaud, "Scaling properties of cracks", *J. Phys.: Condens. Matter* 9, 4319, 1997), vascular tortuosity, and river sinuosity.
+Anisotropy/curvature sidequest (see `crackgraph/anisotropy.py` and `crackgraph/curvature.py` docstrings for the full attribution): axial circular statistics and the doubled-angle construction — Mardia & Jupp, *Directional Statistics*, Wiley, 2000; Fisher, *Statistical Analysis of Circular Data*, Cambridge University Press, 1993 (the more common reference in earth-science fracture/joint-orientation work). The 2nd-order orientation tensor formalism (and its known insufficiency, motivating a 4th-order tensor) — Advani & Tucker, "The Use of Tensors to Describe and Predict Fiber Orientation in Short Fiber Composites", *Journal of Rheology*, 1987. Chord-angle/turning-angle discrete curvature estimation on digitized curves — Rosenfeld & Johnston, "Angle Detection on Digital Curves", *IEEE Transactions on Computers* C-22(9), 1973 (an alternative standard estimator, the 3-point circle fit / Menger curvature, was not used — chosen for consistency with the shared chord-based scan in `_chord_scan.py`, not for a documented accuracy advantage). Tortuosity (arc/chord) is a generic, uncredited-to-one-source geometric ratio, used with the same definition in crack-path roughness work (Bouchaud, "Scaling properties of cracks", *J. Phys.: Condens. Matter* 9, 4319, 1997), vascular tortuosity, and river sinuosity.
 
 ## Scope discipline
 
-Floor deliverable (do this first, it is guaranteed reportable): graph extraction + junction census + generation counts across the four Rakelspalt settings and SSC vs LSC. Ceiling deliverable: full arc-level poset with width computation and cross-condition comparison. Build the floor before climbing; if T-junctions turn out rare in these patterns, the ordering apparatus has little to work on and that is itself a cheap, useful finding.
+Main deliverable: reliable, comparable per-image crack statistics across the conditions — Rakelspalt settings, SSC vs LSC, substrate, humidity — with known biases measured and stated. Work that makes these numbers trustworthy and comparable comes first.

@@ -25,10 +25,8 @@ import numpy as np
 
 from .anisotropy import compute_anisotropy
 from .binarize import binarize
-from .corners import cross_check_junctions, find_background_contours
 from .curvature import compute_edge_curvature
 from .graph import extract_graph
-from .junctions import classify_junctions
 from .overlay import render_overlay
 from .skeleton import skeletonize_and_prune
 from .summary_plots import render_orientation_rose
@@ -36,13 +34,9 @@ from .synthetic import (
     generate_curved_t_junction,
     generate_oriented_segment_field,
     generate_t_junction,
-    generate_y_junction,
 )
 
 # -- Tolerances, mirrored from the existing pytest suite --------------------
-ANGLE_RECOVERY_TOL_DEG = 6.0  # tests/test_junction_angle.py::ANGLE_RECOVERY_TOL_DEG
-Y_ANGLE_RECOVERY_TOL_DEG = 11.0  # tests/test_junction_angle.py::Y_ANGLE_RECOVERY_TOL_DEG
-GAP_RECOVERY_TOL_DEG = 20.0  # tests/test_corners.py::GAP_RECOVERY_TOL_DEG
 STRAIGHT_TORTUOSITY_MAX = 1.02  # tests/test_curvature.py::STRAIGHT_TORTUOSITY_MAX
 STRAIGHT_MEAN_CURVATURE_MAX_PX_INV = 0.002  # tests/test_curvature.py::STRAIGHT_MEAN_CURVATURE_MAX_PX_INV
 CURVATURE_RECOVERY_REL_TOL = 0.25  # tests/test_curvature.py::CURVATURE_RECOVERY_REL_TOL
@@ -55,7 +49,7 @@ CIRCULAR_BEARING_TOL_DEG = 10.0  # tests/test_anisotropy.py::CIRCULAR_BEARING_TO
 @dataclass
 class ValidationCaseResult:
     name: str
-    method: str  # "junction" | "curvature" | "corner" | "anisotropy" -- report section grouping
+    method: str  # "curvature" | "anisotropy" -- report section grouping
     description: str
     image_relpath: str  # relative to the report's own directory
     rows: list[tuple[str, str, str, bool]]  # (metric, expected, measured, passed)
@@ -102,158 +96,6 @@ def _within_rel(expected: float, measured: float, rel_tol: float) -> bool:
     return abs(expected - measured) / expected < rel_tol
 
 
-# -- Junction classification cases -------------------------------------------
-
-
-def _junction_case(name: str, description: str, gray: np.ndarray, out_dir: Path, expected_gaps: list[float] | None, expected_label: str) -> ValidationCaseResult:
-    skel_res, graph_res = _run_stage123(gray)
-    junction_res = classify_junctions(skel_res.skeleton, graph_res)
-    out_path = out_dir / f"{name}.png"
-    render_overlay(_to_rgb_uint8(gray), skel_res.skeleton, graph_res, out_path, junction_result=junction_res, detail=True)
-
-    rows: list[tuple[str, str, str, bool]] = []
-    if junction_res.n_deg3_total != 1:
-        rows.append(_row("n degree-3 junctions", "1", str(junction_res.n_deg3_total), False))
-        return ValidationCaseResult(name, "junction", description, out_path.name, rows, False)
-
-    c = junction_res.classifications[0]
-    rows.append(_row("label", expected_label, c.label, c.label == expected_label))
-    if expected_gaps is not None and c.sector_gaps_deg is not None:
-        for exp, meas in zip(expected_gaps, sorted(c.sector_gaps_deg)):
-            rows.append(_row("sector gap (deg)", f"{exp:.1f}", f"{meas:.1f}", _within(exp, meas, ANGLE_RECOVERY_TOL_DEG)))
-    elif expected_gaps is not None:
-        rows.append(_row("sector gaps (deg)", "/".join(f"{g:.1f}" for g in expected_gaps), "none (insufficient_data)", False))
-
-    return ValidationCaseResult(name, "junction", description, out_path.name, rows, all(r[3] for r in rows))
-
-
-def case_t_junction_90(out_dir: Path) -> ValidationCaseResult:
-    gray = generate_t_junction(angle_deg=90.0)
-    return _junction_case(
-        "t_junction_90deg",
-        "Straight T-junction, right angle (90°) — clean baseline case.",
-        gray, out_dir, expected_gaps=[90.0, 90.0, 180.0], expected_label="T",
-    )
-
-
-def case_t_junction_75(out_dir: Path) -> ValidationCaseResult:
-    gray = generate_t_junction(angle_deg=75.0)
-    return _junction_case(
-        "t_junction_75deg",
-        "Straight T-junction, non-right angle (75°) — checks angle recovery isn't hardcoded to 90°.",
-        gray, out_dir, expected_gaps=[75.0, 105.0, 180.0], expected_label="T",
-    )
-
-
-def case_curved_t_junction_r60(out_dir: Path) -> ValidationCaseResult:
-    gray = generate_curved_t_junction(radius=60.0)
-    return _junction_case(
-        "curved_t_junction_r60",
-        "Curved-host T-junction, radius=60px (gentle curve) — tangent fit must recover ~180° host tangents despite curvature.",
-        gray, out_dir, expected_gaps=[90.0, 90.0, 180.0], expected_label="T",
-    )
-
-
-def case_y_junction_120(out_dir: Path) -> ValidationCaseResult:
-    gray = generate_y_junction(bearings_deg=(90.0, 210.0, 330.0))
-    return _junction_case(
-        "y_junction_120deg",
-        "Canonical Y-junction, three arms 120° apart.",
-        gray, out_dir, expected_gaps=[120.0, 120.0, 120.0], expected_label="Y",
-    )
-
-
-def case_y_junction_ambiguous(out_dir: Path) -> ValidationCaseResult:
-    gray = generate_y_junction(bearings_deg=(0.0, 60.0, 180.0))
-    return _junction_case(
-        "y_junction_ambiguous",
-        "Three arms at 0°/60°/180° — fits neither the T nor Y template; must be classified 'ambiguous', not forced into either bucket.",
-        gray, out_dir, expected_gaps=None, expected_label="ambiguous",
-    )
-
-
-def case_curved_t_junction_r30_corner_limitation(out_dir: Path) -> ValidationCaseResult:
-    """Known-limitation case, reported honestly rather than hidden: at the
-    default corner-cross-check window (CORNER_WINDOW_PX=10, see corners.py),
-    a severely curved host (radius=30) does not resolve as cleanly via the
-    background-wall-corner method as it does via the tangent fit (which
-    still classifies it T at default parameters, see
-    tests/test_junction_angle.py's default-window curved-host check). This
-    case shows both methods' actual output side by side instead of a
-    hand-picked pass/fail -- the point is the disagreement, not a threshold.
-    """
-    name = "curved_t_junction_r30_corner_limitation"
-    gray = generate_curved_t_junction(radius=30.0)
-    skel_res, graph_res = _run_stage123(gray)
-    junction_res = classify_junctions(skel_res.skeleton, graph_res)
-    contours = find_background_contours(skel_res.mask_clean)
-    cross_check = cross_check_junctions(
-        junction_res, contours, y_angle_tol_deg=15.0, t_straight_tol_deg=20.0, t_right_tol_deg=20.0
-    )
-    out_path = out_dir / f"{name}.png"
-    render_overlay(
-        _to_rgb_uint8(gray), skel_res.skeleton, graph_res, out_path,
-        junction_result=junction_res, corner_cross_check=cross_check, detail=True,
-    )
-
-    rows: list[tuple[str, str, str, bool]] = []
-    if junction_res.n_deg3_total == 1:
-        c = junction_res.classifications[0]
-        rows.append(_row("tangent-fit label", "T", c.label, c.label == "T"))
-        cc = cross_check[0]
-        cc_label = cc.label if cc.label is not None else f"unresolved ({cc.unresolved_reason})"
-        rows.append(
-            _row(
-                "corner cross-check label (documented limitation at this radius, see corners.py)",
-                "n/a — informational",
-                cc_label,
-                True,
-            )
-        )
-    else:
-        rows.append(_row("n degree-3 junctions", "1", str(junction_res.n_deg3_total), False))
-
-    return ValidationCaseResult(
-        name, "junction",
-        "Curved-host T-junction, radius=30px (severe curve) — tangent fit resolves T; corner cross-check is shown as-is, including where it disagrees.",
-        out_path.name, rows, all(r[3] for r in rows),
-    )
-
-
-# -- Corner cross-check case ---------------------------------------------------
-
-
-def case_corner_crosscheck_t90(out_dir: Path) -> ValidationCaseResult:
-    name = "corner_crosscheck_t90"
-    gray = generate_t_junction(angle_deg=90.0)
-    skel_res, graph_res = _run_stage123(gray)
-    junction_res = classify_junctions(skel_res.skeleton, graph_res)
-    contours = find_background_contours(skel_res.mask_clean)
-    cross_check = cross_check_junctions(
-        junction_res, contours, y_angle_tol_deg=15.0, t_straight_tol_deg=20.0, t_right_tol_deg=20.0
-    )
-    out_path = out_dir / f"{name}.png"
-    render_overlay(
-        _to_rgb_uint8(gray), skel_res.skeleton, graph_res, out_path,
-        junction_result=junction_res, corner_cross_check=cross_check, detail=True,
-    )
-
-    rows: list[tuple[str, str, str, bool]] = []
-    cc = cross_check[0]
-    rows.append(_row("n wall corners found", "2", str(len(cc.corners)), len(cc.corners) == 2))
-    rows.append(_row("label", "T", str(cc.label), cc.label == "T"))
-    rows.append(_row("agrees with tangent fit", "True", str(cc.agrees_with_tangent_fit), cc.agrees_with_tangent_fit is True))
-    if cc.sector_gaps_deg is not None:
-        for exp, meas in zip([90.0, 90.0, 180.0], sorted(cc.sector_gaps_deg)):
-            rows.append(_row("sector gap (deg)", f"{exp:.1f}", f"{meas:.1f}", _within(exp, meas, GAP_RECOVERY_TOL_DEG)))
-
-    return ValidationCaseResult(
-        name, "corner",
-        "T-junction, independent background-wall-corner cross-check of the same tangent-fit angle — an entirely different geometric method (no skeleton medial axis involved).",
-        out_path.name, rows, all(r[3] for r in rows),
-    )
-
-
 # -- Curvature / tortuosity cases ----------------------------------------------
 
 
@@ -261,10 +103,9 @@ def case_curvature_straight_line(out_dir: Path) -> ValidationCaseResult:
     name = "curvature_straight_line"
     gray = generate_t_junction(angle_deg=90.0)
     skel_res, graph_res = _run_stage123(gray)
-    junction_res = classify_junctions(skel_res.skeleton, graph_res)
     curvature_res = compute_edge_curvature(skel_res.skeleton, graph_res)
     out_path = out_dir / f"{name}.png"
-    render_overlay(_to_rgb_uint8(gray), skel_res.skeleton, graph_res, out_path, junction_result=junction_res)
+    render_overlay(_to_rgb_uint8(gray), skel_res.skeleton, graph_res, out_path)
 
     rows: list[tuple[str, str, str, bool]] = []
     for edge in curvature_res.edges:
@@ -276,7 +117,7 @@ def case_curvature_straight_line(out_dir: Path) -> ValidationCaseResult:
 
     return ValidationCaseResult(
         name, "curvature",
-        "All 3 arms of a straight T-junction — tortuosity should read near 1.0 and mean curvature near 0 (no drawn curvature).",
+        "All 3 arms of a straight T-shaped crack meeting — tortuosity should read near 1.0 and mean curvature near 0 (no drawn curvature).",
         out_path.name, rows, all(r[3] for r in rows),
     )
 
@@ -287,10 +128,9 @@ def case_curvature_arc(out_dir: Path) -> ValidationCaseResult:
     arc_half_angle_deg = 75.0
     gray = generate_curved_t_junction(radius=radius, arc_half_angle_deg=arc_half_angle_deg)
     skel_res, graph_res = _run_stage123(gray)
-    junction_res = classify_junctions(skel_res.skeleton, graph_res)
     curvature_res = compute_edge_curvature(skel_res.skeleton, graph_res)
     out_path = out_dir / f"{name}.png"
-    render_overlay(_to_rgb_uint8(gray), skel_res.skeleton, graph_res, out_path, junction_result=junction_res)
+    render_overlay(_to_rgb_uint8(gray), skel_res.skeleton, graph_res, out_path)
 
     true_kappa = 1.0 / radius
     phi = math.radians(arc_half_angle_deg)
@@ -394,13 +234,6 @@ def case_anisotropy_orthogonal_blind_spot(out_dir: Path) -> ValidationCaseResult
 
 
 ALL_CASES = [
-    case_t_junction_90,
-    case_t_junction_75,
-    case_curved_t_junction_r60,
-    case_curved_t_junction_r30_corner_limitation,
-    case_y_junction_120,
-    case_y_junction_ambiguous,
-    case_corner_crosscheck_t90,
     case_curvature_straight_line,
     case_curvature_arc,
     case_anisotropy_aligned,

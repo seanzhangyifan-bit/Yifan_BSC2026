@@ -1,20 +1,14 @@
 """Per-atomic-edge length/width/area metrics.
 
-Naming caution: "width" in this module means physical crack width in px
-(sampled from the EDT distance transform) -- METHODOLOGY.md's third chronometer
-("crack width... earlier cracks tend wider due to post-crack drying
-shrinkage"). This is a completely different quantity from stage 6's poset
-antichain width `w` (the count of mutually-undatable cracks). The two are
-never mixed in this module's field names.
+"Width" in this module means physical crack width in px, sampled from the
+EDT distance transform.
 
-Atoms are the same atomic edge (`path_index`, from skan's summary table)
-that precedence.py already keys its arcs on -- per METHODOLOGY.md's "atoms: arcs,
-not whole cracks" rule, nothing here collapses collinear edges into a single
-"crack".
+The unit is the atomic edge (`path_index`, from skan's summary table):
+nothing here collapses collinear edges into a single "crack".
 
 Four area estimates are computed per edge/image, deliberately kept as
 separate, cross-checked numbers rather than collapsed into one "best"
-answer (matching METHODOLOGY.md's existing chronometer-agreement philosophy):
+answer:
 
 - `area_px2` (exact per-edge partition, seedless watershed): the primary
   method. [interpreted] -- a deterministic partition, but pixels right at a
@@ -52,14 +46,10 @@ from skimage.segmentation import watershed
 from .graph import GraphResult
 
 WIDTH_TRIM_INNER_PX_PLACEHOLDER = 5.0
-# [PLACEHOLDER] Same jitter/junction-blob-avoidance reasoning as
-# junctions.py's ANNULUS_INNER_PX_PLACEHOLDER, kept as an independently
-# named/tunable constant because it trims for a different purpose (keeping
-# a *width sample* off the junction blob and off a tapering tip, not an
-# angle-fit band) and may need separate calibration later. Effective value
-# at a given endpoint is max(this, medial_radius at that endpoint), reusing
-# the same "widen past the blob" pattern junctions.py established. Not
-# derived from calibrated um-per-px (none exists yet). Revisit once
+# [PLACEHOLDER] Keeps a *width sample* off the junction blob (where skeleton
+# jitter is severe) and off a tapering tip. Effective value at a given
+# endpoint is max(this, medial_radius at that endpoint), so the trim always
+# clears the blob. Not derived from calibrated um-per-px. Revisit once
 # calibration lands.
 
 AREA_JUNCTION_BLOB_RADIUS_PLACEHOLDER = 5.0
@@ -169,8 +159,7 @@ def measure_edge_width(
 ) -> EdgeWidthMeasurement:
     """Sample 2*medial_radius along skel.path_coordinates(path_index),
     trimmed by max(trim_inner_px, local endpoint half-width) at BOTH ends --
-    the same "skip the junction blob" pattern junctions.py established for
-    angle fitting, applied symmetrically here since a degree-1 tip's taper
+    skipping the junction blob, applied symmetrically here since a degree-1 tip's taper
     is equally unrepresentative of "mid-arm" width as a junction blob is.
 
     If the trim consumes the whole edge, no width is computed -- ok=False,
@@ -307,8 +296,7 @@ def _iter_junction_disks(
     medial_radius: np.ndarray,
     radius_px: float,
 ):
-    """Shared geometry for every degree>=3 node (topological -- both
-    classified degree-3 T/Y and unclassified degree>=4): crop a local disk
+    """Shared geometry for every degree>=3 node: crop a local disk
     of radius max(radius_px, medial_radius-at-node). Yields
     (node_id, coord, eff_radius, r_lo, c_lo, disk_bool_mask) where
     disk_bool_mask is sized to the (r_lo:r_hi, c_lo:c_hi) crop, already

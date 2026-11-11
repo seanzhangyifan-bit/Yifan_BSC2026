@@ -1,5 +1,5 @@
 """Curvature/tortuosity correctness checks against synthetics with known
-geometry: a circular-arc host has exact closed-form tortuosity and
+geometry: a circular-arc bar has exact closed-form tortuosity and
 curvature (1/radius); straight lines must read near-zero curvature and
 near-1 tortuosity; a sharp kink must show max curvature well above the
 mean (the reason both numbers are reported, not just one).
@@ -40,7 +40,7 @@ CURVATURE_RECOVERY_REL_TOL = 0.25
 # Tortuosity closed form for a circular arc of half-angle phi (radians):
 # arc/chord = phi / (2*sin(phi/2)). Measured deviation from this at the
 # default radius=30, arc_half_angle_deg=75 case was ~3%, attributed to the
-# host arm's graph edge endpoint not landing exactly on the idealized
+# bar arm's graph edge endpoint not landing exactly on the idealized
 # vertex/tip due to line thickness and spur pruning.
 TORTUOSITY_RECOVERY_REL_TOL = 0.10
 
@@ -77,8 +77,8 @@ def test_curved_arc_recovers_known_curvature_and_tortuosity():
     gray = generate_curved_t_junction(radius=radius, arc_half_angle_deg=arc_half_angle_deg)
     result = _run_curvature(gray)
 
-    # The two host arms are the edges with a real chord/arc gap; the
-    # straight abutter reads ~1.0. Identify by tortuosity rather than a
+    # The two bar arms are the edges with a real chord/arc gap; the
+    # straight stem reads ~1.0. Identify by tortuosity rather than a
     # hardcoded path_index, since skan's path ordering is not a documented
     # contract.
     curved_edges = [e for e in result.edges if e.tortuosity is not None and e.tortuosity > 1.02]
@@ -111,7 +111,7 @@ def test_kinked_line_max_curvature_far_exceeds_mean():
 
 
 def test_short_edge_has_tortuosity_but_no_curvature_profile():
-    # arm_length=5.0 makes the abutter edge shorter than 2*window_px (the
+    # arm_length=5.0 makes the stem edge shorter than 2*window_px (the
     # default window is 10px), so it can't support a windowed profile --
     # but tortuosity, which needs no window, should still be reported.
     gray = generate_t_junction(arm_length=5.0)

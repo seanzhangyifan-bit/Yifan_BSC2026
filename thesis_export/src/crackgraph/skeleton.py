@@ -113,11 +113,11 @@ def skeletonize_and_prune(
     skel_image = skeletonize(mask_clean)
     n_pixels_pre = int(skel_image.sum())
 
-    # Local crack half-width at every mask pixel -- used downstream (stage
-    # 4, junctions.py) to keep the annulus fit band outside the junction
-    # blob (which can be wider than a fixed inner-radius placeholder), and
-    # groundwork for METHODOLOGY.md's width chronometer (post-crack drying
-    # shrinkage: earlier cracks tend wider).
+    # Local crack half-width at every mask pixel (the distance to the
+    # nearest dark pixel). Used downstream for crack widths (edge_metrics,
+    # the crack-stats export) and flaking detection, and below for
+    # host-stub pruning: the host crack's half-width near a junction
+    # decides how much of a dead end lies outside it.
     medial_radius = distance_transform_edt(mask_clean)
 
     skel = skan.Skeleton(skel_image, source_image=source_image)

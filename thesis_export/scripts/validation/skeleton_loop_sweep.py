@@ -21,7 +21,7 @@ T-junctions has no particular reason to be shorter than the crack itself
 is wide, but a doubled-line loop segment does.
 
 This is a real-data audit, not a synthetic ground-truth sweep like
-window_sweep.py/corner_window_sweep.py -- there's no synthetic case that
+curvature_window_sweep.py -- there's no synthetic case that
 reproduces JPEG-compression boundary noise on a real crack band, so the
 claim here is checked against the actual 39-image dataset instead.
 

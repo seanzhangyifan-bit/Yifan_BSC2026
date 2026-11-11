@@ -14,7 +14,5 @@ as evidence of anything.
 
 The doc it's based on is itself explicit about its own status: "nothing in this document is built
 or tested... a design discussion... not a status update on work in progress." It explores whether
-this pipeline could extend from single static micrographs to in-situ drying video, and — if a
-crack's formation were literally caught on camera — turn an *inferred* T-junction ordering into a
-*directly observed* one. That would be a genuine epistemic upgrade over what a single micrograph
-can support, not just a speed optimization, which is why it's kept here rather than discarded.
+this pipeline could extend from single static micrographs to in-situ drying video. It's kept here
+for the record, not as part of the pipeline.

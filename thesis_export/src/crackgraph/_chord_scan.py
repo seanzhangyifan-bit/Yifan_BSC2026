@@ -2,12 +2,7 @@
 
 Given a polyline's pixel coordinates and cumulative arc length, find the
 incoming/outgoing chord vectors spanning `window_px` on each side of a
-point -- the same chord-pair-turn-angle technique corners.py's wall-corner
-scan uses. corners.py keeps its own inline copy of this logic (already
-tested and working) -- this module exists so curvature.py and
-anisotropy.py, a second and third consumer, don't duplicate/triplicate it.
-Retrofitting corners.py onto this module is a separate follow-up task, not
-part of adding the two newer analyses.
+point (chord-pair turn angles). Shared by curvature.py and anisotropy.py.
 """
 
 import numpy as np
@@ -23,7 +18,7 @@ def chord_pair_at(
     coords: np.ndarray, s: np.ndarray, k: int, window_px: float
 ) -> tuple[np.ndarray, np.ndarray] | None:
     """Incoming/outgoing chord vectors spanning window_px on each side of
-    point index k, using the same searchsorted logic as corners.py's scan.
+    point index k, located by searchsorted on the cumulative arc length.
 
     Returns None if k is within window_px of either path end (no room for
     a full window on that side), or if either chord has ~zero length.

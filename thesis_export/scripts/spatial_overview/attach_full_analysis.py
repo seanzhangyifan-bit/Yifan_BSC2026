@@ -1,13 +1,12 @@
-"""Attach an already-generated full-image overlay + precedence graph
-(from `python3 -m src.analyze_image <image> --full-image --out-dir outputs`,
-stage 4/5) to that image's existing entry in the master HTML report.
+"""Attach an already-generated full-image overlay
+(from `python3 -m src.analyze_image <image> --full-image --out-dir outputs`)
+to that image's existing entry in the master HTML report.
 
 Deliberately does not run analyze_image.py itself: this script only wires
 already-produced PNGs into the report. The image must already have an
-entry (created by scripts/spatial_overview/overview_figure.py) and the two PNGs must
+entry (created by scripts/spatial_overview/overview_figure.py) and the PNG must
 already exist at analyze_image.py's standard --full-image naming
-convention (outputs/<coating>/<stem>_full_overlay.png and
-..._full_precedence.png) before running this.
+convention (outputs/<coating>/<stem>_full_overlay.png) before running this.
 
 Usage:
     python3 -m scripts.spatial_overview.attach_full_analysis <image_path> [--out-dir outputs]
@@ -20,7 +19,7 @@ from src.crackgraph.html_report import attach_full_analysis_images
 
 
 def parse_args():
-    p = argparse.ArgumentParser(description="Attach full-image overlay/precedence PNGs to the master HTML report.")
+    p = argparse.ArgumentParser(description="Attach a full-image overlay PNG to the master HTML report.")
     p.add_argument("image_path", type=str)
     p.add_argument("--out-dir", type=str, default="outputs")
     return p.parse_args()
@@ -34,8 +33,7 @@ def main():
     image_out_dir = out_dir / coating
 
     full_overlay_path = image_out_dir / f"{image_path.stem}_full_overlay.png"
-    full_precedence_path = image_out_dir / f"{image_path.stem}_full_precedence.png"
-    for p in (full_overlay_path, full_precedence_path):
+    for p in (full_overlay_path,):
         if not p.exists():
             raise FileNotFoundError(
                 f"{p} does not exist -- run "
@@ -47,9 +45,8 @@ def main():
         coating=coating,
         image_stem=image_path.stem,
         full_overlay_png_relpath=str(full_overlay_path.relative_to(out_dir)),
-        full_precedence_png_relpath=str(full_precedence_path.relative_to(out_dir)),
     )
-    print(f"Attached full overlay/precedence for {image_path.stem} to: {html_path}")
+    print(f"Attached full overlay for {image_path.stem} to: {html_path}")
 
 
 if __name__ == "__main__":

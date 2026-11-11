@@ -6,15 +6,11 @@ known right answer" with actual numbers, not eyeballing. See `../../CALIBRATION.
 status of every tunable constant this tier justifies.
 
 **Synthetic ground-truth galleries** (known right answer, human-reviewable + numeric):
-- `validation_gallery.py [--out-dir outputs/validation]`: 12 synthetic cases across 4
-  measurement methods, run through the real pipeline, compiled into one browsable HTML page with
-  expected-vs-measured tables. Includes two cases that show a known method limitation honestly
-  (severely curved host defeats the corner cross-check; an orthogonal grid reads as isotropic
-  under the 2nd-order orientation tensor) rather than hiding them.
-- `junction_tolerance_sweep.py --data-dir <image folder>`: how much the T/Y/ambiguous junction
-  census changes when the classification cut-offs move. Measures each image's junction angles
-  once, then re-sorts them under 17 cut-off settings. Results and interpretation:
-  `../../docs/junction_tolerance_sensitivity.md`.
+- `validation_gallery.py [--out-dir outputs/validation]`: 5 synthetic cases across 2
+  measurement methods (curvature/tortuosity, anisotropy), run through the real pipeline, compiled
+  into one browsable HTML page with expected-vs-measured tables. Includes one case that shows a
+  known method limitation honestly (an orthogonal grid reads as isotropic under the 2nd-order
+  orientation tensor) rather than hiding it.
 - `crack_stats_synthetic_gallery.py`, `synthetic_benchmark_raw_gallery.py`,
   `synthetic_benchmark_report.py`: a newer, larger 9-case synthetic-benchmark matrix (canonical
   geometries, structural networks, degradation resilience), built in two steps — raw geometry
@@ -26,10 +22,10 @@ status of every tunable constant this tier justifies.
   skeleton → final graph) for one real image, useful for explaining the pipeline visually.
 
 **Calibration sweeps** (deterministic, seeded — justify a specific constant's value):
-- `window_sweep.py`, `corner_window_sweep.py`, `curvature_window_sweep.py`: generate synthetic
-  junctions with known geometry and seeded pixel jitter, sweep a window-size parameter, report
-  bias/std/RMSE per (geometry, jitter, window) combination. The shipped defaults are the
-  minimax-RMSE choice from these sweeps, not an eyeballed guess.
+- `curvature_window_sweep.py`: generates synthetic shapes with known curvature and seeded pixel
+  jitter, sweeps the curvature window, and reports bias/std/RMSE per (geometry, jitter, window)
+  combination. The shipped default is the minimax-RMSE choice from this sweep, not an eyeballed
+  guess.
 - `skeleton_loop_sweep.py`: audits every image in the real dataset for short
   junction-to-junction edges (0-55% of edges, image-dependent). Originally framed as a
   doubled-line loop artifact; most turn out to be short segments between close junctions

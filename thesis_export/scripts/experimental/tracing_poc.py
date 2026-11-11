@@ -23,7 +23,7 @@ Sec. 4):
 - L-shape (90-degree turn): medial axis bends sharply at the corner -> tests
   following a genuine direction change.
 
-No fork/branch case: none of these three shapes branches, so the annulus /
+No fork/branch case: none of these three shapes branches, so the
 fork-spawning machinery from Sec. 5 is out of scope here.
 
 The tracer is greedy with a 1-step lookahead, not full Dijkstra/A* to a known

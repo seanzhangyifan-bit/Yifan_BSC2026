@@ -150,10 +150,9 @@ def case_t_y_junction(out_dir: Path) -> dict:
     _save_graph_only(t_img, sr_t, gr_t, out_path_a, "T-junction — final graph")
     _save_graph_only(y_img, sr_y, gr_y, out_path_b, "Y-junction — final graph")
     return {
-        "name": "t_y_junction", "title": "2. T / Y-junction",
+        "name": "t_y_junction", "title": "2. T- and Y-shaped meetings",
         "image": out_path_a.name, "image_b": out_path_b.name,
-        "desc": "Light-touch topology check only — angle recovery stays validation_gallery.py's "
-                "job. Both recover the textbook 3-edge/1-junction/3-endpoint topology exactly.",
+        "desc": "Topology check: both recover the textbook 3-edge/1-junction/3-endpoint topology exactly.",
         "rows": [
             _row("T: n_endpoints/n_deg3/n_edges", "3 / 1 / 3", f"{gr_t.n_endpoints} / {gr_t.n_junctions_deg3} / {gr_t.n_edges}"),
             _row("Y: n_endpoints/n_deg3/n_edges", "3 / 1 / 3", f"{gr_y.n_endpoints} / {gr_y.n_junctions_deg3} / {gr_y.n_edges}"),

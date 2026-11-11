@@ -1,9 +1,8 @@
 """Synthetic-mesh validation gallery for the crack_stats pipeline
 specifically (stage 1-3 + flaking.py -- the modules
 scripts/batch_stats/export_crack_stats.py actually imports), as opposed to
-scripts/validation/validation_gallery.py's battery, which covers stage 4
-(junction/corner/curvature/anisotropy) and is not part of
-crack_stats.xlsx at all.
+scripts/validation/validation_gallery.py's battery, which covers
+curvature/anisotropy and is not part of crack_stats.xlsx at all.
 
 Runs generate_grid (at several widths), generate_wavy_grid,
 generate_hexagonal_grid, and generate_grid_with_flakes (see

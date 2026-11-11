@@ -168,27 +168,8 @@ Multi-step path search (rather than single-step greedy) also directly fixes fail
 -- a single noisy pixel can no longer derail the whole trace, since the cost is evaluated
 cumulatively over many steps.
 
-Junction/fork detection under this scheme reuses machinery this project already has, rather than
-needing anything new: the **annulus technique** already used for junction-angle measurement
-(`METHODOLOGY.md`, stage 4) -- sample a small ring around the current tracing point and count distinct
-angular sectors with foreground extending outward. One sector = keep tracing single-path. Two or
+Junction/fork detection under this scheme is simple: sample a small ring around the current
+tracing point and count distinct angular sectors with foreground extending outward. One sector = keep tracing single-path. Two or
 more = a real fork, and the correct behavior is to spawn a separate trace per sector, not to pick
 a single "best" one (there often isn't a single correct branch at a genuine Y-split -- there are
 two, and both are real).
-
-## 6. The epistemic point (why this matters beyond performance)
-
-This ties directly back to `METHODOLOGY.md`'s core framing: a single static micrograph has no external
-timestamps, so a T-junction only certifies a *local* fact (the abutting crack arrived after the
-crack it hit, *at that point*) -- the reconstructed partial order's incompleteness is a measured
-result of that limitation, not a failure.
-
-Propagation outcome (c) above -- the growing trace colliding with an already-existing separate
-edge -- is not just a graph-update detail. It is *literally watching a T-junction form*, frame by
-frame, with a real timestamp. In a video where this is caught on camera, the ordering between the
-two cracks stops being an inference from junction geometry and becomes a directly observed fact.
-This would upgrade the reconstructed partial order toward a directly-observed (near-)total order
-for every junction caught forming on camera -- and it would turn the three existing chronometers
-(junction angle, approach curvature, crack width) from primary evidence into a **validation check
-against real ground truth**, rather than the only evidence available. That is a genuine epistemic
-upgrade the static-image methodology cannot offer by construction, not merely a speed optimization.

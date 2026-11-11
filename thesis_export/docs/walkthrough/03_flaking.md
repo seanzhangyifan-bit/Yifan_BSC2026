@@ -112,10 +112,10 @@ Flagged segments are left out of the length and width stats
 
 ### `remove_flake_touching_edges(...)`, line 226
 
-For tools that analyse the graph itself (junctions, curvature, anisotropy) rather than only
+For tools that analyse the graph itself (curvature, anisotropy, per-segment metrics) rather than only
 summing stats over it: removes the flagged segments from the skeleton and rebuilds the graph.
-Where a three way junction loses a branch, its two remaining segments merge into one. `analyze_image.py`,
-the overview figure and the junction cut-off sweep use this.
+Where a three way junction loses a branch, its two remaining segments merge into one. `analyze_image.py`
+and the overview figure use this.
 
 ---
 

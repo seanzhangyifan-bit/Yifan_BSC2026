@@ -83,12 +83,10 @@ def test_attach_full_analysis_images_adds_them_to_existing_entry(tmp_path):
         coating="T5",
         image_stem="image_a",
         full_overlay_png_relpath="T5/image_a_full_overlay.png",
-        full_precedence_png_relpath="T5/image_a_full_precedence.png",
     )
 
     html = html_path.read_text()
     assert "T5/image_a_full_overlay.png" in html
-    assert "T5/image_a_full_precedence.png" in html
     assert "T5/image_a_overview.png" in html  # original entry untouched
 
 
@@ -101,7 +99,6 @@ def test_attach_full_analysis_images_does_not_touch_other_entries(tmp_path):
         coating="T5",
         image_stem="image_a",
         full_overlay_png_relpath="T5/image_a_full_overlay.png",
-        full_precedence_png_relpath="T5/image_a_full_precedence.png",
     )
 
     html = html_path.read_text()
@@ -118,5 +115,4 @@ def test_attach_full_analysis_images_raises_for_missing_entry(tmp_path):
             coating="T5",
             image_stem="does_not_exist",
             full_overlay_png_relpath="T5/x_full_overlay.png",
-            full_precedence_png_relpath="T5/x_full_precedence.png",
         )

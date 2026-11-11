@@ -1,8 +1,7 @@
 """Export the per-image crack-statistics table (stages 1-3 only).
 
 Binarize -> skeletonize -> flaking exclusion -> graph -> area, width, edge
-length and connectivity stats. No junction classification, curvature or
-ordering. Column reference: docs/batch_stats/crack_stats_schema.md -- keep
+length and connectivity stats. No curvature or anisotropy. Column reference: docs/batch_stats/crack_stats_schema.md -- keep
 the two in sync.
 
 Flaking: the mask is skeletonized once. Any edge with a pixel inside a

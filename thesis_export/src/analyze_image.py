@@ -1,11 +1,13 @@
-"""CLI entry point: run stage 1-3 on a single image.
+"""CLI entry point: analyse one image in detail.
+
+Binarize, skeletonize, flaking exclusion, graph, then per-edge curvature,
+tortuosity, network anisotropy and per-edge length/width/area.
 
 Usage:
     python3 -m src.analyze_image <image_path> [options]
 
-For now this always analyzes only a top-left corner crop of the image
-(see crackgraph/region.py) unless --full-image is passed -- full-image
-runs are deferred until this corner check is validated (see README).
+Analyses a top-left corner crop of the image (see crackgraph/region.py)
+unless --full-image is passed.
 """
 
 import argparse
@@ -18,13 +20,6 @@ import skimage
 
 from .crackgraph.anisotropy import ORIENT_WINDOW_PX_PLACEHOLDER, compute_anisotropy
 from .crackgraph.binarize import binarize
-from .crackgraph.corners import (
-    CORNER_MIN_TURN_DEG,
-    CORNER_SEARCH_RADIUS_PX,
-    CORNER_WINDOW_PX,
-    cross_check_junctions,
-    find_background_contours,
-)
 from .crackgraph.curvature import CURVATURE_WINDOW_PX_PLACEHOLDER, compute_edge_curvature
 from .crackgraph.edge_metrics import (
     AREA_JUNCTION_BLOB_RADIUS_PLACEHOLDER,
@@ -35,23 +30,13 @@ from .crackgraph.edge_metrics import (
 from .crackgraph.flaking import exclude_flaking_regions, remove_flake_touching_edges
 from .crackgraph.graph import extract_graph
 from .crackgraph.io_utils import load_image
-from .crackgraph.junctions import (
-    ANNULUS_INNER_PX_PLACEHOLDER,
-    ANNULUS_OUTER_PX_PLACEHOLDER,
-    T_RIGHT_TOL_DEG_PLACEHOLDER,
-    T_STRAIGHT_TOL_DEG_PLACEHOLDER,
-    Y_ANGLE_TOL_DEG_PLACEHOLDER,
-    classify_junctions,
-)
-from .crackgraph.overlay import render_overlay, render_precedence_overlay
-from .crackgraph.precedence import build_precedence_graph
+from .crackgraph.overlay import render_overlay
 from .crackgraph.region import default_corner_crop
 from .crackgraph.skeleton import SPUR_PX_PLACEHOLDER, skeletonize_and_prune
 from .crackgraph.xlsx_report import (
     ANISOTROPY_MUDCRACK_LIKE_THRESHOLD,
     anisotropy_classification,
     append_chunk_to_workbook,
-    corner_agreement_counts,
     curvature_stats,
     tortuosity_stats,
 )
@@ -66,7 +51,7 @@ EXPECTED_HEIGHT_PX_RANGE = (7300, 7900)
 
 
 def parse_args():
-    p = argparse.ArgumentParser(description="Stage 1-3 crack-graph pipeline (single image).")
+    p = argparse.ArgumentParser(description="Detailed crack-network analysis of a single image.")
     p.add_argument("image_path", type=str)
     p.add_argument("--out-dir", type=str, default="outputs")
     p.add_argument(
@@ -85,43 +70,15 @@ def parse_args():
     p.add_argument("--max-overlay-dim", type=int, default=2500)
     p.add_argument("--corner-frac", type=float, default=0.125)
     p.add_argument("--edge-margin-frac", type=float, default=0.02)
-    p.add_argument("--annulus-inner-px", type=float, default=ANNULUS_INNER_PX_PLACEHOLDER)
-    p.add_argument("--annulus-outer-px", type=float, default=ANNULUS_OUTER_PX_PLACEHOLDER)
     p.add_argument("--curvature-window-px", type=float, default=CURVATURE_WINDOW_PX_PLACEHOLDER)
     p.add_argument("--orientation-window-px", type=float, default=ORIENT_WINDOW_PX_PLACEHOLDER)
-    p.add_argument("--y-angle-tol-deg", type=float, default=Y_ANGLE_TOL_DEG_PLACEHOLDER)
-    p.add_argument("--t-straight-tol-deg", type=float, default=T_STRAIGHT_TOL_DEG_PLACEHOLDER)
-    p.add_argument("--t-right-tol-deg", type=float, default=T_RIGHT_TOL_DEG_PLACEHOLDER)
-    p.add_argument("--corner-search-radius-px", type=float, default=CORNER_SEARCH_RADIUS_PX)
-    p.add_argument("--corner-window-px", type=float, default=CORNER_WINDOW_PX)
-    p.add_argument("--corner-min-turn-deg", type=float, default=CORNER_MIN_TURN_DEG)
     p.add_argument("--width-trim-inner-px", type=float, default=WIDTH_TRIM_INNER_PX_PLACEHOLDER)
     p.add_argument("--area-ambiguity-radius-px", type=float, default=AREA_JUNCTION_BLOB_RADIUS_PLACEHOLDER)
     p.add_argument(
         "--full-image",
         action="store_true",
         default=False,
-        help="Process the whole image instead of the default corner crop (not used yet, see README).",
-    )
-    p.add_argument(
-        "--show-fit-detail",
-        action="store_true",
-        default=False,
-        help=(
-            "Also write a second overlay with the fitted-curve/tick/terminal-segment "
-            "diagnostic layer and full angle-gap labels, for auditing the angle estimator. "
-            "The default (clean) overlay is always written regardless."
-        ),
-    )
-    p.add_argument(
-        "--hide-corner-check",
-        action="store_true",
-        default=False,
-        help=(
-            "Omit corner cross-check markers/diamonds from the overlay(s). The cross-check "
-            "itself still runs and still appears in the console report -- this only hides "
-            "the markers."
-        ),
+        help="Process the whole image instead of the default corner crop.",
     )
     p.add_argument(
         "--skip-curvature",
@@ -135,35 +92,8 @@ def parse_args():
         default=False,
         help="Don't compute network anisotropy. Independent of every other stage.",
     )
-    p.add_argument(
-        "--skip-junctions",
-        action="store_true",
-        default=False,
-        help=(
-            "Don't classify junctions (stage 4). Cascades: corner cross-check and the "
-            "precedence graph both need junction classification, so this skips them too."
-        ),
-    )
-    p.add_argument(
-        "--skip-corner-cross-check",
-        action="store_true",
-        default=False,
-        help=(
-            "Don't compute the corner cross-check (the background-contour method), unlike "
-            "--hide-corner-check, which still computes it but only hides its overlay markers. "
-            "The precedence graph still runs if requested, using the tangent-fit method alone."
-        ),
-    )
-    p.add_argument(
-        "--skip-precedence",
-        action="store_true",
-        default=False,
-        help="Don't build or render the precedence graph (stage 5).",
-    )
     args = p.parse_args()
-    skip_flags_set = args.skip_curvature or args.skip_anisotropy or (
-        args.skip_junctions or args.skip_corner_cross_check or args.skip_precedence
-    )
+    skip_flags_set = args.skip_curvature or args.skip_anisotropy
     if args.xlsx_out is not None and skip_flags_set:
         p.error("--xlsx-out requires the full pipeline; it can't be combined with any --skip-* flag.")
     return args
@@ -201,7 +131,7 @@ def main():
         rgb = rgb_full[region.row_slice, region.col_slice]
         crop_h, crop_w = gray.shape
         # The area share travels with every result that quotes region_desc (console
-        # report, xlsx row, GUI), so junction counts from this crop can't be mistaken
+        # report, xlsx row, GUI), so numbers from this crop can't be mistaken
         # for whole-image numbers like the batch crack stats.
         area_pct = 100.0 * crop_h * crop_w / (full_h * full_w)
         region_desc = (
@@ -263,48 +193,6 @@ def main():
         width_trim_inner_px=args.width_trim_inner_px,
         area_ambiguity_radius_px=args.area_ambiguity_radius_px,
     )
-    junction_result = None
-    if not args.skip_junctions:
-        junction_result = classify_junctions(
-            skeleton_result.skeleton,
-            graph_result,
-            inner_radius_px=args.annulus_inner_px,
-            outer_radius_px=args.annulus_outer_px,
-            y_angle_tol_deg=args.y_angle_tol_deg,
-            t_straight_tol_deg=args.t_straight_tol_deg,
-            t_right_tol_deg=args.t_right_tol_deg,
-            medial_radius=skeleton_result.medial_radius,
-        )
-    # Corner cross-check needs a real junction_result to check against; skipping
-    # junction classification skips this too, regardless of --skip-corner-cross-check.
-    corner_check_skipped = args.skip_corner_cross_check or junction_result is None
-    corner_cross_check = []
-    if not corner_check_skipped:
-        background_contours = find_background_contours(skeleton_result.mask_clean)
-        corner_cross_check = cross_check_junctions(
-            junction_result,
-            background_contours,
-            search_radius_px=args.corner_search_radius_px,
-            window_px=args.corner_window_px,
-            min_turn_deg=args.corner_min_turn_deg,
-            y_angle_tol_deg=args.y_angle_tol_deg,
-            t_straight_tol_deg=args.t_straight_tol_deg,
-            t_right_tol_deg=args.t_right_tol_deg,
-        )
-    # Precedence needs a real junction_result too; corner_cross_check may be the
-    # empty list above (either genuinely skipped or genuinely no findings) -- either
-    # way build_precedence_graph degrades cleanly to tangent-fit-only arcs on [].
-    precedence_skipped = args.skip_precedence or junction_result is None
-    precedence_result = None
-    if not precedence_skipped:
-        precedence_result = build_precedence_graph(
-            junction_result,
-            corner_cross_check,
-            y_angle_tol_deg=args.y_angle_tol_deg,
-            t_straight_tol_deg=args.t_straight_tol_deg,
-            t_right_tol_deg=args.t_right_tol_deg,
-        )
-
     # Nest under the image's own source folder (e.g. data/raw/T5,
     # data/raw/humidity_loading) so outputs from different coatings/sample
     # batches don't pile up flat in one directory.
@@ -312,21 +200,6 @@ def main():
     out_dir.mkdir(parents=True, exist_ok=True)
     edge_metrics_csv_path = out_dir / f"{image_path.stem}_{stem_suffix}_edge_metrics.csv"
     write_edge_metrics_csv(edge_metrics_result, edge_metrics_csv_path)
-    precedence_out_path = out_dir / f"{image_path.stem}_{stem_suffix}_precedence.png"
-    if precedence_result is not None:
-        render_precedence_overlay(
-            rgb,
-            skeleton_result.skeleton,
-            graph_result,
-            precedence_result,
-            skeleton_result.medial_radius,
-            precedence_out_path,
-            max_overlay_dim=args.max_overlay_dim,
-        )
-    else:
-        precedence_out_path = None
-    overlay_corner_cross_check = None if args.hide_corner_check else corner_cross_check
-
     out_path = out_dir / f"{image_path.stem}_{stem_suffix}_overlay.png"
     scale = render_overlay(
         rgb,
@@ -334,29 +207,12 @@ def main():
         graph_result,
         out_path,
         max_overlay_dim=args.max_overlay_dim,
-        junction_result=junction_result,
-        corner_cross_check=overlay_corner_cross_check,
-        detail=False,
     )
-    detail_out_path = None
-    if args.show_fit_detail:
-        detail_out_path = out_dir / f"{image_path.stem}_{stem_suffix}_overlay_detail.png"
-        render_overlay(
-            rgb,
-            skeleton_result.skeleton,
-            graph_result,
-            detail_out_path,
-            max_overlay_dim=args.max_overlay_dim,
-            junction_result=junction_result,
-            corner_cross_check=overlay_corner_cross_check,
-            detail=True,
-        )
-
-    print(f"=== Stage 1-3 report: {image_path.name} ===")
+    print(f"=== Crack-network report: {image_path.name} ===")
     print(f"Image (full):     {full_w} x {full_h} px, RGB")
     print(f"Region analyzed:  {region_desc}")
     if not args.full_image:
-        print("                  (full-image run skipped for now -- pass --full-image to override)")
+        print("                  (pass --full-image to analyse the whole image)")
     print()
     print("-- Parameters (every value used, for reproducing this exact report) --")
     for name, value in vars(args).items():
@@ -471,7 +327,7 @@ def main():
         for lo, hi, count in zip(edges_deg[:-1], edges_deg[1:], counts):
             bar = "#" * int(round(count / max(counts.max(), 1e-9) * 40))
             print(f"  [{lo:5.1f}, {hi:5.1f}) {count:8.1f}  {bar}")
-        # [PLACEHOLDER -- not calibrated against a real-image junction-type census]
+        # [PLACEHOLDER -- not calibrated against real images]
         classification = anisotropy_classification(anisotropy_result)
         print(f"Qualitative read: {classification}    [interpreted]")
         print(
@@ -481,10 +337,6 @@ def main():
         )
     print()
     print("-- Edge geometry: length/width/area per atomic edge --")
-    print(
-        "(width here is physical crack width in px -- METHODOLOGY.md's third chronometer; "
-        "NOT the poset antichain width `w` from stage 6, a different quantity)"
-    )
     em = edge_metrics_result
     print(
         f"Width trim (inner, per endpoint): {em.width_trim_inner_px:.1f} px    "
@@ -551,154 +403,9 @@ def main():
             f"(ambiguous={m.area_ambiguous_px2}px2, {m.area_ambiguous_frac * 100:.0f}%)"
         )
     print()
-    print("-- Stage 4: Junction classification (annulus tangent-fit method) --")
-    print(f"Region: {region_desc}")
-    if not args.full_image:
-        print(
-            "  (junction counts below cover this corner crop only -- not comparable to "
-            "whole-image numbers such as the batch crack stats)"
-        )
-    if junction_result is None:
-        print("(skipped, not requested)")
-    else:
-        print(
-            f"Annulus radii: inner={junction_result.inner_radius_px:.1f} px, "
-            f"outer={junction_result.outer_radius_px:.1f} px    "
-            "[PLACEHOLDER -- not calibrated to real h/um-per-px]"
-        )
-        print(
-            f"Classification tolerances: Y +/-{junction_result.y_angle_tol_deg:.1f} deg, "
-            f"T-straight +/-{junction_result.t_straight_tol_deg:.1f} deg, "
-            f"T-right-angle +/-{junction_result.t_right_tol_deg:.1f} deg    [PLACEHOLDER]"
-        )
-        print(f"Degree-3 junctions: {junction_result.n_deg3_total}")
-        print(f"  T: {junction_result.n_t}    [interpreted]")
-        print(f"  Y: {junction_result.n_y}    [interpreted]")
-        print(f"  ambiguous: {junction_result.n_ambiguous}    [interpreted]")
-        print(
-            f"  insufficient annulus data: {junction_result.n_insufficient_data}    "
-            "[interpreted -- geometry could not be measured; see failure_reason]"
-        )
-        print(
-            f"Degree>=4 junctions (report-only, not classified): "
-            f"{junction_result.n_deg_ge4_unclassified}    [measured]"
-        )
-        print(
-            "(sector gaps: the 3 angular gaps between arm bearings, sorted, sum to 360 "
-            "exactly -- signed bearings, not unsigned pairwise angles, so reflex gaps "
-            "show correctly instead of being folded into [0,180])"
-        )
-        for c in junction_result.classifications:
-            row, col = c.coord
-            if c.label == "insufficient_data":
-                print(f"  node {c.node_id} at ({row:.1f}, {col:.1f}): insufficient_data ({c.failure_reason})")
-            else:
-                gaps = ", ".join(f"{g:.1f}" for g in c.sector_gaps_deg)
-                gap_sum = sum(c.sector_gaps_deg)
-                extra = ""
-                if c.label == "T":
-                    by_path = {ed.path_index: ed for ed in c.edge_directions}
-                    host_curvs = ", ".join(
-                        f"{by_path[p].curvature_per_px:+.4f}" if by_path[p].curvature_per_px is not None else "n/a"
-                        for p in c.host_path_indices
-                    )
-                    extra = (
-                        f"  abutter=path{c.abutter_path_index} host=paths{c.host_path_indices}"
-                        f" host_curv=[{host_curvs}]/px"
-                    )
-                print(
-                    f"  node {c.node_id} at ({row:.1f}, {col:.1f}): {c.label}  "
-                    f"gaps=[{gaps}] (sum={gap_sum:.1f}){extra}"
-                )
-    print()
-    print("-- Corner cross-check (background-tile walls, independent of the annulus fit) --")
-    if corner_check_skipped:
-        reason = "not requested" if args.skip_corner_cross_check else "requires junction classification"
-        print(f"(skipped, {reason})")
-    else:
-        print(
-            f"Search radius: {args.corner_search_radius_px:.1f} px, window: {args.corner_window_px:.1f} px, "
-            f"min turn: {args.corner_min_turn_deg:.1f} deg    [PLACEHOLDER -- see corners.py]"
-        )
-        n_agree, n_disagree, n_unresolved = corner_agreement_counts(corner_cross_check)
-        print(
-            f"Agree: {n_agree}, disagree: {n_disagree}, unresolved: {n_unresolved} "
-            f"(of {len(corner_cross_check)})    [interpreted -- a validation signal per METHODOLOGY.md's "
-            "independent-chronometer philosophy, not a tiebreaker]"
-        )
-        for cc in corner_cross_check:
-            if cc.label is None:
-                print(f"  node {cc.node_id}: unresolved ({cc.unresolved_reason}, {len(cc.corners)} corners found)")
-            else:
-                # agrees_with_tangent_fit is None when the tangent-fit had no
-                # comparable gaps to check against (e.g. insufficient_data) --
-                # that's "not comparable", not a disagreement, so keep it a
-                # distinct flag rather than folding it into [DISAGREE].
-                if cc.agrees_with_tangent_fit is False:
-                    flag = "  [DISAGREE]"
-                elif cc.agrees_with_tangent_fit is None:
-                    flag = "  [N/A: tangent-fit not comparable]"
-                else:
-                    flag = ""
-                gaps = ", ".join(f"{g:.1f}" for g in cc.sector_gaps_deg)
-                max_diff = (
-                    f"{cc.max_gap_disagreement_deg:.1f}" if cc.max_gap_disagreement_deg is not None else "n/a"
-                )
-                print(
-                    f"  node {cc.node_id}: {cc.label} gaps=[{gaps}] "
-                    f"(max diff vs tangent-fit: {max_diff} deg){flag}"
-                )
-    print()
-    print("-- Stage 5: Precedence graph (first pass -- graph + cycle report, not yet resolved) --")
-    if precedence_result is None:
-        reason = "not requested" if args.skip_precedence else "requires junction classification"
-        print(f"(skipped, {reason})")
-    else:
-        n_by_both = sum(a.methods_agree for a in precedence_result.arcs)
-        n_by_tangent = sum(a.supporting_methods == ("tangent_fit",) for a in precedence_result.arcs)
-        n_by_corner = sum(a.supporting_methods == ("corner_cross_check",) for a in precedence_result.arcs)
-        print(
-            f"Arcs: {len(precedence_result.arcs)} total "
-            f"(both methods agree: {n_by_both}, tangent-fit only: {n_by_tangent}, "
-            f"corner-cross-check only: {n_by_corner})    [interpreted -- union of both stage-4 classifiers]"
-        )
-        print(
-            f"Conflicting abutter (both methods resolved T, disagreed on which arm): "
-            f"{precedence_result.n_conflicting_abutter}    [interpreted -- no arc emitted, not guessed]"
-        )
-        if precedence_result.conflicting_node_ids:
-            print(f"  nodes: {precedence_result.conflicting_node_ids}")
-        print(
-            f"Corner-resolved T not mapped to path indices: {precedence_result.n_corner_unmapped}    "
-            "[interpreted -- see precedence.py module docstring]"
-        )
-        n_touched = precedence_result.graph.number_of_nodes()
-        n_determined = sum(g is not None for g in precedence_result.generation.values())
-        print(
-            f"Atomic edges touched by >=1 precedence arc: {n_touched} of {graph_result.n_edges} total    "
-            "[measured]"
-        )
-        print(
-            f"  of those, with a determined generation: {n_determined}    "
-            f"[interpreted -- {n_touched - n_determined} undetermined because caught in an unresolved cycle]"
-        )
-        print(
-            f"Nontrivial cycles (strongly-connected clusters of size > 1, or a self-arc): "
-            f"{len(precedence_result.nontrivial_sccs)}    "
-            "[measured -- reported per METHODOLOGY.md, NOT deleted or force-resolved this pass]"
-        )
-        for scc in precedence_result.nontrivial_sccs:
-            print(f"  cluster of {len(scc)} atomic edges: paths {sorted(scc)}")
-    print()
     print("-- Output --")
     dim_note = "" if scale >= 1.0 else f" (downsampled by {scale:.3f}x)"
     print(f"Overlay saved to: {out_path}{dim_note}")
-    if detail_out_path is not None:
-        print(f"Detail overlay saved to: {detail_out_path}")
-    if precedence_out_path is not None:
-        print(f"Precedence graph overlay saved to: {precedence_out_path}")
-    else:
-        print("Precedence graph overlay: not generated (skipped)")
     print(f"Edge geometry (length/width/area, all four area methods) CSV saved to: {edge_metrics_csv_path}")
 
     if args.xlsx_out is not None:
@@ -713,8 +420,6 @@ def main():
             graph_result=graph_result,
             curvature_result=curvature_result,
             anisotropy_result=anisotropy_result,
-            junction_result=junction_result,
-            corner_cross_check=corner_cross_check,
             overlay_png_path=out_path,
             out_dir=out_dir,
         )

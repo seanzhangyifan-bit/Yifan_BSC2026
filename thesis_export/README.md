@@ -6,9 +6,8 @@ A standalone, runnable copy of the full crack-pattern analysis codebase from the
 depend on the rest of that repository; everything needed to run every deliverable below is in
 this folder.
 
-**Start here for the science**: [`METHODOLOGY.md`](METHODOLOGY.md) explains *why* the analysis targets a
-partial order of crack growth rather than a full chronology — read that before the deliverables
-below make full sense. [`GLOSSARY.md`](GLOSSARY.md) has one-line term definitions;
+**Start here for the science**: [`METHODOLOGY.md`](METHODOLOGY.md) explains what the analysis measures and
+why — read that before the deliverables below make full sense. [`GLOSSARY.md`](GLOSSARY.md) has one-line term definitions;
 [`CALIBRATION.md`](CALIBRATION.md) has the calibration status of every tunable constant.
 [`CHANGELOG.md`](CHANGELOG.md) lists every fix and change, and whether it affects reported results.
 [`docs/walkthrough/`](docs/walkthrough/README.md) is a plain-language, file-by-file tour of the code.
@@ -39,16 +38,16 @@ python3 -m streamlit run app.py
 ## A note on authorship
 
 This project's scientific direction, methodology design, and every interpretive decision are the
-author's own (BSc thesis work, KIT Thin Film Technology group) — the choice to reconstruct a
-partial order rather than a chronology, the annulus/corner-cross-check measurement design, which
-constants get swept vs. asserted, and how every result in this repo is read and reported. The
+author's own (BSc thesis work, KIT Thin Film Technology group) — which quantities to measure and
+how, which constants get swept vs. asserted, and how every result in this repo is read and reported. The
 code implementation was written with AI assistance (Claude, Anthropic) under the author's
 direction and review, not autonomously.
 
 ## Repo layout
 
 - **`src/`** — the library: the analysis engine itself (`src/crackgraph/`'s
-  binarize → skeletonize → graph → junctions → precedence chain), plus
+  binarize → skeletonize → flaking exclusion → graph → per-segment metrics, curvature and
+  anisotropy), plus
   `src/analyze_image.py` as the one CLI entry point that wires those pieces together for a
   single image. Meant to be imported, not run standalone except via that entry point.
 - **`scripts/`** — standalone tools built on top of `src/`, one per job: `batch_stats/`
@@ -70,7 +69,7 @@ validation levels. Each has its own folder-level README with full detail; this t
 
 | # | Deliverable | What it does | Validation level | Where |
 |---|---|---|---|---|
-| 1 | **Per-image pipeline** | Junction classification (T/Y), precedence-graph assembly | Synthetic ground-truth pytest suite + sweep-justified window constants + corner-cross-check agreement + real-image visual review | `src/`, run via `python3 -m src.analyze_image <image_path>` |
+| 1 | **Per-image pipeline** | Detailed analysis of one image: per-segment length, width and area, curvature/tortuosity, orientation anisotropy | Synthetic ground-truth pytest suite + sweep-justified curvature window + real-image visual review | `src/`, run via `python3 -m src.analyze_image <image_path>` |
 | 2 | **Batch crack-stats export** | Numeric spreadsheets (crack density, width, connectivity) across many images/conditions | One method; flaked regions handled in a single pass (edges touching them omitted) | `scripts/batch_stats/` |
 | 3 | **Spatial overview & report** | First-look spatial-variation figures + one master HTML report across all analyzed images | None formal — deliberately a first look, not a citable result | `scripts/spatial_overview/` |
 | 4 | **Methodology validation & QA** | Synthetic ground-truth galleries + calibration sweeps that justify the per-image pipeline's tunable constants | This *is* the validation evidence for #1 | `scripts/validation/` |
@@ -82,17 +81,16 @@ validation levels. Each has its own folder-level README with full detail; this t
 python3 -m src.analyze_image path/to/image.jpg
 ```
 
-Binarizes, skeletonizes, classifies every junction, cross-checks against an independent
-background-corner method, and assembles a precedence graph — console report plus overlay PNGs
-under `outputs/<source-subfolder>/`. See `METHODOLOGY.md`'s "Pipeline shape" and README-equivalent
-sections above for the full stage-by-stage description and every CLI flag.
+Binarizes, skeletonizes, excludes flaked regions, builds the crack graph, and measures every
+segment's length, width and area plus curvature/tortuosity and anisotropy — console report, a
+per-segment CSV and an overlay PNG under `outputs/<source-subfolder>/`. See `METHODOLOGY.md`'s
+"Pipeline stages" and `docs/walkthrough/08_analyze_image.md` for every CLI flag.
 
-**Junction results cover a small corner sample, not the whole image.** By default the
-pipeline analyses only a top-left corner crop, about **1.5% of the image area**, the region
-it was validated on. The batch crack stats cover the **whole image**. Don't put corner
-junction counts next to whole-image crack stats as if they describe the same area. The
-report, spreadsheet row and GUI all state the region. `--full-image` exists but isn't
-validated yet.
+**Per-image results cover a small corner sample, not the whole image.** By default the
+pipeline analyses only a top-left corner crop, about **1.5% of the image area**. The batch
+crack stats cover the **whole image**. Don't put corner numbers next to whole-image crack
+stats as if they describe the same area. The report, spreadsheet row and GUI all state the
+region. Pass `--full-image` to analyse the whole image.
 
 ## GUI (optional, easiest way to try this)
 
@@ -107,10 +105,8 @@ locally at `http://localhost:8501` — runs entirely on your own machine, nothin
 anywhere.
 
 Upload one or more micrographs, then check off what you want run on them: crack stats (density,
-width, connectivity), curvature & tortuosity, anisotropy, junction classification
-(T/Y), corner cross-check, precedence graph, and spatial overview (a quadrant-comparison figure)
-— any combination. Corner cross-check and the precedence graph both need junction classification
-turned on, so the app disables them until you check that box first. A progress bar tracks each
+width, connectivity), curvature & tortuosity, anisotropy, and spatial overview (a quadrant-comparison figure)
+— any combination. A progress bar tracks each
 image through whichever stages you selected, with a rough elapsed-time/time-remaining estimate.
 
 This is a thin front-end onto deliverables #1, #2, and #3 below — same underlying scripts as the
@@ -150,7 +146,7 @@ how each file was produced.
 python3 -m pytest tests/ -v
 ```
 
-Full suite: synthetic-ground-truth correctness checks (known junction angles, known crack
-widths) plus regression tests for every fix described in the docs above. All tests
+Full suite: synthetic-ground-truth correctness checks (known crack lengths, widths,
+curvature and orientation) plus regression tests for every fix described in the docs above. All tests
 pass in a fresh venv built from this folder's own `requirements.txt` alone — verified as part of
 producing this export, not assumed.

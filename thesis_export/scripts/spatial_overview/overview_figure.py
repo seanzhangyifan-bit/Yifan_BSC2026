@@ -1,6 +1,5 @@
 """Run the curvature/anisotropy slice of the pipeline (binarize ->
-flaking exclusion -> skeletonize -> graph -> curvature -> anisotropy -- NOT junctions or the
-corner cross-check, which this overview figure doesn't need) across a
+flaking exclusion -> skeletonize -> graph -> curvature -> anisotropy) across a
 coarse grid of sections of one full image, plus once on the whole image,
 and compile every resulting rose diagram + curvature histogram into a
 single overview figure. Also updates one master HTML report (one page for
@@ -8,9 +7,8 @@ all coatings/images, see crackgraph/html_report.py) with this image's
 section.
 
 This is deliberately a separate script from src/analyze_image.py: that CLI
-runs the *full* stage 1-5 pipeline (junctions, corner cross-check,
-optional xlsx export) on exactly one region per invocation. Pulling those
-stages into this script would be scope creep the overview figure doesn't
+runs the detailed per-image analysis (edge metrics, optional xlsx export)
+on exactly one region per invocation, which the overview figure doesn't
 need.
 
 Usage:

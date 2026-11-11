@@ -1,23 +1,16 @@
 """Per-edge curvature and tortuosity: how bent an individual crack segment is.
 
-This is a geometry measurement, not a chronology one -- it says nothing
-about growth order and does not touch the junction/poset machinery. It
-answers a different question from junctions.py's annulus tangent fit:
-junctions.py measures a *signed* curvature at a single point (the vertex,
-s=0) on one arm, as a byproduct of T/Y classification. This module instead
-scans the *whole* edge and reports an *unsigned* curvature profile plus a
-scale-invariant tortuosity, using the same chord-pair-turn-angle geometry
-as corners.py's wall-corner scan (see _chord_scan.py, the shared
-implementation this module and anisotropy.py both call into) but run
-continuously rather than thresholded/flagged: a threshold-based scan only
-asks "is there a sharp corner here"; this module asks "how much does this
-one edge bend, overall and locally".
+A geometry measurement: it scans the *whole* edge and reports an
+*unsigned* curvature profile plus a scale-invariant tortuosity, using
+chord-pair turn angles (see _chord_scan.py, the shared implementation this
+module and anisotropy.py both call into), run continuously rather than
+thresholded: it asks "how much does this one edge bend, overall and
+locally", not "is there a sharp corner here".
 
 Two numbers are reported per edge because they catch different things: a
 long smooth bend and several small sharp wiggles can have similar
 tortuosity but very different mean curvature (see test_curvature.py's
-kinked-line case) -- per METHODOLOGY.md's "chronometers can disagree
-informatively" ethos, both are kept rather than collapsed into one.
+kinked-line case) -- both are kept rather than collapsed into one.
 
 [cited] Neither number here is a novel invention. Tortuosity (arc length
 / chord length) is a standard, widely-used path-straightness metric with
@@ -35,10 +28,9 @@ exists (fitting a circle through three points -- the back/current/forward
 triple -- and taking its radius, i.e. Menger curvature); the two agree
 exactly on a true circle (which is all the synthetic ground truth below
 can distinguish) but would generally disagree on a non-circular bend. The
-turning-angle method was chosen here specifically to reuse the same
-chord-pair scan already implemented for corners.py's wall-corner
-detection (see _chord_scan.py), not for a documented accuracy advantage
-over the circle-fit alternative.
+turning-angle method was chosen here specifically to reuse the shared
+chord-pair scan (see _chord_scan.py), not for a documented accuracy
+advantage over the circle-fit alternative.
 
 Known limitation: for a path of *constant* curvature (a true circular
 arc), the chord-pair estimator below is essentially exact at any window
@@ -48,8 +40,7 @@ determines how much rasterization/skeleton-jitter noise gets averaged
 over, not a systematic bias. That is not true for a path whose curvature
 *varies* along its length (real cracks, generically): there, a large
 window blurs together genuinely different local curvatures into one
-number, the same bias/smoothing tradeoff documented for the annulus fit
-in junctions.py / generate_curved_t_junction. The window is therefore a
+number. The window is therefore a
 real bias-vs-jitter-noise tradeoff on real (non-constant-curvature) data,
 to be *measured* via scripts/validation/curvature_window_sweep.py -- which, because
 generate_curved_t_junction is exactly circular, can only validate the
@@ -68,8 +59,7 @@ from .graph import GraphResult
 
 CURVATURE_WINDOW_PX_PLACEHOLDER = 10.0
 # [PLACEHOLDER] chord window (arc length) on each side of each scan point.
-# Same jitter-averaging scale reasoning as corners.py's CORNER_WINDOW_PX
-# and junctions.py's annulus radii; not derived from calibrated h/um-per-px
+# A jitter-averaging scale; not derived from calibrated h/um-per-px
 # (none exists yet, so this is still a pixel-space placeholder, not a
 # um/h-anchored value). scripts/validation/curvature_window_sweep.py's minimax sweep
 # over windows [5,8,10,15,20] px, radii [15,30,60,100] px, jitter [0,0.5,1]
@@ -89,8 +79,8 @@ TORTUOSITY_MIN_CHORD_PX_PLACEHOLDER = 10.0
 # its raw, measured value. This threshold instead gates reliable_tortuosities()
 # (used by aggregate stats and histograms), because a short edge's tortuosity
 # can be numerically real but physically meaningless: below roughly twice
-# junctions.py's ANNULUS_INNER_PX_PLACEHOLDER (5.0px, "jitter near vertices
-# is severe"), ordinary skeleton pixel staircasing near both of an edge's
+# the ~5 px scale where skeleton jitter near vertices is severe,
+# ordinary skeleton pixel staircasing near both of an edge's
 # endpoints can dominate the arc/chord ratio. [measured] evidence motivating
 # this: a real humidity-series image had edges with chord_length_px=1.0-7.6
 # reporting tortuosity=2.4-5.7, while the bulk of edges (median chord ~75px)
@@ -146,8 +136,8 @@ def compute_edge_curvature(
     Tortuosity (arc_length / chord_length) is computed for every edge with
     a non-degenerate chord, independent of window_px -- even a 2-point edge
     has a tortuosity. The windowed curvature profile additionally requires
-    at least 2*window_px of arc length (same requirement as corners.py's
-    chord-pair scan); shorter edges get tortuosity but
+    at least 2*window_px of arc length (one full chord on each side);
+    shorter edges get tortuosity but
     curvature_profile_px_inv=None, which is not a failure (ok=True) -- just
     not enough edge to profile.
 

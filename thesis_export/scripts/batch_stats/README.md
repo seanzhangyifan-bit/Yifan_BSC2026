@@ -4,7 +4,7 @@
 segment length, connectivity — for the thesis's cross-condition tables (SSC vs LSC, four
 Rakelspalt gap settings) and for the sibling `image_visualization` repo, which reads these
 spreadsheets and never hand-edits them. This is stage 1-3 only (binarize → skeletonize → graph
-extraction) — no junctions, no ordering, no timing claims. See
+extraction) — no curvature or anisotropy. See
 `../../docs/batch_stats/crack_stats_schema.md` for the full column reference.
 
 **Flaked regions** are handled in a single pass: the mask is skeletonized once, and any edge

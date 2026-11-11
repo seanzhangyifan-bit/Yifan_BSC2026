@@ -106,7 +106,7 @@ def test_histogram_is_consistent_with_scalar_index():
     # the index from the histogram's bin centers/weights should recover
     # very nearly the same A and dominant bearing as the direct computation,
     # on a network with a real, non-trivial edge-orientation mix (a T
-    # junction's two collinear host arms + one perpendicular abutter).
+    # meeting's two collinear bar arms + one perpendicular stem).
     gray = generate_t_junction()
     result = _run_anisotropy(gray)
 

@@ -51,9 +51,6 @@ STAGE_MARKERS: list[tuple[str, str]] = [
     ("-- Edge curvature & tortuosity", "Curvature & tortuosity"),
     ("-- Network anisotropy", "Anisotropy"),
     ("-- Edge geometry: length/width/area", "Edge geometry"),
-    ("-- Stage 4: Junction classification", "Junction classification"),
-    ("-- Corner cross-check", "Corner cross-check"),
-    ("-- Stage 5: Precedence graph", "Precedence graph"),
     ("-- Output --", "Writing output"),
 ]
 
@@ -61,16 +58,13 @@ STAGE_MARKERS: list[tuple[str, str]] = [
 # prints two runtime lines (see its main()) rather than one header per stage. The second
 # marker isn't a line prefix (it starts with a tile count that varies), so matching uses
 # substring containment rather than startswith -- see _make_stage_progress_callback.
-# Shown on every per-image pipeline result, so corner-crop junction counts are never read
-# as whole-image numbers next to the (always whole-image) crack stats.
+# Shown on every per-image pipeline result, so corner-crop numbers are never read as
+# whole-image numbers next to the (always whole-image) crack stats.
 PIPELINE_REGION_NOTE_CORNER = (
-    "Region analyzed: top-left corner crop only, about 1.5% of the image area "
-    "(the pipeline's validated default). Junction counts here are a corner sample, not whole-image totals."
+    "Region analyzed: top-left corner crop only, about 1.5% of the image area. "
+    "Numbers here are a corner sample, not whole-image totals."
 )
-PIPELINE_REGION_NOTE_FULL = (
-    "Region analyzed: whole image. Full-image junction classification hasn't been validated yet; "
-    "treat these results as exploratory."
-)
+PIPELINE_REGION_NOTE_FULL = "Region analyzed: whole image."
 
 OVERVIEW_STAGE_MARKERS: list[tuple[str, str]] = [
     ("Whole-image pipeline runtime:", "Whole-image pass"),
@@ -110,52 +104,34 @@ def run_single_image_analysis(
     out_dir: Path,
     *,
     full_image: bool = False,
-    show_fit_detail: bool = False,
     skip_curvature: bool = False,
     skip_anisotropy: bool = False,
-    skip_junctions: bool = False,
-    skip_corner_cross_check: bool = False,
-    skip_precedence: bool = False,
     on_line: Callable[[str], None] | None = None,
 ) -> dict:
     """Runs src.analyze_image as a subprocess -- deliberately not imported directly, since
     analyze_image.py is a monolithic CLI script with no function separable from its own argument
     parsing and printing today. Shelling out keeps this GUI at zero risk to that well-tested
-    pipeline code. Returns the console report text plus paths to whichever overlay/precedence
-    PNGs analyze_image.py actually wrote (filename convention confirmed directly against its
-    source, not guessed: {stem}_{corner|full}_overlay[.png|_detail.png],
-    {stem}_{corner|full}_precedence.png, under out_dir/<image's own parent folder name>/ --
-    the precedence PNG simply won't exist if skip_junctions/skip_precedence left it unbuilt)."""
+    pipeline code. Returns the console report text plus the path to the overlay PNG
+    analyze_image.py wrote ({stem}_{corner|full}_overlay.png, under
+    out_dir/<image's own parent folder name>/)."""
     cmd = [sys.executable, "-m", "src.analyze_image", str(image_path), "--out-dir", str(out_dir)]
     if full_image:
         cmd.append("--full-image")
-    if show_fit_detail:
-        cmd.append("--show-fit-detail")
     if skip_curvature:
         cmd.append("--skip-curvature")
     if skip_anisotropy:
         cmd.append("--skip-anisotropy")
-    if skip_junctions:
-        cmd.append("--skip-junctions")
-    if skip_corner_cross_check:
-        cmd.append("--skip-corner-cross-check")
-    if skip_precedence:
-        cmd.append("--skip-precedence")
     result = _run_streaming(cmd, on_line)
 
     stem = image_path.stem
     tag = "full" if full_image else "corner"
     subfolder = out_dir / image_path.parent.name
     overlay_png = subfolder / f"{stem}_{tag}_overlay.png"
-    precedence_png = subfolder / f"{stem}_{tag}_precedence.png"
-    detail_png = subfolder / f"{stem}_{tag}_overlay_detail.png"
 
     return {
         "returncode": result.returncode,
         "stdout": result.stdout,
         "overlay_png": overlay_png if overlay_png.exists() else None,
-        "precedence_png": precedence_png if precedence_png.exists() else None,
-        "detail_png": detail_png if (show_fit_detail and detail_png.exists()) else None,
     }
 
 
@@ -247,29 +223,6 @@ def main() -> None:
             help="Whether cracks in this image tend to point in one dominant direction, or are randomly oriented.",
         )
     with col2:
-        run_junctions = st.checkbox(
-            "Junction classification (T/Y)",
-            value=True,
-            key="cb_junctions",
-            help="Labels each 3-way crack meeting as a T (one crack stopped at another) or a Y (three cracks met at once).",
-        )
-        run_corner_check = st.checkbox(
-            "Corner cross-check",
-            value=True,
-            key="cb_corner_check",
-            disabled=not run_junctions,
-            help="Requires junction classification. Double-checks each T/Y label with a second, independent method, to catch disagreements.",
-        )
-        run_precedence = st.checkbox(
-            "Precedence graph",
-            value=True,
-            key="cb_precedence",
-            disabled=not run_junctions,
-            help=(
-                "Requires junction classification. Uses T-junctions to work out which crack "
-                "came first at each meeting point, and builds a partial timeline from that."
-            ),
-        )
         run_overview = st.checkbox(
             "Spatial overview (quadrant comparison)",
             value=False,
@@ -279,22 +232,16 @@ def main() -> None:
                 "a quick first look at spatial variation, not a validated result."
             ),
         )
-    # Effective values for building CLI flags -- force these off if junction classification
-    # is off, regardless of a disabled checkbox's last displayed state.
-    eff_corner_check = run_corner_check and run_junctions
-    eff_precedence = run_precedence and run_junctions
-    run_pipeline = run_curvature or run_anisotropy or run_junctions
+    run_pipeline = run_curvature or run_anisotropy
 
     with st.expander("Advanced options"):
         full_image = st.checkbox(
             "Analyze full image (default: top-left corner crop)",
             help=(
-                "Applies to junctions, curvature and anisotropy. The default corner crop covers about "
-                "1.5% of the image; full-image junction classification isn't validated yet. Crack "
-                "stats always use the whole image."
+                "Applies to curvature and anisotropy. The default corner crop covers about "
+                "1.5% of the image. Crack stats always use the whole image."
             ),
         )
-        show_fit_detail = st.checkbox("Show fit-detail overlay")
 
     nothing_selected = not (run_crack_stats or run_pipeline or run_overview)
     if nothing_selected:
@@ -330,8 +277,8 @@ def main() -> None:
             elapsed = time.monotonic() - start_time
             # Straight-line extrapolation from progress so far -- a rough estimate, not a
             # measurement, and a noisy one until a few steps have actually completed (early
-            # stages like binarizing aren't representative of slower ones like junction
-            # classification), so it's withheld for the first couple of steps rather than
+            # stages like binarizing aren't representative of slower ones like the edge
+            # geometry), so it's withheld for the first couple of steps rather than
             # shown with false confidence.
             eta_note = ""
             if steps_done[0] >= 3:
@@ -354,12 +301,8 @@ def main() -> None:
                         image_path,
                         out_dir,
                         full_image=full_image,
-                        show_fit_detail=show_fit_detail,
                         skip_curvature=not run_curvature,
                         skip_anisotropy=not run_anisotropy,
-                        skip_junctions=not run_junctions,
-                        skip_corner_cross_check=not eff_corner_check,
-                        skip_precedence=not eff_precedence,
                         on_line=on_line,
                     )
                 except Exception as exc:  # noqa: BLE001
@@ -374,11 +317,7 @@ def main() -> None:
                             st.code(result["stdout"] or "(no output captured)")
                         else:
                             if result["overlay_png"] is not None:
-                                st.image(str(result["overlay_png"]), caption="Junction classification overlay")
-                            if result["detail_png"] is not None:
-                                st.image(str(result["detail_png"]), caption="Fit-detail overlay")
-                            if result["precedence_png"] is not None:
-                                st.image(str(result["precedence_png"]), caption="Precedence graph")
+                                st.image(str(result["overlay_png"]), caption="Skeleton overlay")
                             report_text = result["stdout"] or "(no output captured)"
                             with st.expander("Console report (full text)", expanded=False):
                                 st.code(report_text)
@@ -442,7 +381,7 @@ def main() -> None:
                 st.caption("Computed on the whole image.")
                 if run_pipeline and not full_image:
                     st.info(
-                        "The junction, curvature and anisotropy results above cover only the top-left "
+                        "The curvature and anisotropy results above cover only the top-left "
                         "corner crop (about 1.5% of each image), while these crack stats cover the whole "
                         "image. Don't compare the two as if they describe the same area."
                     )

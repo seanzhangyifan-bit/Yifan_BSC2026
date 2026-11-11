@@ -27,8 +27,8 @@ spreadsheet. Every column is defined in
 **`find_images(data_dir, pattern)`, line 65.** Every image file under the folder, in any
 subfolder, sorted. It doesn't look at file names: which images get analysed is up to you, by what
 you put in the folder (or upload in the GUI). If there are none, it stops with a message telling
-you to pass `--data-dir`. `pattern` lets another script narrow it down; the junction cut-off sweep
-uses it to pick its fixed image set.
+you to pass `--data-dir`. `pattern` lets another script narrow the search to a
+sub-pattern.
 
 ### Small helpers, lines 79–164
 
@@ -67,7 +67,7 @@ This is the heart of the export. Step by step:
 | 272–284 | The giant component's span, measured over *every pixel* of its kept segments, not just its nodes. A closed loop with no junctions has only one node, but real physical size. |
 | 286–294 | Convert to µm / mm² with the calibration, for every image. |
 | 300–336 | Assemble the row: one dictionary entry per column, plus the time each stage took (`runtime_*`). |
-| 338–348 | If `cache_dir` was given, also save intermediate arrays and an overlay picture (page 12). |
+| 338–348 | If `cache_dir` was given, also save intermediate arrays and an overlay picture (page 9). |
 
 **Two width numbers, on purpose.** `avg_width_px` (area ÷ length) and `median_width_px`
 (per-pixel) are different estimates. Area ÷ length runs high where junction blobs add area

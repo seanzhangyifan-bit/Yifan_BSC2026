@@ -35,10 +35,8 @@ class ImageEntry:
     tiling_desc: str
     timestamp_iso: str
     # Attached later by attach_full_analysis_images(), once analyze_image.py
-    # --full-image has been run separately (stage 4/5, not part of
-    # scripts/spatial_overview/overview_figure.py's lighter curvature/anisotropy-only slice).
+    # --full-image has been run separately.
     full_overlay_png_relpath: str | None = None
-    full_precedence_png_relpath: str | None = None
 
 
 def _load_registry(json_path: Path) -> list[dict]:
@@ -87,12 +85,6 @@ def _render_html(entries: list[dict]) -> str:
       <h4>full overlay</h4>
       <img src="{e["full_overlay_png_relpath"]}" alt="full-image overlay for {e["image_stem"]}">"""
                 )
-            if e.get("full_precedence_png_relpath"):
-                extra_images.append(
-                    f"""
-      <h4>full precedence graph</h4>
-      <img src="{e["full_precedence_png_relpath"]}" alt="full-image precedence graph for {e["image_stem"]}">"""
-                )
             image_blocks.append(f"""
     <div class="image-block">
       <h3>{e["image_stem"]}</h3>
@@ -135,10 +127,8 @@ def _render_html(entries: list[dict]) -> str:
 block per analyzed image. Each image block holds its multi-section
 overview figure (per-section + whole-image rose diagrams and
 curvature/tortuosity histograms, see scripts/spatial_overview/overview_figure.py) and,
-where attached, the full-image skeleton overlay and precedence graph
-from `analyze_image.py --full-image` (stage 4/5 -- exploratory on a
-full image, see METHODOLOGY.md's scope-discipline notes; validated so far
-only on the small corner crop).</p>
+where attached, the full-image skeleton overlay from
+`analyze_image.py --full-image`.</p>
 {body}
 </body>
 </html>
@@ -186,14 +176,11 @@ def attach_full_analysis_images(
     coating: str,
     image_stem: str,
     full_overlay_png_relpath: str,
-    full_precedence_png_relpath: str,
 ) -> Path:
-    """Attach the full-image overlay/precedence-graph paths (from a
-    separate `analyze_image.py --full-image` run -- stage 4/5, not part of
-    scripts/spatial_overview/overview_figure.py's lighter slice) to an *existing* image
-    entry, and rewrite the HTML. Only updates those two fields on the
-    matching entry, leaving everything else (including a previously
-    attached pair, if re-run) untouched. Raises if no matching entry
+    """Attach the full-image overlay path (from a separate
+    `analyze_image.py --full-image` run) to an *existing* image entry, and
+    rewrite the HTML. Only updates that field on the matching entry, leaving
+    everything else untouched. Raises if no matching entry
     exists yet -- this attaches to a block created by
     update_master_report(), it doesn't create new ones.
     """
@@ -205,7 +192,6 @@ def attach_full_analysis_images(
     for entry in entries:
         if entry["coating"] == coating and entry["image_stem"] == image_stem:
             entry["full_overlay_png_relpath"] = full_overlay_png_relpath
-            entry["full_precedence_png_relpath"] = full_precedence_png_relpath
             break
     else:
         raise ValueError(

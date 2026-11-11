@@ -1,10 +1,10 @@
 # 4. The crack network
 
-**File**: `src/crackgraph/graph.py` (62 lines)
+**File**: `src/crackgraph/graph.py` (60 lines)
 
 **What it does.** It turns the cleaned skeleton into a **graph**: points (junctions and loose
 ends) connected by segments. Most of the work is done by the **skan** library. This file pulls
-out what the rest of the project needs and counts junction types.
+out what the rest of the project needs and counts nodes by degree.
 
 ## skan's vocabulary
 
@@ -22,7 +22,7 @@ types, see the skan figure in [02_skeleton.md](02_skeleton.md#what-the-library-s
 | `branch_type` | 0 = isolated piece, 1 = dead end, 2 = junction to junction, 3 = closed loop. |
 | `path_coordinates(i)` | The (row, col) of every pixel along segment `i`, in order from src to dst. |
 
-## `GraphResult`, line 17
+## `GraphResult`, line 15
 
 | Field | Meaning |
 |---|---|
@@ -33,26 +33,26 @@ types, see the skan figure in [02_skeleton.md](02_skeleton.md#what-the-library-s
 | `n_edges` | Number of segments. |
 | `summary` | The full skan summary table, kept for later steps. |
 
-## `path_pixel_indices(coords, shape)`, line 28
+## `path_pixel_indices(coords, shape)`, line 26
 
 A small shared helper. Skeleton coordinates can be fractional, so it rounds them to whole pixel
 indices and clamps them inside the image, so a segment touching the border can't point off the
 edge. It returns `(rows, cols)`, ready to look up values in any image-sized grid, such as the
 width map. It's used by `skeleton.py`, `flaking.py` and the exporter.
 
-## `extract_graph(skel)`, line 38
+## `extract_graph(skel)`, line 36
 
 | Line | What happens |
 |---|---|
-| 39 | `summary = skan.summarize(skel, separator="_")`: the per-segment table. |
-| 41–48 | Collect every node ID that appears at either end of any segment. `np.unique` removes duplicates. |
-| 50–51 | Look up each node's degree and position in skan's skeleton. |
-| 53–62 | Count degree-1, degree-3 and degree-≥4 nodes, and return everything. |
+| 37 | `summary = skan.summarize(skel, separator="_")`: the per-segment table. |
+| 39–46 | Collect every node ID that appears at either end of any segment. `np.unique` removes duplicates. |
+| 48–49 | Look up each node's degree and position in skan's skeleton. |
+| 51–60 | Count degree-1, degree-3 and degree-≥4 nodes, and return everything. |
 
 ## Worth knowing
 
-- **No T/Y here.** This step only knows *how many* segments meet at a node, not at what angles.
-  Angles come in `junctions.py` (page 7).
+- **Only counts, no angles.** This step only knows *how many* segments meet at a node, not at
+  what angles.
 - **Short edges add junctions.** Each small loop around a dark speck (page 2) creates two extra
   degree-3 nodes, and a crossing read as two 3-way junctions adds one short edge. Both inflate
   junction and edge counts, especially on wide-crack images.

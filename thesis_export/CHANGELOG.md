@@ -11,6 +11,31 @@ Commit IDs link each entry to its full details in `git log`. Findings are number
 
 ## 2026-11-11
 
+### Removed: T/Y junction classification, corner cross-check and precedence analysis
+
+**Changes results** of the per-image analysis (`analyze_image.py`, GUI) only: those outputs lose
+their junction-type, corner-check and precedence parts. **No change** to the crack stats
+(`export_crack_stats.py`, `thesis_stats.xlsx`) or to any per-segment, curvature or anisotropy
+number. These parts weren't mature enough to ship with the thesis.
+
+- Deleted `junctions.py`, `corners.py`, `precedence.py`, their tests, and the three sweeps that
+  tuned them (`window_sweep.py`, `corner_window_sweep.py`, `junction_tolerance_sweep.py`), plus
+  `docs/junction_tolerance_sensitivity.md` and the July 2026 stage-4 review.
+- `analyze_image.py`: the `--annulus-*`, `--y-angle-tol-deg`, `--t-*`, `--corner-*`,
+  `--show-fit-detail`, `--hide-corner-check` and `--skip-junctions/-corner-cross-check/-precedence`
+  options are gone; it no longer writes `_precedence.png` or `_overlay_detail.png`. The overlay
+  shows endpoints and junctions (degree ≥ 3) only.
+- The per-run spreadsheet (`--xlsx-out`) loses its T/Y/ambiguous and corner-agreement columns.
+- GUI: the junction, corner-check and precedence checkboxes and the fit-detail option are gone.
+- The validation gallery has 5 cases (curvature, anisotropy), down from 12.
+- Junctions as graph nodes (degree ≥ 3, junction blobs, `n_junctions_deg3`) are unchanged.
+- `METHODOLOGY.md`, `GLOSSARY.md`, `CALIBRATION.md`, the walkthrough (renumbered, pages 7–9
+  removed) and the other docs no longer describe the removed parts. Findings 1, 12, 13 and 19 of
+  the full code review, and the changelog entries for them, were taken out with them.
+- Everything removed is kept: the git tag `archive/ty-precedence` holds the state before removal,
+  and `archive/thesis_export_ty_precedence_2026-11-11/` at the repo root holds the original
+  version of every file this change deleted or edited.
+
 ### Changed: the crack-stats export no longer selects images by file name
 
 **Changes results** for the command-line export only: which images get a row. The numbers for any
@@ -26,9 +51,6 @@ up to you: put only those in the folder, or upload them in the GUI, which never 
   at the whole of `data/raw/`, the export now includes the `lu`/`ro` captures and the scale-bar
   image too, and a `_D_mm000000` frame would get (wrong) µm values instead of empty ones.
 - `find_batch_images` → `find_images(data_dir, pattern="**/*")`.
-- `junction_tolerance_sweep.py` keeps its fixed image set through a new `--glob` option (default
-  `**/*_mm000001.jpg`). It no longer applies the two hand-listed exceptions, so a re-run covers
-  `T5-M_H190_v2_mm000001.jpg` but not `23RH_PTFE_v1_mm000003.jpg`.
 - Schema doc §2 now describes the old rules as guidance for choosing images, not as rules the
   export applies; §6 and §7b, walkthrough page 5, the batch README and `METHODOLOGY.md` updated.
 
@@ -56,7 +78,7 @@ method remains.
   `export_crack_stats_v3_batch_bcd.py` is now `export_crack_stats_batch_bcd.py`. Default outputs
   drop the `_v3` suffix. `compute_row` keeps the GUI's `on_stage` progress hook; the stage order
   is now binarize, skeletonize, flaking.
-- `analyze_image.py`, the spatial overview figure and the junction cut-off sweep skeletonize once
+- `analyze_image.py` and the spatial overview figure skeletonize once
   and remove flake-touching edges from the skeleton before analysis
   (`flaking.remove_flake_touching_edges`, new). `analyze_image`'s report line is now "Skeleton
   edges touching a flaked region, removed before graph analysis".
@@ -221,25 +243,6 @@ flaked images. Now:
 Neither of the two corner crops checked touches a flake, so both reports came out unchanged.
 The per-run spreadsheet row (`--xlsx-out`) doesn't use these totals.
 
-### Fixed: junction arm fit could mix in a loop's far end
-
-**No change to results** on the thesis images (checked). Review finding 13.
-
-Each arm's direction is fitted to the skeleton pixels 5–60 px from the junction. That used to
-mean every such pixel along the segment, so a crack curving back into the ring, or a loop
-returning to its own junction, mixed a second direction into the fit. Each arm is now cut at
-its first pixel beyond 60 px, and a loop at its midpoint. A new test shows a synthetic lollipop
-now reads as T (it read "ambiguous" before). Re-running the T/Y sensitivity sweep on all 41
-images and 17 cut-off settings gave identical counts.
-
-### Fixed: a crack ordered before itself is reported as a cycle
-
-**No change to results** on the images checked (no such case seen). Review finding 19.
-
-A loop segment whose two ends meet at one T can come out as both host and abutter: "X came after
-X". The cycle report only listed groups of two or more segments, so X got a generation number
-instead. It's now reported as a cycle, with generation undetermined.
-
 ### Fixed: one validation-gallery row always said PASS
 
 **No change to results.** Review finding 14.
@@ -260,7 +263,7 @@ They're now rejected before anything runs.
 **No change to results** (checked). Review finding 9.
 
 - Segment areas are counted in one pass over the image instead of one pass per segment.
-- The corner cross-check skips crack-free outlines too far from a junction to matter.
+- A second step, since removed from this export, was sped up the same way.
 
 On a full T5 image, `analyze_image --full-image` went from 194 s to 61 s. The report and the
 edge table (1,853 segments) came out identical.
@@ -286,20 +289,18 @@ overview figure, `region.py` and the GUI on a small synthetic grid with a flake.
 they run and write their files, not their numbers. The broken v3 import found in October would
 have failed here.
 
-### Changed: junction results say they cover a corner sample
+### Changed: per-image results say they cover a corner sample
 
 **No change to results** (labels only). Review finding 10.
 
 By default the per-image analysis looks at a top-left corner crop, **about 1.5% of each image**,
-while the crack stats cover the whole image. Corner junction counts could be mistaken for
+while the crack stats cover the whole image. Corner numbers could be mistaken for
 whole-image numbers. Now:
 
-- The console report states the region and its area share at the top and next to the junction
-  counts. The spreadsheet's `region_description` column carries the same text.
+- The console report states the region and its area share at the top. The spreadsheet's `region_description` column carries the same text.
 - The GUI labels every result with its region, and shows a note when corner and whole-image
   results appear together.
-- The sensitivity sweep's CSVs have a `region_area_pct` column. A re-run gave identical counts.
-- README, `METHODOLOGY.md`, the sensitivity write-up and the walkthrough say the same.
+- README, `METHODOLOGY.md` and the walkthrough say the same.
 
 ### Added: code walkthrough
 
@@ -307,39 +308,6 @@ whole-image numbers. Now:
 
 [`docs/walkthrough/`](docs/walkthrough/README.md): a 14-page, plain-language tour of every part of
 the code, in the order data flows through it, function by function with line references.
-
-### Added: sensitivity check for the T/Y junction cut-offs
-
-**No change to results** (adds an analysis). Review finding 12.
-
-New script `scripts/validation/junction_tolerance_sweep.py` re-sorts each image's measured
-junction angles under 17 cut-off settings. Results in
-[`docs/junction_tolerance_sensitivity.md`](docs/junction_tolerance_sensitivity.md), on 41 images
-(corner crop):
-
-- At the current cut-offs, 67% of junctions are ambiguous, 26% T, 7% Y.
-- Absolute T share ranges 9–45% as all cut-offs go from ×0.5 to ×1.5. The Y count ranges 6–208.
-- Ranking conditions by T share holds for ±5° / ±25% changes (rank correlation 0.82–0.98).
-
-**Affects how you report junction counts**: report absolute T/Y numbers with a range, not as
-fixed values, and check that any comparison between conditions keeps its direction across the
-tested cut-offs.
-
-### Fixed: corner cross-check read west-pointing cracks as east-pointing
-
-**Changes results** (corner cross-check and precedence agreement only). Commit `65d1ed9`,
-review finding 1.
-
-The corner cross-check combined two angle readings with a plain average. Two readings of a
-west-pointing crack wall, such as 179° and −179°, averaged to 0°, which points east. On synthetic
-T-junctions near west, this flipped the crack's direction in 9 of 20 runs while still reporting
-agreement with the main method.
-
-Both averages now go the short way around the circle. Two regression tests were added.
-
-- **Affected outputs**: the corner cross-check's agree/disagree counts, and the "both methods
-  agree" support in the precedence graph, on images with roughly east–west cracks.
-- **Not affected**: skeletons, crack stats, and the main method's T/Y labels.
 
 ### Fixed: batch exports couldn't find images; scale-bar claim no longer automatic
 

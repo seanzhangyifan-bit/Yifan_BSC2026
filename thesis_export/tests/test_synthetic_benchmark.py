@@ -206,9 +206,9 @@ def test_hierarchical_network_adds_subbranches_without_disturbing_primary_layer(
 
     n_sub = n_courses * sub_branches_per_primary
     added_px = int(full_mask.sum()) - int(base_mask.sum())
-    # each sub-branch starts AT the host course's own centerline (same
+    # each sub-branch starts AT the main course's own centerline (same
     # convention generate_t_junction/generate_double_t_junction already
-    # use for their abutters), so part of its rectangle overlaps pixels
+    # use for their stems), so part of its rectangle overlaps pixels
     # the primary layer already lit -- added_px is strictly less than the
     # naive non-overlapping n_sub*length*thickness upper bound, not equal
     # to it.
@@ -218,7 +218,7 @@ def test_hierarchical_network_adds_subbranches_without_disturbing_primary_layer(
     # each sub-branch's tip (near its far end, well past the primary
     # course's own thickness band) should be newly foreground in `full`
     # and background in `base` -- confirms the stubs actually reach their
-    # expected far end, not just contribute overlap area near the host.
+    # expected far end, not just contribute overlap area near the main course.
     row_ys = [margin + spacing * (i + 1) for i in range(n_courses)]
     x0, x1 = margin, size - margin
     span = x1 - x0

@@ -11,13 +11,13 @@ file changes later, function names stay the easiest way to find your place.
 
 ## The big picture
 
-The project answers two questions about a micrograph of a cracked catalyst layer:
+The project turns a micrograph of a cracked catalyst layer into numbers that let crack patterns
+be compared across conditions:
 
-1. **How much cracking is there?** Crack area, width, segment length and connectivity. These are
-   the *crack stats*, exported to spreadsheets.
-2. **In what order did the cracks form?** Where one crack stops against another (a T-junction),
-   the stopped crack is younger. Collecting those local facts gives a *partial order*: which
-   cracks came before which, where the geometry can tell.
+1. **The crack stats**: crack area, width, segment length and connectivity for each image,
+   exported to spreadsheets. These are the thesis's main numbers.
+2. **The per-image analysis**: a closer look at one image, adding per-segment width and area,
+   how bent each segment is, and whether the cracks share a direction.
 
 Both start with the same four steps:
 
@@ -27,7 +27,7 @@ micrograph (.jpg)
   ├─ 1. load            io_utils.py         grey + colour pixel grids
   ├─ 2. binarize        binarize.py         crack / not-crack mask
   ├─ 3. skeletonize     skeleton.py         1-pixel centre lines, junk branches removed
-  │     └─ flaking      flaking.py          find flaked-off patches, remove, skeletonize again
+  │     └─ flaking      flaking.py          find flaked-off patches, drop segments touching them
   ├─ 4. graph           graph.py            network of junctions + segments
   │
   ├──► crack stats      export_crack_stats.py          area, width, length, connectivity → .xlsx
@@ -35,10 +35,7 @@ micrograph (.jpg)
   └──► per-image analysis (analyze_image.py)
         ├─ edge_metrics.py   length, width and area per segment
         ├─ curvature.py      how bent each segment is
-        ├─ anisotropy.py     whether cracks share a direction
-        ├─ junctions.py      T / Y / ambiguous at each 3-way junction
-        ├─ corners.py        independent second opinion on each junction
-        └─ precedence.py     "which crack came first" graph
+        └─ anisotropy.py     whether cracks share a direction
 ```
 
 ## Reading order
@@ -51,17 +48,14 @@ micrograph (.jpg)
 | 4 | [The crack network](04_graph.md) | `graph.py` | Junctions, segments, and skan's vocabulary |
 | 5 | [Crack-stats export](05_crack_stats_export.md) | `scripts/batch_stats/` | Every spreadsheet number |
 | 6 | [Per-segment metrics](06_edge_metrics.md) | `edge_metrics.py` | Width and area per segment |
-| 7 | [Junction classification](07_junctions.md) | `junctions.py` | T vs Y, the heart of the ordering |
-| 8 | [Corner cross-check](08_corners.md) | `corners.py` | A second, independent angle measurement |
-| 9 | [Precedence graph](09_precedence.md) | `precedence.py` | The partial order itself |
-| 10 | [Curvature and anisotropy](10_curvature_anisotropy.md) | `curvature.py`, `anisotropy.py`, `_chord_scan.py` | Shape of the network |
-| 11 | [The per-image command](11_analyze_image.md) | `analyze_image.py` | How it all runs together |
-| 12 | [Outputs and reports](12_outputs.md) | `overlay.py`, `xlsx_report.py`, `cache_io.py`, plots, HTML, tiling | Pictures, spreadsheets, caches |
-| 13 | [The GUI](13_gui.md) | `app.py` | The point-and-click front end |
-| 14 | [Validation and tests](14_validation_and_tests.md) | `synthetic*.py`, `validation_*.py`, `scripts/validation/`, `tests/` | How we know it works |
+| 7 | [Curvature and anisotropy](07_curvature_anisotropy.md) | `curvature.py`, `anisotropy.py`, `_chord_scan.py` | Shape of the network |
+| 8 | [The per-image command](08_analyze_image.md) | `analyze_image.py` | How it all runs together |
+| 9 | [Outputs and reports](09_outputs.md) | `overlay.py`, `xlsx_report.py`, `cache_io.py`, plots, HTML, tiling | Pictures, spreadsheets, caches |
+| 10 | [The GUI](10_gui.md) | `app.py` | The point-and-click front end |
+| 11 | [Validation and tests](11_validation_and_tests.md) | `synthetic*.py`, `validation_*.py`, `scripts/validation/`, `tests/` | How we know it works |
 
-Pages 1–5 cover the crack-stats path and take a few hours. Pages 6–11 cover the ordering
-analysis. Pages 12–14 are supporting material you can skim.
+Pages 1–5 cover the crack-stats path and take a few hours. Pages 6–8 cover the per-image
+analysis. Pages 9–11 are supporting material you can skim.
 
 ## Ideas that come up everywhere
 

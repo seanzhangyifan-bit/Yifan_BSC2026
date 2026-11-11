@@ -1,7 +1,6 @@
 """Network-wide crack orientation anisotropy: is this network rectilinear
 /grid-like (strong preferred direction) or mudcrack-like (no preferred
-direction)? A geometry measurement, not a chronology one -- independent
-of, and does not touch, the junction/poset machinery.
+direction)? A geometry measurement of the whole network.
 
 Method: length-weighted axial circular statistics on edge tangent bearings
 (the standard "orientation tensor" / fabric-tensor method from structural
@@ -75,8 +74,8 @@ from .graph import GraphResult
 ORIENT_WINDOW_PX_PLACEHOLDER = 10.0
 # [PLACEHOLDER] chord window (arc length) on each side of each scan point,
 # used to get a smoothed tangent bearing (see compute_orientation_samples).
-# Same jitter-averaging scale reasoning as curvature.py/corners.py; not
-# derived from calibrated h/um-per-px (none exists yet).
+# Same jitter-averaging scale reasoning as curvature.py; not derived from
+# calibrated h/um-per-px (none exists yet).
 
 ROSE_HISTOGRAM_N_BINS = 18  # display resolution only, not a fitted parameter
 
@@ -85,8 +84,7 @@ _BEARING_EPS = 1e-9
 
 def _bearing_deg(vec: np.ndarray) -> float:
     """0 deg = +col, 90 deg = -row (CCW in array space) -- same convention
-    as junctions.py's/corners.py's _bearing_deg and synthetic.py's
-    _draw_rotated_arm. Not folded mod 180 here; callers fold as needed."""
+    as synthetic.py's _draw_rotated_arm. Not folded mod 180 here; callers fold as needed."""
     return float(np.degrees(np.arctan2(-vec[0], vec[1])))
 
 
@@ -152,8 +150,7 @@ def compute_orientation_samples(
     (s[k+1]-s[k-1])/2), so weights approximately sum to the edge's arc
     length minus the two window_px zones nearest each endpoint, where a
     smoothed tangent isn't available -- those zones are exactly where
-    junction-blob skeleton jitter is worst anyway (junctions.py excludes
-    the same region for the same reason), so excluding them from the
+    junction-blob skeleton jitter is worst anyway, so excluding them from the
     orientation stat is a feature, not a gap.
 
     Edges shorter than 2*window_px fall back to a single endpoint-to

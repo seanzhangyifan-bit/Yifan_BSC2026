@@ -6,10 +6,8 @@
 (binarize → skeletonize → graph extraction, plus flaking exclusion) on one image and returns a
 row of summary numbers: image identification/provenance, crack area, crack width, edge length,
 and network-connectivity ("percolation") statistics — pixel units plus a physically-calibrated
-secondary where applicable. It is deliberately **not** the full crack-graph pipeline output — no
-junction classification (T/Y census), no anisotropy, no curvature, no crack-ordering/precedence
-data. Those exist for a different purpose (reconstructing a partial order of crack growth from
-junction geometry) and are out of scope here on purpose.
+secondary where applicable. It deliberately leaves out anisotropy and curvature, which come from
+the per-image analysis (`src/analyze_image.py`) instead.
 
 `compute_row()` backs two scripts, both writing the columns in §4:
 

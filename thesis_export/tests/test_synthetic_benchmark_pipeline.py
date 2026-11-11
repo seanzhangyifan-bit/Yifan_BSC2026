@@ -87,7 +87,7 @@ def test_case1_tapered_line_otsu_truncates_the_dim_tip():
     )
 
 
-# -- case 2: T/Y-junction -- basic topology recovery (angle recovery stays validation_gallery.py's job) --
+# -- case 2: T- and Y-shaped meetings -- basic topology recovery --
 
 
 def test_case2_t_junction_topology_recovers_exactly():

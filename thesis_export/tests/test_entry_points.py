@@ -63,10 +63,10 @@ def test_analyze_image_full_pipeline_runs(flaked_grid_image: Path, tmp_path: Pat
     report = capsys.readouterr().out
 
     sub = out_dir / "coating_x"
-    for suffix in ("overlay.png", "precedence.png", "edge_metrics.csv"):
+    for suffix in ("overlay.png", "edge_metrics.csv"):
         assert (sub / f"synthetic_grid_full_{suffix}").exists(), suffix
     assert xlsx.exists()
-    assert "Stage 4: Junction classification" in report
+    assert "Edge geometry: length/width/area" in report
     # The flake sits on a junction, so some edges touch it and must be reported
     # as removed before the graph analysis.
     assert "Skeleton edges touching a flaked region" in report

@@ -2,8 +2,8 @@
 
 binarize.py picks a single global Otsu threshold and its docstring asserts
 (but never checks) that adaptive/local thresholding isn't needed because
-"these images are already high-contrast." Every other tunable constant in
-this project gets a sweep script (window_sweep.py, corner_window_sweep.py)
+"these images are already high-contrast." Other tunable constants in
+this project get a sweep script (e.g. curvature_window_sweep.py)
 -- the threshold that decides what counts as crack in the first place never
 has. This script is that sweep: it does NOT change binarize.py's production
 default (Otsu stays the default, deliberately -- see that file's docstring),

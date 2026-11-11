@@ -1,7 +1,7 @@
 """Correctness checks for the mesh/network generators (generate_grid,
 generate_wavy_grid, generate_hexagonal_grid, generate_grid_with_flakes) --
 crack_stats-scoped: stage 1-3 (binarize/skeletonize/graph) and flaking.py
-only, no junction/curvature/anisotropy classification.
+only, no curvature/anisotropy.
 
 Unlike every single-junction generator, a mesh's ground truth is a network
 invariant (total edge/node count, total length), and two of the four cases

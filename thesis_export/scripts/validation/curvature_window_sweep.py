@@ -47,8 +47,8 @@ RADII = [15.0, 30.0, 60.0, 100.0]
 JITTER_LEVELS = [0.0, 0.5, 1.0]
 N_SEEDS_WHEN_JITTERED = 6
 
-# A T-junction's host arm is a circular arc; only edges that are actually
-# curved (not the straight abutter) should contribute to this sweep.
+# The synthetic shape's bar is a circular arc; only edges that are actually
+# curved (not the straight stem) should contribute to this sweep.
 CURVED_EDGE_TORTUOSITY_MIN = 1.02
 
 

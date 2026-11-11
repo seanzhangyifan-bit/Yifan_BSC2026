@@ -1,0 +1,39 @@
+"""Shared chord-pair scanning geometry for per-edge polyline analysis.
+
+Given a polyline's pixel coordinates and cumulative arc length, find the
+incoming/outgoing chord vectors spanning `window_px` on each side of a
+point -- the same chord-pair-turn-angle technique corners.py's wall-corner
+scan uses. corners.py keeps its own inline copy of this logic (already
+tested and working) -- this module exists so curvature.py and
+anisotropy.py, a second and third consumer, don't duplicate/triplicate it.
+Retrofitting corners.py onto this module is a separate follow-up task, not
+part of adding the two newer analyses.
+"""
+
+import numpy as np
+
+
+def arc_length(coords: np.ndarray) -> np.ndarray:
+    """Cumulative arc length along a polyline. s[0] = 0."""
+    steps = np.linalg.norm(np.diff(coords, axis=0), axis=1)
+    return np.concatenate([[0.0], np.cumsum(steps)])
+
+
+def chord_pair_at(
+    coords: np.ndarray, s: np.ndarray, k: int, window_px: float
+) -> tuple[np.ndarray, np.ndarray] | None:
+    """Incoming/outgoing chord vectors spanning window_px on each side of
+    point index k, using the same searchsorted logic as corners.py's scan.
+
+    Returns None if k is within window_px of either path end (no room for
+    a full window on that side), or if either chord has ~zero length.
+    """
+    if s[k] < window_px or s[-1] - s[k] < window_px:
+        return None
+    j_back = int(np.searchsorted(s, s[k] - window_px, side="right")) - 1
+    j_fwd = int(np.searchsorted(s, s[k] + window_px, side="left"))
+    v_in = coords[k] - coords[j_back]
+    v_out = coords[j_fwd] - coords[k]
+    if np.linalg.norm(v_in) < 1e-9 or np.linalg.norm(v_out) < 1e-9:
+        return None
+    return v_in, v_out

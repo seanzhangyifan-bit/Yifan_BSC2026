@@ -76,7 +76,7 @@ def test_width_matches_known_thickness():
 
 
 def test_width_trim_flags_too_short_edge():
-    # Abutter too short (4px) to survive trimming max(5px placeholder,
+    # Stem too short (4px) to survive trimming max(5px placeholder,
     # local junction-blob half-width) off both ends.
     gray = generate_t_junction(angle_deg=90.0, arm_length=4.0)
     result, _, graph_result = _run(gray, spur_px=0.5, prune_host_stubs=False)  # the host-stub rule would also remove this deliberately tiny branch

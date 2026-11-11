@@ -1,10 +1,9 @@
-"""Synthetic test image generation: minimal, known-topology/known-angle
-junction images.
+"""Synthetic test image generation: minimal, known-topology/known-geometry
+crack images.
 
-Used to validate the stage 1-3 chain end-to-end against cases with a known
-right answer (exact node/edge counts), and stage 4's annulus angle
-measurement against a known ground-truth angle -- rather than just "runs
-without crashing" on real data.
+Used to validate the pipeline end-to-end against cases with a known right
+answer (exact node/edge counts, known curvature and orientation) -- rather
+than just "runs without crashing" on real data.
 
 Everything above this point is a single isolated junction (one T, one Y,
 one bent line). generate_grid/generate_wavy_grid/generate_hexagonal_grid/
@@ -32,10 +31,10 @@ def _smooth_jitter_1d(
 
     Independent per-pixel noise (tried first) rasterizes into a jagged
     boundary that skeletonizes into dozens of spurious spur branches per
-    arm -- confirmed empirically (see scripts/validation/window_sweep.py's git
-    history / dev notes: an early version of this jitter model produced
-    40-170 "junctions" per single-junction test image at jitter_px=0.5-1.0,
-    i.e. it was testing topology breakage, not angle-estimation noise).
+    arm -- confirmed empirically (an early version of this jitter model
+    produced 40-170 "junctions" per single-junction test image at
+    jitter_px=0.5-1.0, i.e. it was testing topology breakage, not
+    measurement noise).
     Real skeletonization wobble is smooth/low-frequency, not per-pixel
     white noise, so this instead perturbs a coarse grid of control points
     (spaced `control_spacing_px` apart) and linearly interpolates -- a
@@ -74,9 +73,9 @@ def _draw_rotated_arm(
     for reproducibility, before filling a thickness-band strip around it --
     a model of realistic skeletonization wobble with a known nominal
     ground truth, NOT a claim about the exact pixel-level boundary of any
-    real crack. It exists so the tangent-fit estimator's robustness to
-    jitter can be measured (see scripts/validation/window_sweep.py) instead of
-    asserted. The start point (t=0) is always exact/unperturbed, so
+    real crack. It exists so the estimators' robustness to
+    jitter (e.g. curvature, see scripts/validation/curvature_window_sweep.py)
+    can be measured instead of asserted. The start point (t=0) is always exact/unperturbed, so
     `bearing_deg` remains the nominal ground-truth direction at the vertex.
 
     `tip_taper_frac > 0` narrows the FAR end (t=length, the free tip --
@@ -160,20 +159,20 @@ def generate_t_junction(
 ) -> np.ndarray:
     """Grayscale image with exactly one T-junction.
 
-    A horizontal "host" line spans the image width (inset by `margin` on
-    each side); a straight "abutter" line meets it from above at the host's
-    midpoint, at `angle_deg` measured from the host's own bearing (0 deg),
+    A horizontal "bar" line spans the image width (inset by `margin` on
+    each side); a straight "stem" line meets it from above at the bar's
+    midpoint, at `angle_deg` measured from the bar's own bearing (0 deg),
     and stops there (does not cross through) -- forming exactly one 3-way
-    junction, with three endpoints (both host ends and the abutter's free
+    junction, with three endpoints (both bar ends and the stem's free
     end). `angle_deg=90.0` (the default) reproduces a plain right-angle T.
 
     `tip_taper_frac > 0.0` (default 0.0, exactly the original flat-
-    rectangle-tip geometry, since stage-4's angle/corner/curvature tests
-    and validation_cases.py's own ground truth are calibrated against
-    that exact shape) tapers the host's two free ends AND the abutter's
+    rectangle-tip geometry, since the curvature tests and
+    validation_cases.py's own ground truth are calibrated against
+    that exact shape) tapers the bar's two free ends AND the stem's
     free end to a point, via `_draw_rotated_arm`'s own `tip_taper_frac`
     (see that function). Only supported when `jitter_px <= 0.0` -- the
-    host's jitter path uses its own bespoke per-column loop, not
+    bar's jitter path uses its own bespoke per-column loop, not
     `_draw_rotated_arm`, so it has no taper implementation to opt into.
     """
     img = np.full((size, size), bg_value, dtype=np.float64)
@@ -185,7 +184,7 @@ def generate_t_junction(
         # test's assumptions are untouched.
         img[mid - half_t : mid + half_t + 1, margin : size - margin] = fg_value
     elif jitter_px <= 0.0:
-        # tapered host: two half-arms from the midpoint, each tapering to
+        # tapered bar: two half-arms from the midpoint, each tapering to
         # a point at its own free end -- same construction as
         # generate_density_gradient_field's spindle segments.
         half_length = (size / 2.0) - margin
@@ -200,7 +199,7 @@ def generate_t_junction(
                 tip_taper_frac=tip_taper_frac,
             )
     else:
-        # Host jitter model: smooth (spatially-correlated) lateral wobble
+        # Bar jitter model: smooth (spatially-correlated) lateral wobble
         # of the row-band, anchored at the midpoint (the future junction
         # vertex) and extended outward in both directions -- see
         # _smooth_jitter_1d and _draw_rotated_arm's docstring for why
@@ -222,10 +221,10 @@ def generate_t_junction(
         arm_length = size / 2.0 - margin
 
     col_mid = size // 2
-    # abutter starts at the host midpoint and points "backwards" along
-    # angle_deg from the host's own bearing (host bearing = 0 deg, i.e.
+    # stem starts at the bar midpoint and points "backwards" along
+    # angle_deg from the bar's own bearing (bar bearing = 0 deg, i.e.
     # +col); angle_deg=90 points straight up (-row), matching the original
-    # vertical abutter.
+    # vertical stem.
     _draw_rotated_arm(
         img,
         start_rc=(float(mid), float(col_mid)),
@@ -234,7 +233,7 @@ def generate_t_junction(
         thickness=thickness,
         fg_value=fg_value,
         jitter_px=jitter_px,
-        rng_seed=rng_seed + 1,  # decorrelate abutter noise from host noise
+        rng_seed=rng_seed + 1,  # decorrelate stem noise from bar noise
         tip_taper_frac=tip_taper_frac,
     )
 
@@ -246,26 +245,19 @@ def generate_curved_t_junction(
     thickness: int = 5,
     radius: float = 30.0,
     arc_half_angle_deg: float = 75.0,
-    abutter_length: float = 50.0,
+    stem_length: float = 50.0,
     fg_value: float = 230.0,
     bg_value: float = 10.0,
     jitter_px: float = 0.0,
     rng_seed: int = 0,
 ) -> np.ndarray:
-    """Grayscale image with one T-junction whose host is a circular arc.
+    """Grayscale image with one T-shaped meeting whose bar is a circular arc.
 
-    The host is an arc of a circle of the given `radius`; the abutter is a
+    The bar is an arc of a circle of the given `radius`; the stem is a
     straight arm meeting the arc's midpoint radially from the convex side
-    (perpendicular to the local tangent). Ground truth at the junction:
-    host tangents exactly 180 deg apart, abutter at 90 deg to each, host
-    curvature magnitude exactly 1/radius (opposite signs on the two arms,
-    since they are traversed in opposite directions from the vertex).
-
-    The default radius=30 is chosen so a chord over a ~20 px annulus
-    subtends enough arc (~38 deg) that a chord-based direction estimate
-    provably misclassifies this as "ambiguous" (host pair reads ~152 deg,
-    28 deg short of straight, beyond the 20 deg T-straight tolerance),
-    while a tangent fit must recover ~180 deg and classify it as a T.
+    (perpendicular to the local tangent). Ground truth: bar curvature
+    magnitude exactly 1/radius, and the arc/chord tortuosity of each half
+    of the bar follows from `radius` and `arc_half_angle_deg` in closed form.
     """
     img = np.full((size, size), bg_value, dtype=np.float64)
     row_c, col_c = size * 0.3, size / 2.0
@@ -290,13 +282,13 @@ def generate_curved_t_junction(
     band = (np.abs(d - radius) <= thickness / 2.0) & (np.abs(phi) <= arc_half_angle_deg)
     img[band] = fg_value
 
-    # abutter: radially outward (straight "down") from the arc midpoint
+    # stem: radially outward (straight "down") from the arc midpoint
     junction_rc = (row_c + radius, col_c)
     _draw_rotated_arm(
         img,
         start_rc=junction_rc,
         bearing_deg=-90.0,
-        length=abutter_length,
+        length=stem_length,
         thickness=thickness,
         fg_value=fg_value,
         jitter_px=jitter_px,
@@ -376,11 +368,11 @@ def generate_double_t_junction(
     fg_value: float = 230.0,
     bg_value: float = 10.0,
 ) -> np.ndarray:
-    """Grayscale image with TWO T-junctions close together on the same host
+    """Grayscale image with TWO T-junctions close together on the same bar
     line, separated by `gap_px`.
 
     Used by edge_metrics.py's tests as the canonical "no defensible core
-    area" fixture: the host segment between the two junctions is short
+    area" fixture: the bar segment between the two junctions is short
     enough that both junctions' blob-disks (edge_metrics.py's
     AREA_JUNCTION_BLOB_RADIUS_PLACEHOLDER, widened by local medial_radius)
     spatially overlap over it, double-claiming the same middle-segment
@@ -423,13 +415,12 @@ def generate_y_junction(
     """Grayscale image with exactly one 3-way junction at arbitrary bearings.
 
     Three straight arms radiate from a common center at `bearings_deg`
-    (default: 120 deg apart, a canonical Y). No host/abutter distinction --
-    used both for a genuine Y check and, with non-120-deg-apart bearings,
-    to exercise the "ambiguous" (neither T nor Y) classification path.
+    (default: 120 deg apart, a canonical Y); any other bearings give an
+    uneven three-way meeting.
 
     `tip_taper_frac > 0.0` (default 0.0, exactly the original flat-
-    rectangle-tip geometry, since stage-4's angle/corner/curvature tests
-    and validation_cases.py's own ground truth are calibrated against
+    rectangle-tip geometry, since the curvature tests and
+    validation_cases.py's own ground truth are calibrated against
     that exact shape) tapers each arm's free end to a point, via
     `_draw_rotated_arm`'s own `tip_taper_frac`.
     """
@@ -1056,7 +1047,7 @@ def hierarchical_network_topology(
     has ONLY T-junctions, never a 4-way crossing (n_junctions_deg_ge4 is
     always 0 here, unlike grid_topology's rectilinear mesh). Each
     sub-branch adds its own T-junction the same way (+1 edge from
-    splitting its host course, +1 stub edge, +1 endpoint, +1 degree-3
+    splitting its course, +1 stub edge, +1 endpoint, +1 degree-3
     junction) -- a pure combinatorial fact of the construction, not a
     claim about what skeletonize_and_prune actually keeps (whether short
     features survive its SPUR_PX_PLACEHOLDER length threshold is a
@@ -1094,8 +1085,7 @@ def generate_hierarchical_network(
     abutting it), NEVER a 4-way crossing. Deliberately replaces an
     earlier rectilinear-grid design (generate_grid's X-crossings) with
     this brick-bond layout instead, since real crack networks favor
-    T-junctions over 4-way crossings anyway (see METHODOLOGY.md's Goehring
-    2012 reference). Course ends (both left and right) taper to a point
+    T-junctions over 4-way crossings anyway (Goehring 2012). Course ends (both left and right) taper to a point
     -- every free tip in this generator does, courses and sub-branches
     alike; joints never taper, since both their ends land inside a T, not
     a free tip.

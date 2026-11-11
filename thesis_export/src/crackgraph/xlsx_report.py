@@ -8,8 +8,8 @@ schema change, only calling append_chunk_to_workbook() again. `region.py`'s
 crop-selection logic is untouched by this module; whatever region info is
 available (or None, for a --full-image run) is simply recorded.
 
-The four aggregate helpers below (tortuosity_stats, curvature_stats,
-corner_agreement_counts, anisotropy_classification) are the single source
+The three aggregate helpers below (tortuosity_stats, curvature_stats,
+anisotropy_classification) are the single source
 of truth for numbers that used to be computed inline, only in
 analyze_image.py's print block -- analyze_image.py now imports them too,
 so the console report and the spreadsheet row can never silently disagree.
@@ -27,10 +27,8 @@ from PIL import Image as PILImage
 
 from .anisotropy import AnisotropyResult
 from .binarize import BinarizeResult
-from .corners import CornerCrossCheck
 from .curvature import CurvatureScanResult, reliable_tortuosities
 from .graph import GraphResult
-from .junctions import JunctionAnalysisResult
 from .region import Region
 from .skeleton import SkeletonResult
 from .summary_plots import render_curvature_histogram, render_orientation_rose
@@ -43,7 +41,7 @@ ROW_HEIGHT_FOR_THUMBNAILS = 130
 
 ANISOTROPY_GRID_LIKE_THRESHOLD = 0.5
 ANISOTROPY_MUDCRACK_LIKE_THRESHOLD = 0.15
-# [PLACEHOLDER] not calibrated against a real-image junction-type census.
+# [PLACEHOLDER] not calibrated against real images.
 # The console report (analyze_image.py) uses the 0.15 cut-off for the same
 # read: below it, the dominant bearing is reported as not meaningful.
 
@@ -90,23 +88,6 @@ COLUMN_HEADERS: list[str] = [
     "anisotropy_n_samples",
     "anisotropy_total_weighted_length_px",
     "anisotropy_qualitative_class",
-    # junctions
-    "junction_annulus_inner_px_PLACEHOLDER",
-    "junction_annulus_outer_px_PLACEHOLDER",
-    "junction_y_angle_tol_deg_PLACEHOLDER",
-    "junction_t_straight_tol_deg_PLACEHOLDER",
-    "junction_t_right_tol_deg_PLACEHOLDER",
-    "n_deg3_junctions_total",
-    "n_junctions_T",
-    "n_junctions_Y",
-    "n_junctions_ambiguous",
-    "n_junctions_insufficient_data",
-    "n_junctions_deg_ge4_unclassified",
-    # corner cross-check
-    "n_corner_checks_total",
-    "n_corner_agree",
-    "n_corner_disagree",
-    "n_corner_unresolved",
 ]
 
 IMAGE_COLUMN_HEADERS: list[str] = [
@@ -133,14 +114,6 @@ def curvature_stats(curvature_result: CurvatureScanResult) -> tuple[float | None
     if not values:
         return None, None
     return float(np.mean(values)), float(np.max(values))
-
-
-def corner_agreement_counts(corner_cross_check: list[CornerCrossCheck]) -> tuple[int, int, int]:
-    """(n_agree, n_disagree, n_unresolved) across the corner cross-check list."""
-    n_agree = sum(cc.agrees_with_tangent_fit is True for cc in corner_cross_check)
-    n_disagree = sum(cc.agrees_with_tangent_fit is False for cc in corner_cross_check)
-    n_unresolved = sum(cc.label is None for cc in corner_cross_check)
-    return n_agree, n_disagree, n_unresolved
 
 
 def anisotropy_classification(anisotropy_result: AnisotropyResult) -> str:
@@ -225,8 +198,6 @@ def append_chunk_to_workbook(
     graph_result: GraphResult,
     curvature_result: CurvatureScanResult,
     anisotropy_result: AnisotropyResult,
-    junction_result: JunctionAnalysisResult,
-    corner_cross_check: list[CornerCrossCheck],
     overlay_png_path: Path,
     out_dir: Path,
 ) -> None:
@@ -268,7 +239,6 @@ def append_chunk_to_workbook(
 
     tortuosity_mean, tortuosity_median = tortuosity_stats(curvature_result)
     curvature_mean, curvature_max = curvature_stats(curvature_result)
-    n_agree, n_disagree, n_unresolved = corner_agreement_counts(corner_cross_check)
     classification = anisotropy_classification(anisotropy_result)
     n_edges_no_profile = sum(1 for e in curvature_result.edges if e.curvature_profile_px_inv is None)
 
@@ -309,21 +279,6 @@ def append_chunk_to_workbook(
         anisotropy_result.n_samples,
         anisotropy_result.total_weighted_length_px,
         classification,
-        junction_result.inner_radius_px,
-        junction_result.outer_radius_px,
-        junction_result.y_angle_tol_deg,
-        junction_result.t_straight_tol_deg,
-        junction_result.t_right_tol_deg,
-        junction_result.n_deg3_total,
-        junction_result.n_t,
-        junction_result.n_y,
-        junction_result.n_ambiguous,
-        junction_result.n_insufficient_data,
-        junction_result.n_deg_ge4_unclassified,
-        len(corner_cross_check),
-        n_agree,
-        n_disagree,
-        n_unresolved,
     ]
     assert len(row_values) == len(COLUMN_HEADERS)
 

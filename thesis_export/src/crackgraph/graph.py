@@ -1,9 +1,7 @@
 """Stage 3: extract the attributed planar graph via skan.
 
-Junction/endpoint classification here uses *only* node degree (endpoint =
-degree 1, junction = degree >= 3). No T-vs-Y distinction is computed or
-stored -- that requires stage 4's annulus angle measurement, which is out
-of scope for this stage.
+Nodes are told apart by degree only: endpoint = degree 1, junction =
+degree >= 3.
 """
 
 from dataclasses import dataclass
@@ -22,7 +20,7 @@ class GraphResult:
     n_junctions_deg3: int  # degree == 3  [measured]
     n_junctions_deg_ge4: int  # degree >= 4  [measured]
     n_edges: int  # [measured]
-    summary: pd.DataFrame  # full skan.summarize() table, kept for stage 4 reuse
+    summary: pd.DataFrame  # full skan.summarize() table, kept for downstream reuse
 
 
 def path_pixel_indices(coords: np.ndarray, shape: tuple[int, int]) -> tuple[np.ndarray, np.ndarray]:
