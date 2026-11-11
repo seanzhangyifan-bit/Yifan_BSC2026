@@ -21,6 +21,11 @@ Outputs (under --out-dir):
   T share across settings, and whether the ranking of conditions by T share
   changes from the baseline (Spearman rank correlation).
 
+By default only the top-left corner crop is measured, about 1.5% of each
+image's area (the per-image pipeline's validated default). Counts are a corner
+sample, not whole-image totals; every output row records the region and its
+area share.
+
 T share = T / (T + Y + ambiguous). Junctions whose angles couldn't be
 measured ("insufficient_data") are excluded from it; they don't depend on
 the cut-offs.
@@ -96,11 +101,13 @@ def condition_of(image_name: str) -> str:
     return re.sub(r"_v\d+(?=_|$)", "", stem)
 
 
-def measure_junction_gaps(image_path: Path, *, full_image: bool) -> tuple[list, int]:
+def measure_junction_gaps(image_path: Path, *, full_image: bool) -> tuple[list, int, float]:
     """Sector-gap tuples for every degree-3 junction whose angles could be
-    measured, plus the count of junctions that couldn't be. Same stage order
-    and defaults as src/analyze_image.py, including the flaking second pass."""
+    measured, the count of junctions that couldn't be, and the analyzed
+    region's share of the image area (%). Same stage order and defaults as
+    src/analyze_image.py, including the flaking second pass."""
     gray, _ = load_image(image_path)
+    full_area = gray.size
     if not full_image:
         region = default_corner_crop(*gray.shape)
         gray = gray[region.row_slice, region.col_slice]
@@ -123,7 +130,7 @@ def measure_junction_gaps(image_path: Path, *, full_image: bool) -> tuple[list, 
             n_insufficient += 1
         else:
             gap_sets.append(sector_gaps_deg_from_bearings([ed.bearing_deg for ed in c.edge_directions]))
-    return gap_sets, n_insufficient
+    return gap_sets, n_insufficient, 100.0 * gray.size / full_area
 
 
 def census(gap_sets: list, y_tol: float, t_straight_tol: float, t_right_tol: float) -> dict[str, int]:
@@ -156,11 +163,11 @@ def main():
     out_dir.mkdir(parents=True, exist_ok=True)
     image_paths = find_batch_images(data_dir)
     settings = sweep_settings()
-    region = "full image" if args.full_image else "top-left corner crop"
+    region = "full image" if args.full_image else "top-left corner crop (~1.5% of image area)"
 
     rows = []
     for i, image_path in enumerate(image_paths, 1):
-        gap_sets, n_insufficient = measure_junction_gaps(image_path, full_image=args.full_image)
+        gap_sets, n_insufficient, region_area_pct = measure_junction_gaps(image_path, full_image=args.full_image)
         print(f"[{i}/{len(image_paths)}] {image_path.relative_to(data_dir)}: "
               f"{len(gap_sets)} measurable junctions, {n_insufficient} insufficient_data")
         for name, y_tol, ts_tol, tr_tol in settings:
@@ -169,6 +176,7 @@ def main():
                 "image_filename": image_path.name,
                 "condition": condition_of(image_path.name),
                 "region": region,
+                "region_area_pct": region_area_pct,
                 "setting": name,
                 "y_tol_deg": y_tol,
                 "t_straight_tol_deg": ts_tol,

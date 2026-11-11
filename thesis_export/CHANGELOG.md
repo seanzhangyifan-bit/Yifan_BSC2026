@@ -11,6 +11,21 @@ Commit IDs link each entry to its full details in `git log`. Findings are number
 
 ## 2026-11-11
 
+### Changed: junction results say they cover a corner sample
+
+**No change to results** (labels only). Review finding 10.
+
+By default the per-image analysis looks at a top-left corner crop, **about 1.5% of each image**,
+while the crack stats cover the whole image. Corner junction counts could be mistaken for
+whole-image numbers. Now:
+
+- The console report states the region and its area share at the top and next to the junction
+  counts. The spreadsheet's `region_description` column carries the same text.
+- The GUI labels every result with its region, and shows a note when corner and whole-image
+  results appear together.
+- The sensitivity sweep's CSVs have a `region_area_pct` column. A re-run gave identical counts.
+- README, `METHODOLOGY.md`, the sensitivity write-up and the walkthrough say the same.
+
 ### Added: code walkthrough
 
 **No change to results** (documentation only).

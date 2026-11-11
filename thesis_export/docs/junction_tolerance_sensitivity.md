@@ -3,7 +3,7 @@
 - **Date**: 2026-11-11
 - **Script**: [`scripts/validation/junction_tolerance_sweep.py`](../scripts/validation/junction_tolerance_sweep.py)
 - **Data**: the 41 images the batch exporter selects from `data/raw/` (23 conditions, 21 with at least
-  one measurable junction), top-left corner crop, flaking excluded, every other setting at its
+  one measurable junction), top-left corner crop (**1.5% of each image's area**), flaking excluded, every other setting at its
   default. This is the same pipeline as `src/analyze_image.py`.
 - **Reproduce**: `python3 -m scripts.validation.junction_tolerance_sweep --data-dir ../data/raw`
   (about 4 minutes).
@@ -86,7 +86,9 @@ Conditions have a median of 24 measurable junctions, and six have 11 or fewer (T
 
 ## Limits of this check
 
-- Corner crop only, so samples per condition are small and per-condition numbers are noisy. A
+- Corner crop only: about 1.5% of each image's area. Samples per condition are small and
+  per-condition numbers are noisy. These counts are a corner sample, not whole-image totals, so
+  don't put them next to the whole-image crack stats as if both cover the same area. A
   full-image run (`--full-image`) would give far more junctions, but full-image junction
   classification hasn't been validated yet (see `METHODOLOGY.md`).
 - This tests sensitivity, not correctness. It shows how much the answer depends on the cut-offs,

@@ -54,7 +54,8 @@ because early steps aren't representative.
 ## Worth knowing
 
 - **Crack stats always use the full image**, while the per-image analysis defaults to the
-  corner crop. Results for different regions appear side by side (review finding 10).
+  corner crop (about 1.5% of the image). Each result now says which region it covers, and a
+  note appears when both are shown (review finding 10).
 - **Uploads are always recorded as `scale_bar_check = "not checked"`**, because nobody has
   looked at them.
 - **The temporary folder is deleted when the run finishes.** Download anything you want to keep.

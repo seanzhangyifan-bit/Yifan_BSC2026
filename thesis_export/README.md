@@ -87,6 +87,13 @@ background-corner method, and assembles a precedence graph — console report pl
 under `outputs/<source-subfolder>/`. See `METHODOLOGY.md`'s "Pipeline shape" and README-equivalent
 sections above for the full stage-by-stage description and every CLI flag.
 
+**Junction results cover a small corner sample, not the whole image.** By default the
+pipeline analyses only a top-left corner crop, about **1.5% of the image area**, the region
+it was validated on. The batch crack stats cover the **whole image**. Don't put corner
+junction counts next to whole-image crack stats as if they describe the same area. The
+report, spreadsheet row and GUI all state the region. `--full-image` exists but isn't
+validated yet.
+
 ## GUI (optional, easiest way to try this)
 
 No command-line flags to learn: upload one or more images, choose what to run, click go.

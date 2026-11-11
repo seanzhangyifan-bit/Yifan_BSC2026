@@ -198,8 +198,12 @@ def main():
         gray = gray_full[region.row_slice, region.col_slice]
         rgb = rgb_full[region.row_slice, region.col_slice]
         crop_h, crop_w = gray.shape
+        # The area share travels with every result that quotes region_desc (console
+        # report, xlsx row, GUI), so junction counts from this crop can't be mistaken
+        # for whole-image numbers like the batch crack stats.
+        area_pct = 100.0 * crop_h * crop_w / (full_h * full_w)
         region_desc = (
-            f"top-left corner, {crop_w} x {crop_h} px "
+            f"top-left corner, {crop_w} x {crop_h} px, {area_pct:.1f}% of image area "
             f"[corner-frac={region.corner_frac}, edge-margin-frac={region.edge_margin_frac}]"
         )
         stem_suffix = "corner"
@@ -559,6 +563,12 @@ def main():
         )
     print()
     print("-- Stage 4: Junction classification (annulus tangent-fit method) --")
+    print(f"Region: {region_desc}")
+    if not args.full_image:
+        print(
+            "  (junction counts below cover this corner crop only -- not comparable to "
+            "whole-image numbers such as the batch crack stats)"
+        )
     if junction_result is None:
         print("(skipped, not requested)")
     else:

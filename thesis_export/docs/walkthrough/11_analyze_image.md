@@ -17,7 +17,9 @@ It prints a long report with an evidence label on every number, and writes:
 It's mostly *wiring*: almost every calculation happens in the modules from pages 1–10.
 
 **By default it analyses only a corner crop**: a square 1/8 of the image width, inset 2% from
-the top-left corner (`region.py`). The ordering analysis was validated at that size; full-image
+the top-left corner (`region.py`). That's about **1.5% of the image area**. The report states
+the region and its area share at the top and again next to the junction counts, so corner
+counts aren't mistaken for whole-image numbers. The ordering analysis was validated at that size; full-image
 runs (`--full-image`) are allowed but not validated yet.
 
 ---

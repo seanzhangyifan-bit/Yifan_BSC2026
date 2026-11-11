@@ -61,6 +61,17 @@ STAGE_MARKERS: list[tuple[str, str]] = [
 # prints two runtime lines (see its main()) rather than one header per stage. The second
 # marker isn't a line prefix (it starts with a tile count that varies), so matching uses
 # substring containment rather than startswith -- see _make_stage_progress_callback.
+# Shown on every per-image pipeline result, so corner-crop junction counts are never read
+# as whole-image numbers next to the (always whole-image) crack stats.
+PIPELINE_REGION_NOTE_CORNER = (
+    "Region analyzed: top-left corner crop only, about 1.5% of the image area "
+    "(the pipeline's validated default). Junction counts here are a corner sample, not whole-image totals."
+)
+PIPELINE_REGION_NOTE_FULL = (
+    "Region analyzed: whole image. Full-image junction classification hasn't been validated yet; "
+    "treat these results as exploratory."
+)
+
 OVERVIEW_STAGE_MARKERS: list[tuple[str, str]] = [
     ("Whole-image pipeline runtime:", "Whole-image pass"),
     (" sections (", "Per-quadrant sections"),
@@ -275,7 +286,14 @@ def main() -> None:
     run_pipeline = run_curvature or run_anisotropy or run_junctions
 
     with st.expander("Advanced options"):
-        full_image = st.checkbox("Analyze full image (default: top-left corner crop)")
+        full_image = st.checkbox(
+            "Analyze full image (default: top-left corner crop)",
+            help=(
+                "Applies to junctions, curvature and anisotropy. The default corner crop covers about "
+                "1.5% of the image; full-image junction classification isn't validated yet. Crack "
+                "stats always use the whole image."
+            ),
+        )
         show_fit_detail = st.checkbox("Show fit-detail overlay")
 
     nothing_selected = not (run_crack_stats or run_pipeline or run_overview)
@@ -350,6 +368,7 @@ def main() -> None:
 
                 if result is not None:
                     with st.expander(f"Pipeline: {image_path.name}", expanded=n_images == 1):
+                        st.caption(PIPELINE_REGION_NOTE_FULL if full_image else PIPELINE_REGION_NOTE_CORNER)
                         if result["returncode"] != 0:
                             st.error("Analysis failed:")
                             st.code(result["stdout"] or "(no output captured)")
@@ -420,6 +439,13 @@ def main() -> None:
                     st.text(f"  {name}: {msg}")
             if crack_stats_rows:
                 st.subheader("Crack stats")
+                st.caption("Computed on the whole image.")
+                if run_pipeline and not full_image:
+                    st.info(
+                        "The junction, curvature and anisotropy results above cover only the top-left "
+                        "corner crop (about 1.5% of each image), while these crack stats cover the whole "
+                        "image. Don't compare the two as if they describe the same area."
+                    )
                 df = pd.DataFrame(crack_stats_rows)
                 st.warning(
                     "The µm/mm² columns (avg_width_um, crack_area_mm2, median_width_um, etc.) "

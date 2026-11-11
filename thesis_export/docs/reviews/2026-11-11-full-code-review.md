@@ -52,7 +52,7 @@ the code but didn't run it.
 | 7 | Medium | ~~63 references to file paths that no longer exist~~ **Fixed** | 15 paths, across `src/`, `scripts/`, docs |
 | 8 | Medium | ~~Console report names a flaking criterion that was dropped~~ **Fixed** | `analyze_image.py:384` |
 | 9 | Medium | Two steps get very slow on a full image | `edge_metrics.py:272`, `corners.py:282` |
-| 10 | Medium | GUI shows crack stats and pipeline results for different image regions | `app.py` |
+| 10 | Medium | GUI shows crack stats and pipeline results for different image regions **(labelled)** | `app.py` |
 | 11 | Medium | `--n-rows`/`--n-cols` accepted, but anything other than 2×2 crashes at the end | `overview_figure.py:44–45` |
 | 12 | Medium | Three open items from the July review | `junctions.py`, `CALIBRATION.md` |
 | 13 | Low | Junction angle fit mixes up both ends of a loop | `junctions.py:163–164` |
@@ -221,7 +221,12 @@ These are fine on the default corner crop. They scale badly with `--full-image`:
 - `corners.py:282` checks *every* background contour for *every* junction. Pre-filtering contours
   by bounding box, or one spatial index, would cut this sharply.
 
-### 10. GUI mixes two image regions without saying so (from reading)
+### 10. GUI mixes two image regions without saying so (from reading) — LABELLED
+
+> **Labelled 2026-11-11.** Each GUI result now states its region, with a note when corner and
+> whole-image results appear together. The console report, xlsx `region_description` and the
+> sensitivity sweep's CSVs carry the region's area share (1.5%). The regions themselves still
+> differ; making them match would mean validating full-image junction runs.
 
 In `app.py`, the per-image pipeline defaults to the **top-left corner crop**, but crack stats
 always run on the **full image**. The "Analyze full image" checkbox only changes the pipeline
