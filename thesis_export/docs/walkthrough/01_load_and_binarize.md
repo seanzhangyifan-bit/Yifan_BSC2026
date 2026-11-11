@@ -49,6 +49,16 @@ We assume no uneven lighting, so one brightness cutoff for the whole image works
 | 21 | `mask = gray > t` | Brighter than the cutoff = crack. Runs over all ~55 million pixels at once. |
 | 22–26 | `return BinarizeResult(...)` | Packs everything up. `foreground_fraction` is `mask.mean()`: the average of True/False values is the share of True. |
 
+**What Otsu is doing**
+
+![Otsu threshold sweep](img/otsu_sweep.gif)
+
+The animation tries every cutoff on a blurry, noisy test image. Grey bars are pixels below the
+cutoff (background), blue bars are above it (crack). The red curve scores how cleanly each cutoff
+separates the two groups: high when both groups are tight and far apart. Otsu's method simply
+picks the top of that curve. Notice the curve is flat near the top: cutoffs a few steps either
+side give almost the same mask, which is why the result isn't very sensitive to the exact value.
+
 **Worth knowing**
 
 - **Cracks must be the bright part.** Line 21 assumes this. Dark-crack images would come out

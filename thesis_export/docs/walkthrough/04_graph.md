@@ -8,7 +8,8 @@ out what the rest of the project needs and counts junction types.
 
 ## skan's vocabulary
 
-You'll see these names throughout the project:
+You'll see these names throughout the project. For a picture of nodes, endpoints and branch
+types, see the skan figure in [02_skeleton.md](02_skeleton.md#what-the-library-steps-do).
 
 | Term | Meaning |
 |---|---|

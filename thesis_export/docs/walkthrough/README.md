@@ -86,3 +86,7 @@ analysis. Pages 12–14 are supporting material you can skim.
 Terms are defined in [`GLOSSARY.md`](../../GLOSSARY.md). Known problems are listed in
 [`docs/reviews/2026-11-11-full-code-review.md`](../reviews/2026-11-11-full-code-review.md). This
 walkthrough mentions the relevant review findings where they apply.
+
+The figures in `img/` (used in pages 1 and 2) come from
+`scripts/docs/make_walkthrough_figures.py`. Each one runs the real library call on a small
+made-up shape. To redraw them, run `python3 -m scripts.docs.make_walkthrough_figures`.

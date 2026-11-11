@@ -10,9 +10,39 @@ number of pixels it covers, and a junction is wherever 3 or more lines meet.
 
 **The hard part is the cleanup.** Most of this file decides which branches are fake.
 
-For a picture of how thinning works, see `outputs/skeleton_animation.gif` in the parent repo if
-you still have it. Thinning peels the crack like an onion, one pixel layer per pass, until only
-the centre line is left.
+### What the library steps do
+
+**Thinning** (`skeletonize`, scikit-image).
+
+![Thinning, pass by pass](img/thinning.gif)
+
+Each pass removes the edge pixels (orange) that can go without breaking a line or opening a hole,
+like peeling an onion, until only a centre line 1 pixel wide is left (green).
+
+`skeletonize()` doesn't show its intermediate passes, so the animation uses scikit-image's
+`thin()`, a close relative, and then shows both finished results. They differ at the square
+bulge on the left. `thin()` leaves no side branch there. `skeletonize()`, which the pipeline
+uses, leaves two short stubs (circled, 2 and 4 px). Bumps on a crack wall turn into short dead
+ends like these, and the pruning below removes them. (COMPARE LATER)
+
+**Width map** (`distance_transform_edt`, SciPy).
+
+![Distance transform](img/distance_transform.png)
+
+Every crack pixel gets its distance to the nearest background pixel. On the centre line that
+distance is about half the crack's width, so crack width ≈ 2 × value − 1. The bulge reads 6, the
+horizontal crack 4 and the tapering stem 2–3.
+
+**Branch types and pruning** (`skan.summarize`, `prune_paths`).
+
+![skan branch types before and after pruning](img/skan_branch_types.png)
+
+skan splits the skeleton into branches at the junctions and labels each one with a type. The
+cleanup loop below removes only short type 0 and type 1 branches: here the short spur at the top
+left and the tiny speck at the bottom left. Removing the spur also removes its junction, so the
+two orange and blue pieces on the left merge into one longer dead end. That's why the loop runs
+again after each removal. Note that the closed cell on the right counts as type 2, not 3: it is
+made of junction-to-junction branches. Only a ring with no junction at all is type 3.
 
 ---
 
