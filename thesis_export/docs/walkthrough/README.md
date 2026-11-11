@@ -88,5 +88,6 @@ Terms are defined in [`GLOSSARY.md`](../../GLOSSARY.md). Known problems are list
 walkthrough mentions the relevant review findings where they apply.
 
 The figures in `img/` (used in pages 1 and 2) come from
-`scripts/docs/make_walkthrough_figures.py`. Each one runs the real library call on a small
-made-up shape. To redraw them, run `python3 -m scripts.docs.make_walkthrough_figures`.
+`scripts/docs/make_walkthrough_figures.py`. Most run the real library call on a small
+made-up shape; `real_pruned_branches.png` runs the pipeline on real micrographs from `data/raw`.
+To redraw them, run `python3 -m scripts.docs.make_walkthrough_figures`.

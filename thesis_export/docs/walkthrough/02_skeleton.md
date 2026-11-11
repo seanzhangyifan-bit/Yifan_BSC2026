@@ -143,6 +143,53 @@ neighbouring branch into a new short dead end. The next round catches it.
 
 **Return, line 208.** Packs everything into `SkeletonResult`.
 
+### What gets removed on real images
+
+![Branches removed on real micrographs](img/real_pruned_branches.png)
+
+Three examples of each removal reason, from 2048 × 2048 px centre crops of three micrographs,
+chosen at the 25th, 50th and 95th length percentile of their group. "Width" is the crack width at
+the branch's loose end → at its other end; "corr" is the number the corner test checks.
+
+- **Spurs** (top row, orange): short dead ends. Most are stubs from the centre line to a bump or
+  corner on the crack wall, like the middle and right examples. Some are the start of a real
+  faint side crack whose rest fell below the Otsu cutoff, like the left example.
+- **Fragments** (middle row, purple): short isolated pieces. These are mostly bits of real faint
+  cracks that thresholding broke into dashes, not noise.
+- **Corner branches** (bottom row, red): longer than 15 px, so the length rule misses them, but
+  the width climbs steadily from the tip to the junction (here 4 → 28 px up to 6 → 42 px). The
+  correlation is 0.99–1.00.
+
+**The numbers** (same three crops, `spur_px` = 15):
+
+| Image | Spurs | Fragments | Corner branches | Skeleton length removed |
+|---|---|---|---|---|
+| T3-PTFE_v1 (dense, wide cracks) | 162 | 44 | 48 | 5.4% |
+| T4-M_H95_v1 (dense, membrane) | 66 | 6 | 13 | 1.9% |
+| T5-PTFE_H95_v1 (sparse, thin cracks) | 39 | 130 | 0 | 6.9% |
+
+| Reason | Count | Median length | Range |
+|---|---|---|---|
+| Spur | 267 | 9 px | 1–15 px |
+| Fragment | 180 | 4 px | 1–15 px |
+| Corner branch | 61 | 20 px | 15–44 px |
+
+For corner branches, the width at the junction end is a median 7.6× the width at the tip, and
+the median correlation is 0.996.
+
+**What this means for the statistics.** On wide-crack images, most of what gets removed is
+spurs and corner branches, which are artifacts. On thin-crack images such as T5-PTFE_H95, most is
+fragments of real faint cracks. Removing them lowers total crack length (6.9% here) and the
+component count `N`, because each fragment would otherwise count as its own component. So
+fragment pruning is a choice about what counts as a crack, not just cleanup.
+
+Not every corner branch is caught. Some with a correlation just under 0.99 survive as short dead
+ends. A check on six crops found about 27 such misses, mostly on T3-PTFE and T4-M_H95, which
+shorten the median edge length `ledge` by up to about 9% on those images.
+
+These figures and numbers come from `scripts/docs/make_walkthrough_figures.py`. They skip the
+flaking exclusion that the batch export applies, so they won't match the export exactly.
+
 ---
 
 ## Worth knowing

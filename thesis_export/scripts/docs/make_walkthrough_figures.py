@@ -7,6 +7,10 @@ exception is the thinning animation: skeletonize() exposes no intermediate
 steps, so it is animated with skimage's thin(), a close relative; the last
 frames show thin()'s and skeletonize()'s finished results side by side in time.
 
+real_pruned_branches.png is the one figure from real data: it runs the actual
+pipeline on centre crops of three micrographs and shows branches the cleanup
+loop removed, plus their numbers. It is skipped if data/raw isn't found.
+
 Run: python3 -m scripts.docs.make_walkthrough_figures
 Writes to docs/walkthrough/img/.
 """
@@ -244,10 +248,122 @@ def skan_branch_types_figure():
     plt.close(fig)
 
 
+# -- real-data figure: what the cleanup loop actually removes --
+
+REAL_IMAGES = [
+    "characterization2_ptfe/T3-PTFE_v1_mm000001.jpg",
+    "characterization2_membran/T4-M_H95_v1_mm000001.jpg",
+    "characterization2_ptfe/T5-PTFE_H95_v1_mm000001.jpg",
+]
+REAL_CROP_PX = 2048  # centre crop, to keep the run short
+REASON_LABEL = {"spur": "spur", "fragment": "fragment", "corner_artifact": "corner branch"}
+REASON_COLOR = {"spur": "#e8743b", "fragment": "#9467bd", "corner_artifact": "#d62728"}
+
+
+def _find_data_dir() -> Path | None:
+    here = Path(__file__).resolve().parents[2]
+    for cand in (here / "data" / "raw", here.parent / "data" / "raw"):
+        if all((cand / p).exists() for p in REAL_IMAGES):
+            return cand
+    return None
+
+
+def _branch_numbers(coords, medial_radius, kept_skel):
+    """Width at each end and the |correlation| between position and width,
+    oriented tip-first (the end farther from the kept skeleton)."""
+    c = np.round(coords).astype(int)
+    dist_to_kept = distance_transform_edt(~kept_skel)
+    if dist_to_kept[c[0, 0], c[0, 1]] < dist_to_kept[c[-1, 0], c[-1, 1]]:
+        c = c[::-1]
+    widths = 2.0 * medial_radius[c[:, 0], c[:, 1]]
+    corr = float(np.corrcoef(np.arange(len(widths)), widths)[0, 1]) if widths.std() > 0 else 0.0
+    return widths[0], widths[-1], corr
+
+
+def real_pruned_branches_figure(data_dir: Path):
+    from src.crackgraph.binarize import binarize
+    from src.crackgraph.io_utils import load_image
+    from src.crackgraph.skeleton import SPUR_PX_PLACEHOLDER, skeletonize_and_prune
+
+    records, rows = [], []
+    for rel in REAL_IMAGES:
+        gray, _ = load_image(data_dir / rel)
+        h, w = gray.shape
+        r0, c0 = (h - REAL_CROP_PX) // 2, (w - REAL_CROP_PX) // 2
+        gray = gray[r0:r0 + REAL_CROP_PX, c0:c0 + REAL_CROP_PX]
+        sr = skeletonize_and_prune(binarize(gray).mask, source_image=gray)
+        kept = sr.skeleton.skeleton_image.astype(bool)
+        name = Path(rel).stem.replace("_mm000001", "")
+        for pb in sr.pruned_branches:
+            w_tip, w_end, corr = _branch_numbers(pb.coords, sr.medial_radius, kept)
+            records.append(dict(img=name, gray=gray, kept=kept, coords=pb.coords, reason=pb.reason,
+                                length=pb.branch_distance, w_tip=w_tip, w_end=w_end, corr=corr))
+        removed_len = sum(pb.branch_distance for pb in sr.pruned_branches)
+        rows.append((name, sr.n_spurs_pruned, sr.n_fragments_pruned, sr.n_corner_artifacts_pruned,
+                     100 * removed_len / (removed_len + kept.sum())))
+
+    # Three examples per reason, picked by length percentile (deterministic).
+    # Skip branches near the crop edge: there the crop, not the crack, shapes them.
+    def away_from_edge(r, margin=40):
+        co = r["coords"]
+        return co.min() >= margin and co.max() <= REAL_CROP_PX - 1 - margin
+
+    picks = []
+    for reason in ("spur", "fragment", "corner_artifact"):
+        pool = sorted((r for r in records if r["reason"] == reason and away_from_edge(r)),
+                      key=lambda r: r["length"])
+        picks += [pool[int(q * (len(pool) - 1))] for q in (0.25, 0.5, 0.95)]
+
+    fig, axs = plt.subplots(3, 3, figsize=(10, 10.6))
+    for ax, r in zip(axs.flat, picks):
+        co = r["coords"]
+        pad = int(max(30, 1.5 * max(r["w_tip"], r["w_end"])))
+        H, W = r["gray"].shape
+        r0, r1 = max(int(co[:, 0].min()) - pad, 0), min(int(co[:, 0].max()) + pad, H)
+        c0, c1 = max(int(co[:, 1].min()) - pad, 0), min(int(co[:, 1].max()) + pad, W)
+        ax.imshow(r["gray"][r0:r1, c0:c1], cmap="gray", vmin=0, vmax=255, interpolation="nearest")
+        ys, xs = np.nonzero(r["kept"][r0:r1, c0:c1])
+        ax.scatter(xs, ys, s=0.6, c=SKEL)
+        ax.plot(co[:, 1] - c0, co[:, 0] - r0, color=REASON_COLOR[r["reason"]], lw=2.2)
+        ax.set_title(f"{REASON_LABEL[r['reason']]} · {r['img']}\n{r['length']:.0f} px long · width "
+                     f"{r['w_tip']:.0f} → {r['w_end']:.0f} px · corr {r['corr']:.2f}", fontsize=8)
+        ax.axis("off")
+    fig.suptitle("Branches removed by the cleanup loop (coloured) and the skeleton that stays (green)",
+                 fontsize=10)
+    fig.tight_layout()
+    fig.savefig(OUT / "real_pruned_branches.png", dpi=90)
+    plt.close(fig)
+
+    # Numbers for the walkthrough text.
+    print("| Image | Spurs | Fragments | Corner branches | Skeleton length removed |")
+    print("|---|---|---|---|---|")
+    for name, n_s, n_f, n_c, pct in rows:
+        print(f"| {name} | {n_s} | {n_f} | {n_c} | {pct:.1f}% |")
+    print(f"\nspur_px = {SPUR_PX_PLACEHOLDER}")
+    for reason in ("spur", "fragment", "corner_artifact"):
+        rs = [r for r in records if r["reason"] == reason]
+        L = np.array([r["length"] for r in rs])
+        print(f"{reason}: n={len(rs)} length median {np.median(L):.0f} px, range {L.min():.0f}-{L.max():.0f} px")
+        if reason == "corner_artifact":
+            ratio = np.array([r["w_end"] / max(r["w_tip"], 1) for r in rs])
+            print(f"  width end/tip median {np.median(ratio):.1f}x, corr median "
+                  f"{np.median([r['corr'] for r in rs]):.3f}")
+    for r in picks:
+        print(f"pick: {r['reason']:15s} {r['img']:15s} L={r['length']:.0f} w {r['w_tip']:.0f}->{r['w_end']:.0f} corr {r['corr']:.2f}")
+
+
 if __name__ == "__main__":
+    import sys
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
     OUT.mkdir(parents=True, exist_ok=True)
     otsu_sweep()
     thinning_animation()
     distance_transform_figure()
     skan_branch_types_figure()
+    data_dir = _find_data_dir()
+    if data_dir is None:
+        print("real micrographs not found under data/raw; skipped real_pruned_branches.png")
+    else:
+        real_pruned_branches_figure(data_dir)
     print(f"wrote figures to {OUT}")
