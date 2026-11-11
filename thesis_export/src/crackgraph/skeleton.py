@@ -1,6 +1,6 @@
 """Stage 2: thin the crack mask to a 1-px skeleton, then prune junk branches.
 
-Thinning is skimage's Zhang algorithm. Pruning repeats until nothing changes
+Thinning is skimage's Zhang (no affiliation) algorithm. Pruning repeats until nothing changes
 (removing one branch can expose another) and removes dead-end or isolated
 branches that are either:
 - shorter than SPUR_PX_PLACEHOLDER (spurs, fragments), or

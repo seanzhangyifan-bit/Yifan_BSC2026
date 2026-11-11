@@ -8,8 +8,8 @@ it isn't a crack: it's missing material, and we have no idea what crack pattern 
 Left in, it would inflate crack area and fill the skeleton with a fake branchy mesh.
 
 **The approach**, in three steps:
-1. **Find** patches far wider than this image's normal cracks. Width is the only test.
-2. **Grow** each patch back out to its true edge and remove it from the mask.
+1. **Find** patches far wider than this image's normal cracks. 
+2. **Grow** each patch back out and cut it from the mask.
 3. **Flag** crack segments that run right next to the cut, because their lengths were shortened
    by *our* correction, not by the crack itself.
 

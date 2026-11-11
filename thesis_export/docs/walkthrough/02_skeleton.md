@@ -6,9 +6,7 @@
 its middle, called the **skeleton**, then removes junk branches the thinning creates.
 
 **Why.** Thick blobs can't be measured as a network. On 1-pixel lines, a crack's length is the
-number of pixels it covers, and a junction is wherever 3 or more lines meet.
-
-**The hard part is the cleanup.** Most of this file decides which branches are fake.
+number of pixels it covers, and a junction is wherever 3 or more lines meet. Most of this file decides which branches are fake.
 
 ### What the library steps do
 
