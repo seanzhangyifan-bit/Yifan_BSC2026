@@ -11,6 +11,26 @@ Commit IDs link each entry to its full details in `git log`. Findings are number
 
 ## 2026-11-11
 
+### Corrected: what the "skeleton loop" metric measures
+
+**No change to results**: documentation only; no code or number changed.
+
+The docs said thinning sometimes "traces both walls" of a wide crack and leaves a fake loop, and
+that `skeleton_loop_sweep.py` measures this (0–55% of edges per image). That is wrong:
+`skeletonize()` preserves topology, so a loop needs a hole in the mask. A check on 2048 px centre
+crops of all 41 `*_mm000001` images found:
+
+- Mask holes equal graph cycles on 33 of 41 images; the other 8 have 1–5 extra cycles, most
+  likely zero-area pixel cycles where the skeleton is 2 px thick.
+- Of the 370 short junction-to-junction edges the sweep counts, only 30 (8%) lie next to a dark
+  speck, i.e. a real small loop. The rest are short segments between closely spaced junctions:
+  split crossings or real geometry (not yet checked by eye).
+
+The sweep's numbers still describe how many short edges inflate `n_edges`; only their cause was
+misdescribed. Corrected in `docs/design_notes.md`, `docs/batch_stats/crack_stats_schema.md` §4,
+the `skeleton.py` and `skeleton_loop_sweep.py` docstrings, `scripts/validation/README.md` and
+walkthrough pages 2, 4 and 14.
+
 ### Documented: physical justification for the spur cut-off
 
 **No change to results**: `SPUR_PX_PLACEHOLDER` stays 15 px; only its documentation changed.

@@ -15,34 +15,50 @@ iterative spur pruning via skan.Skeleton.prune_paths. Pruning is iterative,
 not a single pass: removing a spur can expose a new short branch at a
 junction that was previously higher-valence, so a single pass under-prunes.
 
-KNOWN LIMITATION -- spurious skeleton loops, not fixed by spur_px: Zhang's
-thinning is pixel-local (each pixel is erased or kept based only on its
-immediate neighborhood, never on the shape's overall width or center), so
-on a locally wide or slightly irregular crack band it can trace both edges
-of the band for a short stretch before merging back into one line, leaving
-a small closed loop instead of a single centerline. This is a well-known
-general sensitivity of skeleton/medial-axis methods to boundary noise, not
-specific to this codebase.
+KNOWN LIMITATION -- small loops and short junction-to-junction edges
+(corrected 2026-11-11; the earlier explanation is kept at the end of this
+block).
 
-The pruning loop above is structurally blind to this: it only ever removes
-branch_type 0 (isolated fragment) and branch_type 1 (spur, one endpoint
-degree-1) branches, never branch_type 2 (junction-to-junction) or 3
-(cycle) -- and a loop's two strands are anchored to the graph at both
-ends, so they are always type 2 or 3, regardless of how spur_px is tuned.
+Where small loops come from. skimage's skeletonize() preserves topology: it
+never creates or removes a hole. So every closed loop in the skeleton
+surrounds a hole in the cleaned mask -- a real crack cell, or a dark speck
+inside a wide crack that is larger than HOLE_AREA_THRESHOLD_PX2 and so
+wasn't filled. Thinning does not "trace both walls" of a crack and leave a
+loop where the mask has no hole. Checked on 2048 px centre crops of all 41
+*_mm000001 micrographs: the number of mask holes equals the number of
+independent graph cycles on 33 of 41. On the other 8 there are 1-5 extra
+cycles, most likely where the skeleton is locally 2 px thick, so skan's
+8-connected pixel graph has two paths between the same junctions with no
+background pixel between them (multi-edges were found on those images).
 
-Measured, not assumed: `scripts/validation/skeleton_loop_sweep.py` audits every image
-in the real dataset for junction-to-junction edges shorter than that
-image's own average crack width (the fingerprint of this artifact). Result
-across the 39-image dataset: 0% to 55.2% of all edges per image, only
-weakly correlated with average crack width (r ~ 0.31 against
-avg_width_px) and NOT cleanly explained by substrate -- Membran and PTFE
-samples have essentially the same mean (~9.7% vs ~9.3%), and the single
-worst offender in the dataset is a Membran sample. This inflates n_edges
-and deflates avg_edge_length_px for affected images (see
-docs/batch_stats/crack_stats_schema.md S4); it has a much larger effect on the planned
-junction-census/T-vs-Y work, since many of the extra "junctions" this
-creates aren't real crack meetings. No fix is implemented yet -- documented
-as a known, measured limitation, not silently worked around.
+What skeleton_loop_sweep.py actually measures. Its fingerprint is
+junction-to-junction edges shorter than the image's average crack width.
+On the same 41 crops that is 370 edges; only 30 (8%) lie within one crack
+width of a small hole (a dark speck). The other 92% are short segments
+between junctions that sit close together. On dense images most are
+longer than 5 px, so they are not pixel clusters. Most likely they are
+split crossings (an X read as two 3-way junctions joined by a short edge,
+as in the synthetic hexagon test) or two cracks meeting a wide host at
+nearby points; the second is real geometry, not an artifact. This split
+has not been checked by eye. So the sweep's 0-55.2% of edges per image is
+a count of short junction-to-junction edges, not of fake loops.
+
+Why pruning doesn't touch either. The pruning loop only removes
+branch_type 0 (isolated fragment) and 1 (dead end). Loop strands and
+edges between two junctions are type 2 or 3, whatever spur_px is.
+
+Effect: these edges inflate n_edges and deflate edge-length statistics on
+affected images (see docs/batch_stats/crack_stats_schema.md S4) and add
+junctions to the census. Speck loops could be reduced by a larger dark-speck
+fill (tested: 130 px^2, the area of a d90 ~ 7.8 um agglomerate, removes
+about 10 loops on the densest crops). Short edges between close junctions
+would need a junction-merging step; none is implemented.
+
+Earlier explanation (superseded): "Zhang's thinning is pixel-local ... on a
+locally wide or slightly irregular crack band it can trace both edges of
+the band for a short stretch before merging back into one line, leaving a
+small closed loop instead of a single centerline." This doesn't hold for a
+topology-preserving thinning: a loop needs a hole in the mask.
 
 Corner-tracing artifacts (in addition to plain short spurs): the medial
 axis transform mathematically *must* trace a skeleton branch into every

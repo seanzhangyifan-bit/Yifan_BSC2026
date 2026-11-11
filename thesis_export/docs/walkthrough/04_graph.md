@@ -53,7 +53,8 @@ width map. It's used by `skeleton.py`, `flaking.py` and the exporter.
 
 - **No T/Y here.** This step only knows *how many* segments meet at a node, not at what angles.
   Angles come in `junctions.py` (page 7).
-- **Fake loops add fake junctions.** Each small thinning loop (page 2) creates two extra
-  degree-3 nodes. That inflates junction counts, especially on wide-crack images.
+- **Short edges add junctions.** Each small loop around a dark speck (page 2) creates two extra
+  degree-3 nodes, and a crossing read as two 3-way junctions adds one short edge. Both inflate
+  junction and edge counts, especially on wide-crack images.
 - **Tests**: `tests/test_grid_synthetic.py` checks exact node and segment counts on synthetic
   grids and honeycombs whose topology is known exactly.

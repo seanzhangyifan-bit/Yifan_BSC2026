@@ -147,12 +147,14 @@ see §4.
 - **`avg_edge_length_px`** answers "how far apart are two junctions/endpoints, on average" — it
   is the mean length of one atomic graph edge, not the mean length of a whole physical crack (a
   crack passing straight through several junctions without arresting there counts as several
-  short edges, not one long one). It is also deflated by a known skeletonization artifact:
-  `skeleton.py`'s thinning step can trace both edges of a locally wide/irregular crack band
-  before merging, leaving a small spurious loop instead of one clean line — measured across the
-  full 39-image dataset at 0–55.2% of all edges per image (`scripts/validation/skeleton_loop_sweep.py`),
-  weakly correlated with crack width, not substrate-dependent. This inflates `n_edges` (the
-  denominator here) for affected images.
+  short edges, not one long one). It is also deflated by short junction-to-junction edges:
+  0–55.2% of all edges per image are shorter than the image's own crack width
+  (`scripts/validation/skeleton_loop_sweep.py`), weakly correlated with crack width, not
+  substrate-dependent. This inflates `n_edges` (the denominator here) for affected images.
+  Corrected 2026-11-11: these were attributed to thinning leaving spurious loops. A check on
+  centre crops of all 41 images found only 8% of them next to a dark speck (a real loop); the
+  rest are short segments between closely spaced junctions, some split crossings, some real
+  geometry. See `docs/design_notes.md`, skeleton.py section.
 - **`n_components` / `giant_component_fraction`** only see pieces that survived this pipeline's
   own despeckling and spur-pruning (isolated fragments and dead-end spurs shorter than a fixed
   pixel threshold are removed before this analysis ever runs) — "components at least

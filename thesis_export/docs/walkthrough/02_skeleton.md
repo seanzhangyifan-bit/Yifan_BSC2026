@@ -48,9 +48,10 @@ made of junction-to-junction branches. Only a ring with no junction at all is ty
 
 ## Opening description, lines 1–15
 
-A short summary of the above, plus the main known limitation. On wide or ragged cracks, thinning
-can trace both walls for a short stretch and leave a small **loop** instead of one line. The
-pruning below never removes those loops. The full reasoning (measurements, rejected methods,
+A short summary of the above, plus the main known limitation. The pruning below never removes
+**small loops** around dark specks inside wide cracks (thinning can't create a loop without a hole
+in the mask, so these come from specks too big for the fill), or **short edges** between junctions
+that sit close together. The full reasoning (measurements, rejected methods,
 references) lives in [`docs/design_notes.md`](../design_notes.md).
 
 ## Settings, lines 26–45
@@ -195,9 +196,10 @@ flaking exclusion that the batch export applies, so they won't match the export 
 ## Worth knowing
 
 - **Only types 0 and 1 are ever removed.** Junction-to-junction branches (type 2) and loops
-  (type 3) are never touched, which is exactly why the "fake loop" problem stays unfixed.
-  `scripts/validation/skeleton_loop_sweep.py` measured it across the dataset: 0–55% of edges per
-  image.
+  (type 3) are never touched. `scripts/validation/skeleton_loop_sweep.py` finds 0–55% of edges
+  per image are junction-to-junction edges shorter than the crack width. Only about 8% of those
+  sit next to a dark speck (a real small loop); the rest are short segments between close
+  junctions. See `docs/design_notes.md`.
 - **Everything is in pixels.** Converting to µm happens in the exporter.
 - **Tests**: `tests/test_skeleton.py` (8 tests):
   - width ramps are flagged; flat and noisy widths and short branches are not

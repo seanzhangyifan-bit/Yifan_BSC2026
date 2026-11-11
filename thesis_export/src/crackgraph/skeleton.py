@@ -7,8 +7,8 @@ branches that are either:
 - corner-tracing artifacts: width ramps steadily toward a concave corner of the
   mask (position-vs-width correlation above CORR_THRESHOLD).
 
-Known, measured, unfixed limitation: on wide or ragged cracks, thinning can
-leave small junction-to-junction loops, which this pruning never removes.
+Known, unfixed limitation: loops around dark specks above the fill limit, and short edges
+between close junctions, are never removed by this pruning (see design_notes.md).
 
 Full rationale (measurements, rejected alternatives, references):
 docs/design_notes.md, section "skeleton.py".

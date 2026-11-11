@@ -1,4 +1,4 @@
-"""Quantify the doubled-skeleton-line artifact across the real dataset,
+"""Quantify short junction-to-junction edges across the real dataset,
 instead of just asserting "this happens on some images."
 
 Background: `skeletonize_and_prune` (skeleton.py) prunes short dead-end
@@ -33,6 +33,13 @@ Deterministic: no randomness anywhere in this script or the pipeline
 stages it calls (Otsu threshold, Zhang thinning, skan graph extraction are
 all deterministic given a fixed input image), so re-running reproduces
 the exact same table.
+
+Correction (2026-11-11): the "doubled-line loop" framing above is wrong.
+skeletonize() preserves topology, so a loop needs a hole in the mask. On
+centre crops of all 41 images, only 8% of the edges this metric counts lie
+next to a dark speck (a real small loop); the rest are short segments
+between closely spaced junctions. The metric itself is unchanged. See
+docs/design_notes.md, skeleton.py section.
 """
 
 import argparse

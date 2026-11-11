@@ -82,7 +82,7 @@ Every row is a real check. The dominant direction in `anisotropy_aligned` must l
 | `curvature_window_sweep.py` | Setting sweep | Picks the curvature window (10 px) against arcs of known radius. |
 | `junction_tolerance_sweep.py` | Sensitivity, real images | How much the T/Y counts move with the angle cut-offs. Results in `docs/junction_tolerance_sensitivity.md`. |
 | `segmentation_sensitivity_sweep.py` | Sensitivity, real image | How much results move if the crack/not-crack threshold changes. |
-| `skeleton_loop_sweep.py` | Measurement, real images | How common the fake thinning loops are, per image. |
+| `skeleton_loop_sweep.py` | Measurement, real images | How common short junction-to-junction edges are, per image (mostly close junctions, not loops; see `docs/design_notes.md`). |
 | `validation_gallery.py` | Gallery | The 12-case page above. |
 | `crack_stats_synthetic_gallery.py` | Gallery | Synthetic grids and flakes through the crack-stats path, expected vs measured. |
 | `synthetic_benchmark_raw_gallery.py`, `synthetic_benchmark_report.py` | Gallery | A 9-case benchmark: first the raw images with exact answers, then the measured results. |
