@@ -6,18 +6,28 @@ Operating guide for Claude Code working in this repository. Read this before pro
 
 A BSc thesis (KIT, Thin Film Technology group) on PEMFC catalyst layer ink formulation and coating, centred on comparing short-side-chain (SSC) vs long-side-chain (LSC) PFSA ionomers and their effect on catalyst layer structure, cracking, and performance. Scope: light-duty-vehicle CCMs, low Pt loading (0.2–0.4 mg/cm²), direct coating on PTFE at four Rakelspalt (doctor-blade gap) settings.
 
-The code in this repo is one component of that thesis: **a tool to analyse crack patterns in catalyst-layer micrographs and characterise how sequential vs concurrent the cracking was.** It is not a general crack-detection package and should not grow into one.
+The code in this repo is one component of that thesis: **a tool to turn catalyst-layer crack micrographs into quantifiable numbers that let crack patterns be compared across conditions** (ionomer type, Rakelspalt, substrate, humidity). It is not a general crack-detection package and should not grow into one.
 
-## The one thing to understand before writing code here
+## What matters most: comparable per-image statistics
 
-The analysis reconstructs a **partial order** on crack growth, not a global chronology. This distinction is load-bearing and must not be eroded "for convenience":
+The thesis's main output is the per-image crack statistics from the batch export (`scripts/batch_stats/`, thesis-notation columns in `thesis_stats.xlsx`: `crack`, `flaking`, `wcrack`, `N`, `fgc`, `ledge`, `ledge,gc`, `dgc` — see `docs/crack_stats_schema.md`). Stated by the user, 2026-11-11: the goal is "some quantifiable characterization of the crack patterns for comparison". The crack-ordering analysis below is secondary.
+
+Consequences for how to work here:
+
+- **Judge any pipeline error by its effect on those columns**, not on junction ordering. Measure the shift, then compare it with (a) the spread between `v1`/`v2` replicates of the same condition and (b) the gap between the conditions being compared. An error that is small next to between-condition differences but comparable to replicate spread matters for close comparisons.
+- **Watch for errors that are systematic, not random.** A bias that grows with crack width or density (e.g. skeleton corner stubs shortening `ledge` on wide-crack images) can tilt a comparison between conditions even when it is only a few percent.
+- **Stages 1–3 (binarize, skeletonize, graph) are where the headline numbers come from**, so their correctness is not a side issue.
+
+## Crack-ordering analysis (secondary): partial order, not chronology
+
+When working on the ordering code, this distinction is load-bearing. The analysis reconstructs a **partial order** on crack growth, not a global chronology. This distinction is load-bearing and must not be eroded "for convenience":
 
 - Input is a single micrograph (no time-lapse video). Therefore there are **no external timestamps / boundary conditions** available.
 - A T-junction (one crack meeting another at ~90°) certifies exactly one *local* fact: the crack that abuts arrived after the crack it hit, **at that point**. Nothing more.
 - The correct output is a partial order (a poset / DAG) that claims only what the geometry supports. Its **incompleteness is a measured result, not a failure.**
 - Do **not** add code that fabricates a total ordering, guesses missing relations, or otherwise presents more temporal information than the junction geometry licenses. If a function would need a timestamp we don't have, it should surface the gap, not fill it.
 
-The headline quantities the tool should produce are: junction-type census (T vs Y vs higher-valence), and the **width `w`** of the precedence poset (size of the largest set of mutually-undatable cracks, via a maximum-antichain / bipartite-matching computation). `w` is simultaneously (a) the count of unresolved orderings, (b) an index of how concurrent vs hierarchical the cracking was, and (c) a falsifiable check on the quasi-static sequential-cracking hypothesis. Small `w` corroborates it; large `w` is a genuine and reportable tension.
+The ordering analysis's own quantities are: junction-type census (T vs Y vs higher-valence), and the **width `w`** of the precedence poset (size of the largest set of mutually-undatable cracks, via a maximum-antichain / bipartite-matching computation). `w` is simultaneously (a) the count of unresolved orderings, (b) an index of how concurrent vs hierarchical the cracking was, and (c) a falsifiable check on the quasi-static sequential-cracking hypothesis. Small `w` corroborates it; large `w` is a genuine and reportable tension.
 
 ## Atoms: arcs, not whole cracks
 
@@ -37,7 +47,7 @@ Model the network as a planar graph: nodes = junctions/endpoints, edges = crack 
 5. Build precedence graph → transitive closure → **DAG/cycle check** → poset. Cycles = misread junctions or genuinely near-simultaneous cracking; report minimum-feedback-arc-set size as a data-quality / simultaneity metric rather than silently deleting.
 6. Compute width `w` (Dilworth / König; use the library rather than hand-rolling). Report `w`, `w-1`, junction census, generation counts.
 
-Stages 1–4 are largely off-the-shelf; stage 5–6 is the actual contribution. Don't gold-plate 1–4.
+Stages 1–4 are largely off-the-shelf, but stages 1–3 produce the headline statistics (see "What matters most"), so their errors count. Don't gold-plate them for looks; do fix errors that measurably shift the thesis columns relative to replicate spread. Stages 5–6 serve the secondary ordering analysis.
 
 ## Three semi-independent chronometers
 
@@ -152,4 +162,6 @@ Anisotropy/curvature sidequest (see `crackgraph/anisotropy.py` and `crackgraph/c
 
 ## Scope discipline
 
-Floor deliverable (do this first, it is guaranteed reportable): graph extraction + junction census + generation counts across the four Rakelspalt settings and SSC vs LSC. Ceiling deliverable: full arc-level poset with width computation and cross-condition comparison. Build the floor before climbing; if T-junctions turn out rare in these patterns, the ordering apparatus has little to work on and that is itself a cheap, useful finding.
+Main deliverable: reliable, comparable per-image crack statistics (the thesis columns above) across the conditions — Rakelspalt settings, SSC vs LSC, substrate, humidity — with known biases measured and stated. Prioritise work that makes these numbers trustworthy and comparable over work on the ordering analysis.
+
+Secondary, optional: junction census and generation counts; beyond that, the full arc-level poset with width `w`. If T-junctions turn out rare in these patterns, the ordering apparatus has little to work on, and that is itself a cheap, useful finding.
