@@ -40,6 +40,17 @@ Two changes to stage 2 (`skeleton.py`), made together:
 | T3-M_v1 | +3.0% | −0.9% | +0.6% | same | same |
 | T5-M_H190_v1 | same | same | +0.2% | same | same |
 
+**Measured on the 19 thesis images, full size, with flaking exclusion** (same code before and
+after except this change; `outputs/reexport_2026-11-11/` in the working copy):
+
+- `ledge`: T4-M +16% (both replicates), T5-PTFE_H145 +8%, all other images −1 to +4%.
+  `ledge,gc` moves the same way.
+- `crack`, `flaking`, `N`: unchanged (≤ 0.7%). `wcrack`: ≤ 2.9% (T4-M).
+- `fgc` and `dgc`: unchanged except T5-PTFE_H50_v1 (−10.9% and −7.8%), the sparsest image (a
+  handful of edges), where one removed stub changes the giant component.
+- No ranking within a comparison group changes, except 0RH vs 23RH NR212, which were tied before
+  (`ledge` 127.6 vs 128.0 µm) and stay within their replicate spread (13–15%).
+
 - **Affected outputs**: `n_edges`, `ledge`, `ledge,gc`, `avg_edge_length_px`, total length,
   loop and junction counts. Spreadsheet column `n_corner_artifacts_pruned` is renamed
   `n_host_stubs_pruned` and counts a different rule. `analyze_image`'s
