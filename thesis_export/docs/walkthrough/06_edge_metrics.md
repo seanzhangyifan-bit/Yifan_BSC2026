@@ -62,7 +62,7 @@ reaches it first.
 | 261–274 | Seed the flood from each segment's *interior* pixels, not its end pixels. Ends are shared between segments at a junction, and seeding them would give an arbitrary owner. Very short segments (2 pixels or fewer) have no interior, so they seed from their ends and are counted. |
 | 276 | `watershed(-medial_radius, markers=..., mask=mask_clean)`: flood "downhill" from the centre line (largest half-width) outward, only through crack pixels. |
 | 278–280 | Count each segment's pixels, all segments in one pass over the label image (`np.bincount`). |
-| 283 | Pixels nobody reached: specks that were pruned away. |
+| 283 | Pixels nobody reached: short pieces that were pruned away. |
 
 ## `estimate_edge_area_ribbon(...)`, line 292
 

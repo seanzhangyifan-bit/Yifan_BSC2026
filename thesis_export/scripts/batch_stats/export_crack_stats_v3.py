@@ -117,7 +117,7 @@ def compute_row(
     # exactly the crack-area figure we want, and reusing it avoids
     # re-deriving the same subtraction by hand. Unlike v1's crack_area_px2
     # (which comes from a SECOND skeletonize_and_prune call and is
-    # therefore re-despeckled after the flake is carved out), this value
+    # therefore re-cleaned after the flake is carved out), this value
     # is not re-cleaned post-subtraction -- v1 and v3 area numbers on
     # flaked images are not expected to be bit-identical even given the
     # same source image. See docs/batch_stats/crack_stats_schema.md section 10.

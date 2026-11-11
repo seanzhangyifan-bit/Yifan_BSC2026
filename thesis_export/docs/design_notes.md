@@ -22,8 +22,8 @@ block).
 Where small loops come from. skimage's skeletonize() preserves topology: it
 never creates or removes a hole. So every closed loop in the skeleton
 surrounds a hole in the cleaned mask -- a real crack cell, or a dark speck
-inside a wide crack that is larger than DARK_SPECK_AREA_PX2 and so
-wasn't filled. Thinning does not "trace both walls" of a crack and leave a
+inside a wide crack that is larger than DARK_SPECK_AREA_PX and so
+wasn't removed. Thinning does not "trace both walls" of a crack and leave a
 loop where the mask has no hole. Checked on 2048 px centre crops of all 41
 *_mm000001 micrographs: the number of mask holes equals the number of
 independent graph cycles on 33 of 41. On the other 8 there are 1-5 extra
@@ -49,7 +49,7 @@ edges between two junctions are type 2 or 3, whatever spur_px is.
 
 Effect: these edges inflate n_edges and deflate edge-length statistics on
 affected images (see docs/batch_stats/crack_stats_schema.md S4) and add
-junctions to the census. Speck loops are reduced by the dark-speck fill,
+junctions to the census. Speck loops are reduced by dark-speck removal,
 raised from 50 to 130 px^2 (the area of a d90 ~ 7.8 um agglomerate) on
 2026-11-11; that removes about 10 loops on the densest crops. Short edges
 between close junctions would need a junction-merging step; none is

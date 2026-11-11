@@ -3,13 +3,13 @@ a dead end is removed if less than spur_px of its length lies outside the
 crack it branches from. A stub from a wide crack's centre line into a small
 bump on its wall must be removed (and survive with the rule off); a real side
 crack or a long tapering wedge sticking out of its host must be kept; a plain
-line has nothing to remove. Also checks the dark-speck fill.
+line has nothing to remove. Also checks dark-speck removal.
 """
 
 import numpy as np
 from skimage.draw import polygon
 
-from src.crackgraph.skeleton import DARK_SPECK_AREA_PX2, SPUR_PX_PLACEHOLDER, skeletonize_and_prune
+from src.crackgraph.skeleton import DARK_SPECK_AREA_PX, SPUR_PX_PLACEHOLDER, skeletonize_and_prune
 
 
 def _wide_band(shape=(160, 260)) -> np.ndarray:
@@ -83,25 +83,25 @@ def test_plain_line_has_no_host_stubs():
     assert result.n_host_stubs_pruned == 0
 
 
-def test_small_dark_speck_is_filled_before_skeletonize():
-    # A dark speck fully enclosed in a crack, below DARK_SPECK_AREA_PX2, must be
-    # filled before skeletonize() sees it, so the skeleton doesn't loop round it.
+def test_small_dark_speck_is_removed_before_skeletonize():
+    # A dark speck fully enclosed in a crack, below DARK_SPECK_AREA_PX, must be
+    # removed before skeletonize() sees it, so the skeleton doesn't loop round it.
     mask = np.zeros((100, 200), dtype=bool)
     mask[40:60, 10:190] = True  # 20px-thick horizontal band
     speck_side = 5  # 25 px^2
-    assert speck_side * speck_side < DARK_SPECK_AREA_PX2
+    assert speck_side * speck_side < DARK_SPECK_AREA_PX
     mask[47:47 + speck_side, 95:95 + speck_side] = False
 
     result = skeletonize_and_prune(mask, spur_px=3)
     assert result.mask_clean[47:47 + speck_side, 95:95 + speck_side].all()
 
 
-def test_large_dark_region_is_not_filled():
-    # A dark region above the limit must survive -- filling is size-gated.
+def test_large_dark_region_is_not_removed():
+    # A dark region above the limit must survive -- removal is size-gated.
     mask = np.zeros((100, 200), dtype=bool)
     mask[30:70, 10:190] = True  # 40px-thick band, wide enough to enclose the region
     side = 13  # 169 px^2
-    assert side * side > DARK_SPECK_AREA_PX2
+    assert side * side > DARK_SPECK_AREA_PX
     mask[44:44 + side, 95:95 + side] = False
 
     result = skeletonize_and_prune(mask, spur_px=3)

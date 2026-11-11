@@ -34,7 +34,7 @@ from openpyxl import load_workbook
 # docs/batch_stats/crack_stats_schema.md Sec. 5.
 DEFINITIONS = [
     ("crack_area_pct",
-     "Share of image pixels classified as crack by Otsu thresholding, after flaking exclusion and despeckling.",
+     "Share of image pixels classified as crack by Otsu thresholding, after flaking exclusion, filling bright spots (light shining through the catalyst layer) and removing dark specks (pieces of catalyst layer or dust inside cracks).",
      "% of image area", "measured"),
     ("crack_area_pct_excl_flakes",
      "Same crack-pixel count as crack_area_pct, but the denominator excludes the flaking-exclusion area instead of the whole image (that area is missing material, not confirmed non-crack).",

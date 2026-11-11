@@ -198,7 +198,7 @@ No dedicated sweep script found; used at `corners.py`'s bearing-matching step
 
 ## SPUR_PX_PLACEHOLDER
 
-`src/crackgraph/skeleton.py:29` — value `15`
+`src/crackgraph/skeleton.py:24` — value `15`
 
 **Physical justification (added 2026-11-11, after the fact).** The value was chosen before
 any of this was known; it was then checked against measured length scales and found to
@@ -242,13 +242,14 @@ pipeline is invoked with `spur_px=3` (an override, not the placeholder default) 
 the sweep/test harnesses deliberately bypass this constant's default value rather than
 validating it.
 
-## DARK_SPECK_AREA_PX2
+## DARK_SPECK_AREA_PX
 
-`src/crackgraph/skeleton.py:35` — value `130` (was `HOLE_AREA_THRESHOLD_PX2` = `50` until 2026-11-11)
+`src/crackgraph/skeleton.py:30` — value `130` (was `HOLE_AREA_THRESHOLD_PX2` = `50` until 2026-11-11)
 
-Dark specks (enclosed background holes) inside a crack smaller than this many px² are filled
-right after `remove_small_objects` and before `skeletonize()`. A speck left unfilled makes the
-skeleton loop around it, adding two junctions and short edges.
+Dark specks inside a crack (pieces of catalyst layer or dust sitting in the gap) smaller than this
+many px² are removed right after bright spots are filled (`remove_small_objects`) and before
+`skeletonize()`. A speck left in makes the skeleton loop around it, adding two junctions and
+short edges.
 
 **Physical justification.** 130 px² × (0.6098 µm/px)² = **48 µm²**, the area of a circle of
 diameter ≈ 7.8 µm: the d90 agglomerate size of inks T2–T4 `[measured]` (same PSD source as
@@ -257,8 +258,8 @@ read as material sitting in the gap, not a separate crack cell `[interpreted]`. 
 as above: wet-ink PSD, one value for every image, `mm` images only.
 
 **Measured effect of 50 → 130 px²** (2048 px centre crops of 6 micrographs,
-`outputs/hole_fill_test/`): 14 real specks inside cracks newly filled (plus 5 background slivers
-at the crop edge), removing their loops; `ledge` +0.9 to +6.9% on the four crops with specks,
+`outputs/hole_fill_test/`): 14 real specks inside cracks newly removed (plus 5 dark background
+slivers cut off at the crop edge), removing their loops; `ledge` +0.9 to +6.9% on the four crops with specks,
 `wcrack`, crack area and `N` unchanged.
 
 The old 50 px² value was carried over from an informal prototype script and never derived.

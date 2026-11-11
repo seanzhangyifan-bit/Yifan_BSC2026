@@ -3,7 +3,7 @@
 Two modes:
 
 - **Full** (default): 8 panels -- raw crop, binarized mask, mask cleaning
-  (small objects removed / small holes filled, highlighted), the pre-prune
+  (bright spots filled / dark specks removed, highlighted), the pre-prune
   (raw) skeleton, the pruned branches (spur/fragment/host-stub, shown
   as one undifferentiated "pruned" category) called out in color, the
   cleaned (post-prune) skeleton, the delaminated region shaded in (when
@@ -86,7 +86,7 @@ CROP_PADDING_FLOOR_PX = 400
 # unrelated categorical layers" lesson.
 PRUNED_COLOR = "orange"
 
-# Mask-cleaning diff color (small objects removed + small holes filled by
+# Mask-cleaning diff color (bright spots filled + dark specks removed by
 # remove_small_objects/remove_small_holes) -- a blue, distinct from every
 # other color in this figure set (lime/magenta/red-tint/cyan/gold/orange).
 MASK_CLEAN_DIFF_COLOR = "dodgerblue"
@@ -139,23 +139,23 @@ def compute_corner_crop_bbox(image_shape):
 
 def draw_mask_cleaned(ax, mask_clean_crop, diff_crop):
     """The cleaned mask (post remove_small_objects/remove_small_holes), with
-    every pixel that changed from the raw Otsu mask -- a small object
-    removed, or a small hole filled -- highlighted in one color. Spur/hole
+    every pixel that changed from the raw Otsu mask -- a bright spot
+    filled, or a dark speck removed -- highlighted in one color. The two
     sub-types are deliberately not distinguished, same simplification as
     draw_pruning_annotated below."""
     ax.imshow(mask_clean_crop, cmap="gray", vmin=0, vmax=1)
     diff_rgba = np.zeros((*diff_crop.shape, 4))
     diff_rgba[diff_crop] = matplotlib.colors.to_rgba(MASK_CLEAN_DIFF_COLOR)
     ax.imshow(diff_rgba)
-    ax.plot([], [], color=MASK_CLEAN_DIFF_COLOR, linewidth=6, label="speck removed/filled")
+    ax.plot([], [], color=MASK_CLEAN_DIFF_COLOR, linewidth=6, label="bright spot filled / dark speck removed")
     ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.03), ncol=1, fontsize=8, framealpha=0.9)
-    ax.set_title("3. Mask cleaning (small objects removed / small holes filled)", fontsize=11)
+    ax.set_title("3. Mask cleaning (bright spots filled / dark specks removed)", fontsize=11)
     ax.axis("off")
 
 
 def draw_clean_skeleton_pruned(ax, mask_clean_crop, mask_clean_diff_crop, skel_final_crop, pruned_branches, bbox, title):
     """Compact-mode panel consolidating mask cleaning + skeletonize + prune
-    into one view: cleaned mask as background (specks highlighted), the
+    into one view: cleaned mask as background (cleaned pixels highlighted), the
     final kept skeleton in skeleton color, and every pruned branch in the
     pruned color -- kept + pruned together reconstruct the pre-prune
     skeleton implicitly, without a separate raw-skeleton panel."""
@@ -179,7 +179,7 @@ def draw_clean_skeleton_pruned(ax, mask_clean_crop, mask_clean_diff_crop, skel_f
     if segments:
         ax.add_collection(LineCollection(segments, colors=PRUNED_COLOR, linewidths=1.8, zorder=3))
 
-    ax.plot([], [], color=MASK_CLEAN_DIFF_COLOR, linewidth=6, label="speck removed/filled")
+    ax.plot([], [], color=MASK_CLEAN_DIFF_COLOR, linewidth=6, label="bright spot filled / dark speck removed")
     ax.plot([], [], color=SKELETON_COLOR, linewidth=2.5, label="kept skeleton")
     ax.plot([], [], color=PRUNED_COLOR, linewidth=1.8, label="pruned")
     ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.03), ncol=3, fontsize=8, framealpha=0.9)
@@ -307,7 +307,7 @@ def main():
         panels.append(("clean_skeleton_pruned", lambda ax: draw_clean_skeleton_pruned(
             ax, mask_clean_crop, mask_clean_diff_crop, skel_clean_crop,
             skeleton_result.pruned_branches, bbox, "2. Mask cleaning + skeletonize + prune")))
-        readme_lines.append(f"| `{fn['clean_skeleton_pruned']}` | Mask cleaning (specks) + skeletonize + prune, consolidated |")
+        readme_lines.append(f"| `{fn['clean_skeleton_pruned']}` | Mask cleaning (bright spots, dark specks) + skeletonize + prune, consolidated |")
 
         if has_flaking_in_crop:
             fig, ax = plt.subplots(figsize=(7, 7))
@@ -355,7 +355,7 @@ def main():
         fig.savefig(out_dir / fn["mask_cleaned"], dpi=150, bbox_inches="tight")
         plt.close(fig)
         panels.append(("mask_cleaned", lambda ax: draw_mask_cleaned(ax, mask_clean_crop, mask_clean_diff_crop)))
-        readme_lines.append(f"| `{fn['mask_cleaned']}` | Cleaned mask, with small objects removed / small holes filled highlighted |")
+        readme_lines.append(f"| `{fn['mask_cleaned']}` | Cleaned mask, with bright spots filled / dark specks removed highlighted |")
 
         fig, ax = plt.subplots(figsize=(7, 7))
         draw_skeleton(ax, mask_crop, skel_raw_crop, "4. Raw skeleton (pre-prune, single pass)")

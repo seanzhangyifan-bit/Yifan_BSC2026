@@ -103,7 +103,7 @@ answers, or checks a fixed bug stays fixed.
 | `test_corners.py` | 8 | Corner cross-check, incl. west-pointing regression (page 8) |
 | `test_precedence.py` | 7 | Precedence arrows, conflicts, cycles incl. self-arcs (page 9) |
 | `test_edge_metrics.py` | 12 | Width, the four area bounds, and leaving flaking-cut edges out of totals (page 6) |
-| `test_skeleton.py` | 7 | Pruning, the host-stub rule and dark-speck filling (page 2) |
+| `test_skeleton.py` | 7 | Pruning, the host-stub rule and dark-speck removal (page 2) |
 | `test_curvature.py`, `test_anisotropy.py` | 7 + 7 | Page 10 |
 | `test_grid_synthetic.py` | 9 | Topology on meshes, flaking on synthetic flakes (pages 3–4) |
 | `test_export_crack_stats.py`, `test_export_crack_stats_v3.py` | 14 + 5 | Export helpers, incl. parallel segments in the network (page 5) |

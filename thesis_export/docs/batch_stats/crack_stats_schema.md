@@ -115,7 +115,7 @@ see §4.
 | 3 | `image_width_px` | Original raw image width | px | `measured` |
 | 4 | `image_height_px` | Original raw image height | px | `measured` |
 | 5 | `scale_bar_check` | `no blue bar (visually confirmed)` only when the run was started with `--scale-bars-checked`, i.e. someone did the direct per-image visual check described in §2 (not the naming-convention inference). Otherwise `not checked`, which is also what the GUI always writes. | text | — |
-| 6 | `crack_area_pct` | `corrected_mask.sum() ÷ (image_width_px × image_height_px) × 100` — share of image pixels classified as crack by Otsu thresholding, after flaking exclusion (§4b) and despeckling (tiny objects below `min_object_px` removed). | % of image area | `measured` |
+| 6 | `crack_area_pct` | `corrected_mask.sum() ÷ (image_width_px × image_height_px) × 100` — share of image pixels classified as crack by Otsu thresholding, after flaking exclusion (§4b) and mask cleaning: bright spots below `min_object_px` (light shining through the catalyst layer) filled, and dark specks inside cracks below `DARK_SPECK_AREA_PX` (pieces of catalyst layer or dust) removed. | % of image area | `measured` |
 | 7 | `crack_area_mm2` | `crack_area_px² × (0.6098 µm/px)² ÷ 1e6` | mm² | `calibrated` |
 | 8 | `avg_width_px` | `crack_area_px² ÷ total_skeleton_length_px` (length excluding cut-adjacent edges, §4b) — an area-based width estimate, **not** the distance-transform-sampled width used elsewhere in this pipeline. See §caveat below. | px | `interpreted` |
 | 9 | `avg_width_um` | `avg_width_px × 0.6098` | µm | `calibrated` |
@@ -156,7 +156,7 @@ see §4.
   rest are short segments between closely spaced junctions, some split crossings, some real
   geometry. See `docs/design_notes.md`, skeleton.py section.
 - **`n_components` / `giant_component_fraction`** only see pieces that survived this pipeline's
-  own despeckling and spur-pruning (isolated fragments and dead-end spurs shorter than a fixed
+  own mask cleaning and spur-pruning (isolated fragments and dead-end spurs shorter than a fixed
   pixel threshold are removed before this analysis ever runs) — "components at least
   roughly-a-crack-length long," not literally every disconnected mark in the raw image.
 - **`giant_component_span_px`/`um`** (columns 25-26) samples every skeleton pixel on every edge
@@ -395,7 +395,7 @@ region gets excluded (see §4b):
   evidence about what was actually there.
 
 **Disclosed semantic gaps versus v1 (not bugs, not being fixed)**: `crack_area_px2` isn't
-re-cleaned after subtraction (v1's second skeletonize pass re-despeckles; v3 reuses the mask
+re-cleaned after subtraction (v1's second skeletonize pass re-cleans the mask; v3 reuses the mask
 directly), so v1/v3 area numbers on flaked images differ in the 5th significant figure, not
 bit-identical. A v3 `--cache-dir`'s `mask_corrected.npz` does not correspond to what was actually
 skeletonized (v3's skeleton comes from the uncorrected mask) — don't point a v3 cache directory

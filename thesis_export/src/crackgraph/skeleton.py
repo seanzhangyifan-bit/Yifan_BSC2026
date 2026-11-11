@@ -7,11 +7,6 @@ branches that are either:
 - host stubs: dead ends with less than SPUR_PX_PLACEHOLDER of their length outside
   the crack they branch from (centre-to-wall stubs into bumps and corners).
 
-Known, unfixed limitation: loops around dark specks above the fill limit, and short edges
-between close junctions, are never removed by this pruning (see design_notes.md).
-
-Full rationale (measurements, rejected alternatives, references):
-docs/design_notes.md, section "skeleton.py".
 """
 
 from dataclasses import dataclass
@@ -28,19 +23,18 @@ from skimage.morphology import remove_small_holes, remove_small_objects, skeleto
 # (mm images only) ~ largest agglomerates and film thickness. 🟢, see docs/calibration_notes.md.
 SPUR_PX_PLACEHOLDER = 15
 
-# DARK_SPECK_AREA_PX2: dark specks (holes) inside a crack smaller than this
-# (px^2) are filled before thinning, so the skeleton doesn't loop around them.
-# 130 px^2 = 48 um^2, the area of a d90 ~ 7.8 um agglomerate (inks T2-T4).
+# DARK_SPECK_AREA_PX: dark specks inside a crack smaller than this
+# (px) are removed before thinning, so the skeleton doesn't loop around them.
+# 130 px = 48 um^2, the area of a d90 ~ 7.8 um agglomerate (inks T2-T4).
 # 🟢, see docs/calibration_notes.md. mm images only.
-DARK_SPECK_AREA_PX2 = 130
+DARK_SPECK_AREA_PX = 130
 
 
 @dataclass
 class PrunedBranchRecord:
     """One pruned branch's full pixel path, kept for later diagnostic
     visualization (e.g. "what got cut and why") without having to re-run
-    the analysis -- SkeletonResult's length-only fields exist for the
-    console report and aren't enough to redraw a branch's location."""
+    the analysis."""
 
     reason: str  # "spur" | "fragment" | "host_stub"
     branch_distance: float  # [measured], px
@@ -51,7 +45,7 @@ class PrunedBranchRecord:
 class SkeletonResult:
     skeleton: skan.Skeleton
     skel_image: np.ndarray
-    mask_clean: np.ndarray  # [measured] despeckled foreground mask (post remove_small_objects), pre-skeletonize
+    mask_clean: np.ndarray  # [measured] cleaned crack mask (bright spots filled, dark specks removed), pre-skeletonize
     medial_radius: np.ndarray  # [measured] EDT of the cleaned mask: local crack half-width (px) at every pixel
     n_pixels_pre_prune: int  # [measured]
     n_pixels_post_prune: int  # [measured]
@@ -78,8 +72,8 @@ def _length_outside_host(
     """Arc length (px) of a dead end's path lying outside the crack it branches from.
 
     The host is the other branches at the dead end's junction. Its half-width
-    r_host is the median medial radius along them, 1-3 junction-blob radii out
-    (so the wider blob where cracks meet doesn't inflate it). A dead-end pixel
+    r_host is the median medial radius along them, measured at points away from the junction
+    so that the area where cracks meet doesn't inflate it. A dead-end pixel
     counts as outside if it is farther than r_host from the host centre line.
     None if the junction has no other branch to measure.
     """
@@ -115,7 +109,7 @@ def skeletonize_and_prune(
     max_iters: int = 10,
 ) -> SkeletonResult:
     mask_clean = remove_small_objects(mask, min_size=min_object_px)
-    mask_clean = remove_small_holes(mask_clean, area_threshold=DARK_SPECK_AREA_PX2)
+    mask_clean = remove_small_holes(mask_clean, area_threshold=DARK_SPECK_AREA_PX)
     skel_image = skeletonize(mask_clean)
     n_pixels_pre = int(skel_image.sum())
 

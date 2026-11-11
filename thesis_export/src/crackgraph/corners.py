@@ -90,7 +90,7 @@ class CornerCrossCheck:
 def find_background_contours(mask_clean: np.ndarray) -> list[np.ndarray]:
     """Contours of the background (intact-film) regions -- the tiles
     between cracks -- as (row, col) polylines. `mask_clean` is the same
-    despeckled foreground mask skeletonize_and_prune already computed
+    cleaned crack mask skeletonize_and_prune already computed
     (SkeletonResult.mask_clean), so this reuses stage 2's cleanup rather
     than re-deriving it.
     """
