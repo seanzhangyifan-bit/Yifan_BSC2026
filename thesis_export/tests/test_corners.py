@@ -4,7 +4,7 @@ and does it agree with the tangent-fit on clean synthetic cases?
 """
 
 from src.crackgraph.binarize import binarize
-from src.crackgraph.corners import cross_check_junctions, find_background_contours
+from src.crackgraph.corners import _angle_diff, _mean_bearing, cross_check_junctions, find_background_contours
 from src.crackgraph.graph import extract_graph
 from src.crackgraph.junctions import classify_junctions
 from src.crackgraph.skeleton import skeletonize_and_prune
@@ -98,3 +98,24 @@ def test_short_arm_fails_gracefully_not_crashed():
     assert c.label is None
     assert c.arm_bearings_deg is None
     assert c.unresolved_reason is not None
+
+
+def test_mean_bearing_wraps_across_180_seam():
+    # Regression: a plain (a + b) / 2 averaged 179 and -179 to 0 (east), the
+    # opposite of the true midpoint (west).
+    assert abs(_angle_diff(_mean_bearing(179.0, -179.0), 180.0)) < 1e-9
+    assert abs(_mean_bearing(10.0, 30.0) - 20.0) < 1e-9
+    assert abs(_mean_bearing(-170.0, 170.0) - (-180.0)) < 1e-9
+
+
+def test_west_pointing_abutter_not_flipped_east():
+    # Regression for the same bug end to end: a T whose abutter points west
+    # (bearing 180). Its two wall corners read the abutter wall just either
+    # side of the +/-180 seam; before the fix the corner method reported the
+    # abutter pointing east (~0 deg) while still labelling the junction T.
+    gray = generate_y_junction(bearings_deg=(180.0, -90.0, 90.0), thickness=7, size=160, arm_length=55.0)
+    junction_result, cross_check = _run(gray)
+    c = cross_check[0]
+    assert c.label == "T"
+    abutter_bearing = c.arm_bearings_deg[2]  # _pair_t_like returns [host_a, host_b, abutter]
+    assert abs(_angle_diff(abutter_bearing, 180.0)) < GAP_RECOVERY_TOL_DEG

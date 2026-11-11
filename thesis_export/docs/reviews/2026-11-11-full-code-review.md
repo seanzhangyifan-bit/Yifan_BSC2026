@@ -7,7 +7,8 @@
 - **Baseline**: commit `08d6e83`, plus the uncommitted doc tidy-up in `skeleton.py`,
   `flaking.py`, `CALIBRATION.md`, `METHODOLOGY.md`, `docs/calibration_notes.md` and the new
   `docs/design_notes.md`.
-- **Status**: nothing in this review has been fixed yet. All 157 tests pass on the baseline.
+- **Status**: finding 1 is fixed (see its section). Everything else is still open. All 157 tests
+  passed on the baseline.
 
 ## Summary
 
@@ -42,7 +43,7 @@ the code but didn't run it.
 
 | # | Severity | What | Where |
 |---|---|---|---|
-| 1 | High | Corner cross-check flips west-pointing cracks to east | `corners.py:205`, `:237` |
+| 1 | High | ~~Corner cross-check flips west-pointing cracks to east~~ **Fixed** | `corners.py:205`, `:237` |
 | 2 | High | Batch exporters crash: image folder hard-coded, no way to point at your own | `export_crack_stats.py:67–69, 361–365` |
 | 3 | High | Every exported row claims "scale bar visually confirmed" | `export_crack_stats.py:309`, `export_crack_stats_v3.py:202` |
 | 4 | Medium | v3 definitions sheet describes the v1 method, not v3 | `add_definitions_sheet.py:88` |
@@ -64,7 +65,12 @@ the code but didn't run it.
 
 ## High
 
-### 1. Corner cross-check flips west-pointing cracks to east (verified)
+### 1. Corner cross-check flips west-pointing cracks to east (verified) — FIXED
+
+> **Fixed 2026-11-11.** Both averages now use `_mean_bearing`, which averages along the shorter
+> arc. Two regression tests were added to `tests/test_corners.py`: a direct 179°/−179° check, and an
+> end-to-end west-pointing T, which reported −1.4° before the fix and 178.6° after. The rotation sweep
+> below went from 10 flipped cases to 0.
 
 **What's wrong.** `corners.py` combines two angle readings by averaging them with a plain
 `(a + b) / 2`, at line 205 (T-junctions) and line 237 (Y-junctions). Angles wrap around at ±180°,

@@ -106,6 +106,13 @@ def _angle_diff(a: float, b: float) -> float:
     return (a - b + 180.0) % 360.0 - 180.0
 
 
+def _mean_bearing(a: float, b: float) -> float:
+    """Midpoint of two bearings along the shorter arc, wrapped to
+    [-180, 180). A plain (a + b) / 2 breaks across the +/-180 seam:
+    179 and -179 would average to 0 (the opposite direction), not 180."""
+    return _angle_diff(a + _angle_diff(b, a) / 2.0, 0.0)
+
+
 def _scan_contour_for_corners(
     contour: np.ndarray,
     contour_index: int,
@@ -202,7 +209,7 @@ def _pair_t_like(corners: list[WallCorner]) -> tuple[list[float] | None, str | N
     if abs(_angle_diff(abutter_a, abutter_b)) > ABUTTER_AGREEMENT_TOL_DEG:
         return None, "abutter_bearing_disagreement_between_corners"
 
-    abutter_bearing = (abutter_a + abutter_b) / 2.0  # simple mean; both should agree closely
+    abutter_bearing = _mean_bearing(abutter_a, abutter_b)
     return [host_a, host_b, abutter_bearing], None
 
 
@@ -234,7 +241,7 @@ def _pair_y_like(corners: list[WallCorner]) -> tuple[list[float] | None, str | N
             return None, "y_bearing_matching_inconsistent"
         used[i] = True
         used[best_j] = True
-        arm_bearings.append((bearing_i + items[best_j][1]) / 2.0)
+        arm_bearings.append(_mean_bearing(bearing_i, items[best_j][1]))
 
     if len(arm_bearings) != 3:
         return None, "y_bearing_matching_wrong_count"
