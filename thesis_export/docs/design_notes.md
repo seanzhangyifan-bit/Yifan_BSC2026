@@ -22,7 +22,7 @@ block).
 Where small loops come from. skimage's skeletonize() preserves topology: it
 never creates or removes a hole. So every closed loop in the skeleton
 surrounds a hole in the cleaned mask -- a real crack cell, or a dark speck
-inside a wide crack that is larger than HOLE_AREA_THRESHOLD_PX2 and so
+inside a wide crack that is larger than DARK_SPECK_AREA_PX2 and so
 wasn't filled. Thinning does not "trace both walls" of a crack and leave a
 loop where the mask has no hole. Checked on 2048 px centre crops of all 41
 *_mm000001 micrographs: the number of mask holes equals the number of
@@ -49,10 +49,11 @@ edges between two junctions are type 2 or 3, whatever spur_px is.
 
 Effect: these edges inflate n_edges and deflate edge-length statistics on
 affected images (see docs/batch_stats/crack_stats_schema.md S4) and add
-junctions to the census. Speck loops could be reduced by a larger dark-speck
-fill (tested: 130 px^2, the area of a d90 ~ 7.8 um agglomerate, removes
-about 10 loops on the densest crops). Short edges between close junctions
-would need a junction-merging step; none is implemented.
+junctions to the census. Speck loops are reduced by the dark-speck fill,
+raised from 50 to 130 px^2 (the area of a d90 ~ 7.8 um agglomerate) on
+2026-11-11; that removes about 10 loops on the densest crops. Short edges
+between close junctions would need a junction-merging step; none is
+implemented.
 
 Earlier explanation (superseded): "Zhang's thinning is pixel-local ... on a
 locally wide or slightly irregular crack band it can trace both edges of
@@ -60,40 +61,54 @@ the band for a short stretch before merging back into one line, leaving a
 small closed loop instead of a single centerline." This doesn't hold for a
 topology-preserving thinning: a loop needs a hole in the mask.
 
-Corner-tracing artifacts (in addition to plain short spurs): the medial
-axis transform mathematically *must* trace a skeleton branch into every
-concave corner of the mask boundary -- this is not thinning noise, it is a
-correct property of the medial axis, and it is blind to length. A branch
-tracing into a real notch (e.g. the ragged edge of a flaked-off region, or
-a background inlet between two crack walls) can be far longer than
-SPUR_PX_PLACEHOLDER and survive flat-length pruning untouched. Confirmed on
-a real case this session (T2-A_membran_v2): a branch with a near-perfectly
-linear 2.0px -> 121.7px width ramp over 45px, visually confirmed tracing
-into a real black wedge with no crack present.
+Host stubs (in addition to plain short spurs). Thinning sends a branch from
+a crack's centre line into every bump, notch or corner on its wall, whatever
+the branch's length (a correct property of the medial axis, not noise). On
+wide cracks these stubs are often longer than SPUR_PX_PLACEHOLDER, so the
+length rule misses them. Confirmed case (T2-A_membran_v2): a 45 px branch
+whose width ramps 2.0 -> 121.7 px, tracing into a black wedge with no crack.
 
-Two other criteria were tried and rejected before settling on the one
-below: a windowed tip-width comparison (too conservative, missed
-medium/long artifacts entirely) and a "fraction of the branch above its own
-tip-median width" test (mathematically flawed -- for a genuinely real,
-noisy-but-stable-width crack, the tip-region median is a random draw from
-the same distribution as the rest of the branch, so ~50% of pixels exceed
-it by symmetric noise alone; the >50% threshold sat right at a coin flip
-for exactly the branches that should survive).
+Current rule (since 2026-11-11): a dead end is removed if less than
+SPUR_PX_PLACEHOLDER (9.1 um) of its length lies outside the crack it branches
+from. The host is the other branches at its junction; host half-width
+r_host = median medial radius along them, 1-3 junction-blob radii out (the
+blob where cracks meet is wider than either crack). A dead-end pixel is
+outside if it is farther than r_host from the host centre line. A stub runs
+from the centre line to the wall and stops, so almost none of it is outside;
+a real side crack leaves the host. It uses the same physical scale as the
+spur rule, which is its special case (r_host = 0), and adds no constant.
 
-What is used instead: the Pearson correlation between pixel position
-(0 = the free tip, where one exists) and local width (2 * medial_radius)
-along the branch. A genuine crack's width is noisy but flat around a
-steady value -> correlation near 0. A corner-tracing artifact's width
-ramps monotonically toward the notch it's chasing -> correlation near +1.
-This sidesteps the coin-flip problem because it tests for a trend, not a
-fraction above a reference drawn from the same noisy population.
+Variants tested and rejected (outputs/corner_rule_test/, 2048 px centre
+crops of 6 micrographs, summary.html):
+- reach = length - r_host: counts the in-host part of branches that leave
+  at a shallow angle. Results within threshold noise of the chosen rule
+  (12 branches differ, all scoring 13-15 px either way).
+- reach = farthest distance from the host centre line - r_host: removes
+  hooks (real cracks that curl round and run alongside the host just past
+  its wall; 23 on these crops), because they never get far from the host.
+- junction-pixel radius as r_host: inflated by the junction blob; removed
+  real short side cracks on thin-crack images.
 
-This targets the same general problem as several standard skeleton-pruning
-methods from the literature -- Discrete Curve Evolution pruning (Bai, Liu &
-Latecki, IEEE TPAMI 2007), the lambda-medial-axis (Chazal & Lieutier,
-Graphical Models 2005), and the scale-axis transform (Giesen et al., SoCG
-2009) -- but the correlation test here is a much simpler, single-parameter
-stand-in, not a reimplementation of any of them.
+Previous rule (until 2026-11-11), kept for history: a dead end or fragment
+was removed if its width rose steadily from tip to junction (Pearson
+correlation of position vs width > 0.99). On the same crops it missed about
+67 interior stubs at correlation 0.94-0.99 and removed 7 real cracks cut off
+by the crop edge. Replacing it raises ledge by up to ~22% on dense wide-crack
+images together with the dark-speck change (see CHANGELOG.md). Earlier still,
+a windowed tip-width comparison (missed medium/long artifacts) and a
+"fraction above the tip median" test (a coin flip on noisy real cracks) were
+rejected before correlation was chosen.
+
+Known limits of the current rule: r_host assumes the host is locally uniform
+in width; real side cracks reaching less than 9.1 um past their host are
+removed (by design, same scale argument as spur_px); dead ends at the image
+border are judged like any other.
+
+This targets the same general problem as standard skeleton-pruning methods
+-- Discrete Curve Evolution pruning (Bai, Liu & Latecki, IEEE TPAMI 2007),
+the lambda-medial-axis (Chazal & Lieutier, Graphical Models 2005), the
+scale-axis transform (Giesen et al., SoCG 2009) -- but is a much simpler
+rule, not a reimplementation of any of them.
 
 ## flaking.py
 

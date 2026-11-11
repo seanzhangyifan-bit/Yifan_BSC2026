@@ -16,9 +16,11 @@ from src.crackgraph.synthetic import generate_curved_t_junction, generate_t_junc
 GAP_RECOVERY_TOL_DEG = 20.0
 
 
-def _run(gray, spur_px=3):
+def _run(gray, spur_px=3, prune_host_stubs=True):
     binarize_result = binarize(gray)
-    skeleton_result = skeletonize_and_prune(binarize_result.mask, source_image=gray, spur_px=spur_px)
+    skeleton_result = skeletonize_and_prune(
+        binarize_result.mask, source_image=gray, spur_px=spur_px, prune_host_stubs=prune_host_stubs
+    )
     graph_result = extract_graph(skeleton_result.skeleton)
     junction_result = classify_junctions(skeleton_result.skeleton, graph_result)
     contours = find_background_contours(skeleton_result.mask_clean)
@@ -93,7 +95,7 @@ def test_curved_host_resolves_cleanly():
 
 def test_short_arm_fails_gracefully_not_crashed():
     gray = generate_t_junction(angle_deg=90.0, arm_length=4.0)
-    junction_result, cross_check = _run(gray, spur_px=0.5)
+    junction_result, cross_check = _run(gray, spur_px=0.5, prune_host_stubs=False)  # the host-stub rule would also remove this deliberately tiny branch
     c = cross_check[0]
     assert c.label is None
     assert c.arm_bearings_deg is None

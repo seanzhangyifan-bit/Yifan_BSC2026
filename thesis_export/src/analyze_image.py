@@ -45,7 +45,7 @@ from .crackgraph.junctions import (
 from .crackgraph.overlay import render_overlay, render_precedence_overlay
 from .crackgraph.precedence import build_precedence_graph
 from .crackgraph.region import default_corner_crop
-from .crackgraph.skeleton import CORR_THRESHOLD, SPUR_PX_PLACEHOLDER, skeletonize_and_prune
+from .crackgraph.skeleton import SPUR_PX_PLACEHOLDER, skeletonize_and_prune
 from .crackgraph.xlsx_report import (
     ANISOTROPY_MUDCRACK_LIKE_THRESHOLD,
     anisotropy_classification,
@@ -78,7 +78,8 @@ def parse_args():
         ),
     )
     p.add_argument("--spur-px", type=float, default=SPUR_PX_PLACEHOLDER)
-    p.add_argument("--corner-artifact-corr-threshold", type=float, default=CORR_THRESHOLD)
+    p.add_argument("--no-host-stub-pruning", action="store_true",
+                   help="Keep dead ends with less than spur_px of their length outside their host crack.")
     p.add_argument("--min-object-px", type=int, default=4)
     p.add_argument("--max-overlay-dim", type=int, default=2500)
     p.add_argument("--corner-frac", type=float, default=0.125)
@@ -218,7 +219,7 @@ def main():
         source_image=gray,
         min_object_px=args.min_object_px,
         spur_px=args.spur_px,
-        corner_artifact_corr_threshold=args.corner_artifact_corr_threshold,
+        prune_host_stubs=not args.no_host_stub_pruning,
     )
     flaking_result = exclude_flaking_regions(
         scout_skeleton_result.mask_clean,
@@ -235,7 +236,7 @@ def main():
             source_image=gray,
             min_object_px=args.min_object_px,
             spur_px=args.spur_px,
-            corner_artifact_corr_threshold=args.corner_artifact_corr_threshold,
+            prune_host_stubs=not args.no_host_stub_pruning,
         )
     else:
         skeleton_result = scout_skeleton_result
@@ -402,7 +403,7 @@ def main():
     )
     print(
         f"Spur length threshold:   {skeleton_result.spur_px_threshold} px    "
-        "[PLACEHOLDER -- not calibrated to real h/um-per-px]"
+        "[derived -- 15 px = 9.1 um on mm images, see docs/calibration_notes.md]"
     )
     example_spurs = [round(x, 1) for x in skeleton_result.pruned_spur_lengths[:5]]
     print(f"Spurs pruned: {skeleton_result.n_spurs_pruned}, example lengths: {example_spurs}   [measured]")
@@ -411,16 +412,13 @@ def main():
         f"Isolated fragments pruned: {skeleton_result.n_fragments_pruned}, "
         f"example lengths: {example_fragments}   [measured]"
     )
+    example_host_stubs = [round(x, 1) for x in skeleton_result.pruned_host_stub_lengths[:5]]
     print(
-        f"Corner-artifact correlation threshold: {skeleton_result.corner_artifact_corr_threshold}   "
-        "[PLACEHOLDER -- see crackgraph/skeleton.py module docstring]"
-    )
-    example_corner_artifacts = [round(x, 1) for x in skeleton_result.pruned_corner_artifact_lengths[:5]]
-    print(
-        f"Corner-tracing artifacts pruned: {skeleton_result.n_corner_artifacts_pruned}, "
-        f"example lengths: {example_corner_artifacts}   "
-        "[interpreted -- medial-axis branches tracing into a concave mask-boundary "
-        "corner, flagged by width-vs-position trend, not length]"
+        f"Host stubs pruned: {skeleton_result.n_host_stubs_pruned} "
+        f"(rule {'on' if skeleton_result.prune_host_stubs else 'off'}), "
+        f"example lengths: {example_host_stubs}   "
+        "[interpreted -- dead ends with less than spur_px of their length outside "
+        "the crack they branch from]"
     )
     print(f"Prune iterations used: {skeleton_result.iters_used}")
     print()

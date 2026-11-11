@@ -4,7 +4,7 @@ Two modes:
 
 - **Full** (default): 8 panels -- raw crop, binarized mask, mask cleaning
   (small objects removed / small holes filled, highlighted), the pre-prune
-  (raw) skeleton, the pruned branches (spur/fragment/corner-artifact, shown
+  (raw) skeleton, the pruned branches (spur/fragment/host-stub, shown
   as one undifferentiated "pruned" category) called out in color, the
   cleaned (post-prune) skeleton, the delaminated region shaded in (when
   present), and the final graph with excluded edges *and* nodes marked.
@@ -79,7 +79,7 @@ CROP_PADDING_FLOOR_PX = 400
 # KEPT_NODE_COLOR / EXCLUDED_NODE_COLOR now live in src/crackgraph/pipeline_figures.py
 # (imported above), shared with scripts/validation/synthetic_benchmark_report.py.
 
-# Single undifferentiated "pruned" color -- spur/fragment/corner-artifact are
+# Single undifferentiated "pruned" color -- spur/fragment/host-stub are
 # deliberately not distinguished here (that would need a 3-color legend for a
 # distinction most viewers of this figure don't need); chosen to not collide
 # with the palette above, per this project's own "don't reuse hues across
@@ -199,11 +199,11 @@ def draw_flaking_shaded(ax, mask_crop, skel_crop, excluded_crop, title):
 
 def draw_pruning_annotated(ax, mask_crop, skel_raw_crop, pruned_branches, bbox):
     """Pre-prune skeleton with every pruned branch (spur, fragment, or
-    corner-artifact -- not distinguished from one another) drawn in one
+    host-stub -- not distinguished from one another) drawn in one
     color. Branches not pruned remain plain skeleton-colored, same as
     draw_skeleton's other panels."""
     y0, y1, x0, x1 = bbox
-    draw_skeleton(ax, mask_crop, skel_raw_crop, "5. Pruned branches (spur / fragment / corner-artifact)")
+    draw_skeleton(ax, mask_crop, skel_raw_crop, "5. Pruned branches (spur / fragment / host-stub)")
 
     segments = []
     for rec in pruned_branches:
@@ -369,7 +369,7 @@ def main():
         fig.savefig(out_dir / fn["pruning"], dpi=150, bbox_inches="tight")
         plt.close(fig)
         panels.append(("pruning", lambda ax: draw_pruning_annotated(ax, mask_crop, skel_raw_crop, skeleton_result.pruned_branches, bbox)))
-        readme_lines.append(f"| `{fn['pruning']}` | Pruned branches (spur / fragment / corner-artifact, not distinguished) |")
+        readme_lines.append(f"| `{fn['pruning']}` | Pruned branches (spur / fragment / host-stub, not distinguished) |")
 
         fig, ax = plt.subplots(figsize=(7, 7))
         draw_skeleton(ax, mask_crop, skel_clean_crop, "6. Cleaned skeleton (post-prune)")

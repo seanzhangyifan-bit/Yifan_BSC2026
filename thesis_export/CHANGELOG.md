@@ -11,6 +11,43 @@ Commit IDs link each entry to its full details in `git log`. Findings are number
 
 ## 2026-11-11
 
+### Changed: host-stub pruning replaces the corner test; dark-speck fill raised to 130 px²
+
+**Changes results**: edge counts and edge-length statistics (`ledge`, `ledge,gc`,
+`avg_edge_length_px`) on dense images with wide cracks; small shifts in total length. Re-run every
+crack-stats export before quoting these numbers.
+
+Two changes to stage 2 (`skeleton.py`), made together:
+
+1. **Host-stub rule.** A dead end is now removed if less than `spur_px` (15 px = 9.1 µm) of its
+   length lies outside the crack it branches from. This replaces the correlation test (width
+   rising steadily along a branch, correlation > 0.99), which missed many stubs from a wide
+   crack's centre line to bumps on its wall (correlation 0.94–0.99) and removed some real cracks
+   cut off by the image edge. `CORR_THRESHOLD` and `MIN_LEN_FOR_CORR_PX` are gone; the rule uses
+   only `spur_px`. Tested against two other variants (`docs/design_notes.md`).
+2. **Dark-speck fill 50 → 130 px²**, renamed `HOLE_AREA_THRESHOLD_PX2` → `DARK_SPECK_AREA_PX2`.
+   130 px² is the area of a d90 ≈ 7.8 µm agglomerate (inks T2–T4). Removes loops around specks
+   inside wide cracks.
+
+**Measured on 2048 px centre crops of 6 micrographs** (no flaking exclusion):
+
+| Image | Edges | `ledge` | Length | `wcrack` | `N` |
+|---|---|---|---|---|---|
+| T3-PTFE_v1 | −16.4% | +22.5% | −2.5% | +1.0% | same |
+| T4-M_H95_v1 | −11.5% | +13.7% | −1.5% | +1.4% | same |
+| T5-PTFE_H95_v1 | −4.7% | +6.1% | −0.8% | same | same |
+| 23RH_NR212_v1 | −2.1% | +3.9% | −0.1% | same | same |
+| T3-M_v1 | +3.0% | −0.9% | +0.6% | same | same |
+| T5-M_H190_v1 | same | same | +0.2% | same | same |
+
+- **Affected outputs**: `n_edges`, `ledge`, `ledge,gc`, `avg_edge_length_px`, total length,
+  loop and junction counts. Spreadsheet column `n_corner_artifacts_pruned` is renamed
+  `n_host_stubs_pruned` and counts a different rule. `analyze_image`'s
+  `--corner-artifact-corr-threshold` is replaced by `--no-host-stub-pruning`.
+- **Not affected (on these crops)**: crack area, flaking area, `N`; `wcrack` within 1.4%.
+- `SkeletonResult` fields renamed: `n_host_stubs_pruned`, `pruned_host_stub_lengths`,
+  `prune_host_stubs`; pruned-branch reason `"corner_artifact"` → `"host_stub"`.
+
 ### Corrected: what the "skeleton loop" metric measures
 
 **No change to results**: documentation only; no code or number changed.

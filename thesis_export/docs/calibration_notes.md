@@ -198,7 +198,7 @@ No dedicated sweep script found; used at `corners.py`'s bearing-matching step
 
 ## SPUR_PX_PLACEHOLDER
 
-`src/crackgraph/skeleton.py:30` — value `15`
+`src/crackgraph/skeleton.py:29` — value `15`
 
 **Physical justification (added 2026-11-11, after the fact).** The value was chosen before
 any of this was known; it was then checked against measured length scales and found to
@@ -242,56 +242,33 @@ pipeline is invoked with `spur_px=3` (an override, not the placeholder default) 
 the sweep/test harnesses deliberately bypass this constant's default value rather than
 validating it.
 
-## HOLE_AREA_THRESHOLD_PX2
+## DARK_SPECK_AREA_PX2
 
-`src/crackgraph/skeleton.py:35` — value `50`
+`src/crackgraph/skeleton.py:35` — value `130` (was `HOLE_AREA_THRESHOLD_PX2` = `50` until 2026-11-11)
 
-> Area (px^2) below which a fully-enclosed background hole inside the foreground mask gets
-> filled in, right after `remove_small_objects` and before `skeletonize()`. A tiny
-> thresholding gap inside an otherwise-solid crack (dust, a faint pixel, a one-off
-> segmentation miss) is still one crack, not two -- left unfilled it can force the skeleton
-> to trace around it, producing a spurious small loop/branch at that exact spot.
+Dark specks (enclosed background holes) inside a crack smaller than this many px² are filled
+right after `remove_small_objects` and before `skeletonize()`. A speck left unfilled makes the
+skeleton loop around it, adding two junctions and short edges.
 
-Value carried over unchanged from an earlier, informal prototype comparison script -- not
-independently derived or swept here. That prototype found filling had a small measured
-effect on one specific image (310px total filled image-wide, 0px within the one crop
-specifically inspected) -- a single data point on a single image, not a general claim the
-effect is always negligible.
+**Physical justification.** 130 px² × (0.6098 µm/px)² = **48 µm²**, the area of a circle of
+diameter ≈ 7.8 µm: the d90 agglomerate size of inks T2–T4 `[measured]` (same PSD source as
+`SPUR_PX_PLACEHOLDER` above). A dark speck no bigger than one agglomerate inside a crack is
+read as material sitting in the gap, not a separate crack cell `[interpreted]`. Same caveats
+as above: wet-ink PSD, one value for every image, `mm` images only.
 
-## CORR_THRESHOLD
+**Measured effect of 50 → 130 px²** (2048 px centre crops of 6 micrographs,
+`outputs/hole_fill_test/`): 14 real specks inside cracks newly filled (plus 5 background slivers
+at the crop edge), removing their loops; `ledge` +0.9 to +6.9% on the four crops with specks,
+`wcrack`, crack area and `N` unchanged.
 
-`src/crackgraph/skeleton.py:41` — value `0.99`
+The old 50 px² value was carried over from an informal prototype script and never derived.
 
-> Pearson correlation (pixel position vs. local width) above which a branch is treated as
-> a corner-tracing medial-axis artifact rather than a real crack spur. Swept at
-> 0.8/0.9/0.95/0.99 on T2-A_membran_v2's full image (1439 eligible branches; 229/187/139/84
-> flagged respectively) and reviewed visually at matched crops: raising the threshold sheds
-> short corner-artifact chains (one chain of 6 short zigzag spurs went from 6/6 flagged at
-> 0.8 to 1/6 at 0.99) while nothing inspected suggested 0.8 was flagging genuine open-field
-> cracks. 0.99 was chosen to prioritize never touching a real crack over catching every
-> short artifact.
+## Removed: CORR_THRESHOLD and MIN_LEN_FOR_CORR_PX
 
-No dedicated sweep script (the sweep was done by hand, comparing four
-full-image renders and matched zoomed crops, not a scripted RMSE-style sweep like
-`ANNULUS_OUTER_PX_PLACEHOLDER`/`CORNER_WINDOW_PX`). The rejected alternative criterion this
-threshold replaced — "fraction of the branch above its own tip-region median width,
-flagged if >50%" — was found to be mathematically flawed, not just under-tuned: for a
-genuinely real, noisy-but-stable-width crack, the tip-region median is a random draw from
-the same distribution as the rest of the branch, so ~50% of pixels exceed it by symmetric
-noise alone, making the >50% threshold a coin flip for exactly the branches that should
-survive. That is why this constant is a correlation coefficient, not a fraction.
-
-## MIN_LEN_FOR_CORR_PX
-
-`src/crackgraph/skeleton.py:45` — value `4`
-
-> Minimum branch length (px) for the correlation test to be meaningful at all; shorter
-> branches don't have enough points for a Pearson correlation to mean anything, so they're
-> never flagged by this criterion.
-
-No sweep. Chosen as a bare minimum (a correlation over 2-3 points is essentially
-unconstrained) rather than derived or measured; revisit if short branches turn out to be a
-meaningful fraction of real corner-tracing artifacts.
+Removed 2026-11-11 with the correlation-based corner test they belonged to (0.99, 🟡, a 4-point
+hand sweep on one image; and 4 px, 🔴). The host-stub rule that replaced the test uses
+`SPUR_PX_PLACEHOLDER` and adds no constant of its own. Why the test was replaced:
+`docs/design_notes.md`, skeleton.py section.
 
 ## CORNER_TO_TANGENT_BEARING_TOL_DEG
 

@@ -227,7 +227,7 @@ def compute_row(
         "flaking_excluded_area_pct": flaking_result.excluded_area_pct,
         "flaking_n_candidates": len(flaking_result.candidates),
         "flaking_n_edges_omitted": len(omitted),
-        "n_corner_artifacts_pruned": skeleton_result.n_corner_artifacts_pruned,
+        "n_host_stubs_pruned": skeleton_result.n_host_stubs_pruned,
         "runtime_binarize_s": t_binarize,
         "runtime_skeletonize_s": t_skeletonize,
         "runtime_flaking_s": t_flaking,

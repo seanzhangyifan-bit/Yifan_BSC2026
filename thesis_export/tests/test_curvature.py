@@ -45,9 +45,11 @@ CURVATURE_RECOVERY_REL_TOL = 0.25
 TORTUOSITY_RECOVERY_REL_TOL = 0.10
 
 
-def _run_curvature(gray, **kwargs):
+def _run_curvature(gray, prune_host_stubs=True, **kwargs):
     binarize_result = binarize(gray)
-    skeleton_result = skeletonize_and_prune(binarize_result.mask, source_image=gray, spur_px=3)
+    skeleton_result = skeletonize_and_prune(
+        binarize_result.mask, source_image=gray, spur_px=3, prune_host_stubs=prune_host_stubs
+    )
     graph_result = extract_graph(skeleton_result.skeleton)
     return compute_edge_curvature(skeleton_result.skeleton, graph_result, **kwargs)
 
@@ -113,7 +115,7 @@ def test_short_edge_has_tortuosity_but_no_curvature_profile():
     # default window is 10px), so it can't support a windowed profile --
     # but tortuosity, which needs no window, should still be reported.
     gray = generate_t_junction(arm_length=5.0)
-    result = _run_curvature(gray)
+    result = _run_curvature(gray, prune_host_stubs=False)  # the host-stub rule would also remove this deliberately tiny branch
     short_edges = [e for e in result.edges if e.arc_length_px < 20.0]
     assert len(short_edges) == 1
     edge = short_edges[0]

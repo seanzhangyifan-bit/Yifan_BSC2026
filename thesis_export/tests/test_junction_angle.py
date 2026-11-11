@@ -31,9 +31,11 @@ ANGLE_RECOVERY_TOL_DEG = 6.0
 Y_ANGLE_RECOVERY_TOL_DEG = 11.0
 
 
-def _run_pipeline(gray, spur_px=3, **kwargs):
+def _run_pipeline(gray, spur_px=3, prune_host_stubs=True, **kwargs):
     binarize_result = binarize(gray)
-    skeleton_result = skeletonize_and_prune(binarize_result.mask, source_image=gray, spur_px=spur_px)
+    skeleton_result = skeletonize_and_prune(
+        binarize_result.mask, source_image=gray, spur_px=spur_px, prune_host_stubs=prune_host_stubs
+    )
     graph_result = extract_graph(skeleton_result.skeleton)
     return classify_junctions(skeleton_result.skeleton, graph_result, **kwargs)
 
@@ -229,7 +231,7 @@ def test_short_abutter_flagged_insufficient_not_crashed():
     # would otherwise just delete a short abutter before it ever reaches
     # stage 4.
     gray = generate_t_junction(angle_deg=90.0, arm_length=4.0)
-    result = _run_pipeline(gray, spur_px=0.5, inner_radius_px=5.0, outer_radius_px=20.0)
+    result = _run_pipeline(gray, spur_px=0.5, prune_host_stubs=False, inner_radius_px=5.0, outer_radius_px=20.0)  # the host-stub rule would also remove this deliberately tiny branch
     assert result.n_deg3_total == 1
     c = result.classifications[0]
     assert c.label == "insufficient_data"

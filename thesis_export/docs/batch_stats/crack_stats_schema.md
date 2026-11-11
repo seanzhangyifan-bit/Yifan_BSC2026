@@ -126,7 +126,7 @@ see §4.
 | 14 | `flaking_excluded_area_pct` | Share of image area excluded as flaking/delamination — see §4b | % of image area | `measured` |
 | 15 | `flaking_n_candidates` | Number of flaking regions identified (width-flagged, grown to their true boundary) — see §4b | count | `interpreted` |
 | 16 | `flaking_n_edges_excluded_near_cut` | Number of graph edges touching the flaking-exclusion boundary, dropped from the length/width stats above (columns 8-11) — see §4b | count | `measured` |
-| 17 | `n_corner_artifacts_pruned` | Number of skeleton branches removed during stage 2 pruning because their width trends monotonically with position (a medial-axis branch tracing into a concave mask-boundary corner) rather than because they were short — see §4c | count | `interpreted` |
+| 17 | `n_host_stubs_pruned` | Number of dead-end skeleton branches removed during stage 2 pruning because less than 15 px (9.1 µm) of their length lies outside the crack they branch from, rather than because they were short overall — see §4c. Named `n_corner_artifacts_pruned` (a different, correlation-based rule) in exports made before 2026-11-11 | count | `interpreted` |
 | 18 | `crack_area_pct_excl_flakes` | `crack_area_px² ÷ (image_width_px × image_height_px × (1 − flaking_excluded_area_pct ÷ 100)) × 100` — same numerator as column 6, but the denominator excludes the flaking-exclusion area (column 14, converted back to pixels) instead of counting the whole image, since that region is missing material, not confirmed non-crack, and there's zero evidence what (if anything) was under it before it flaked off. Equals column 6 exactly wherever `flaking_excluded_area_pct` is 0. | % of non-excluded image area | `measured` |
 | 19 | `median_width_px` | Median of `2 × medial_radius` sampled at every pixel of every skeleton edge NOT touching the flaking-exclusion cut (same exclusion columns 8-11 use) — a genuine per-pixel distance-transform measurement, unlike column 8's area/length ratio. | px | `interpreted` |
 | 20 | `median_width_um` | `median_width_px × 0.6098` | µm | `calibrated` |
@@ -203,20 +203,20 @@ inside the excluded region from the connectivity graph itself, not just the stat
 §10 for why (a single-pass graph would otherwise let a flaked blob's own interior mesh falsely
 bridge two real crack networks).
 
-### 4c. Corner-tracing artifact pruning (column 17)
+### 4c. Host-stub pruning (column 17)
 
-The medial axis transform underlying skeletonization mathematically must trace a branch into
-every concave corner of the mask boundary, regardless of length — this is a correct property of
-the medial axis, not thinning noise, and it is blind to length, so fixed-length spur pruning does
-not catch it. `src/crackgraph/skeleton.py` additionally flags a branch as this kind of artifact
-if its local width (from the same distance transform used elsewhere in this pipeline) trends
-monotonically with position along the branch (Pearson correlation vs. `CORR_THRESHOLD`, currently
-0.99) rather than staying flat the way a genuine, noisy-but-stable-width crack does — see the
-module docstring and `docs/calibration_notes.md` for the full derivation and rejected alternative
-criteria. Flagged branches are pruned from the skeleton entirely, so they affect `crack_area_pct`,
-`avg_width_px`, and `avg_edge_length_px` the same way real pruning always has — there is no
-separate "excluded but topology kept" treatment here, unlike the flaking cut-adjacent case in
-§4b, because these branches are not truncated real edges, they are not real edges at all.
+Thinning sends a branch from a crack's centre line into every bump, notch or corner on its wall,
+whatever the branch's length, so fixed-length spur pruning misses the longer ones on wide cracks.
+`src/crackgraph/skeleton.py` removes a dead end if less than `spur_px` (15 px = 9.1 µm) of its
+length lies outside the crack it branches from: a stub runs from the centre line to the wall and
+stops, a real side crack leaves the host. Removed branches are pruned from the skeleton entirely,
+so they affect edge counts and the length statistics the same way spur pruning always has; there
+is no "excluded but topology kept" treatment, because these are not real edges.
+
+Before 2026-11-11 this column was `n_corner_artifacts_pruned` and counted branches removed by a
+different rule (width rising steadily along the branch, correlation > 0.99). The two counts are
+not comparable, and exports made before that date have lower `ledge` on dense wide-crack images
+(see `CHANGELOG.md`). Full rationale: `docs/design_notes.md`, skeleton.py section.
 
 ## 5. Evidence-level legend
 
@@ -399,7 +399,7 @@ re-cleaned after subtraction (v1's second skeletonize pass re-despeckles; v3 reu
 directly), so v1/v3 area numbers on flaked images differ in the 5th significant figure, not
 bit-identical. A v3 `--cache-dir`'s `mask_corrected.npz` does not correspond to what was actually
 skeletonized (v3's skeleton comes from the uncorrected mask) — don't point a v3 cache directory
-at a v1/v2 one. `n_corner_artifacts_pruned` reflects pruning on the flake-inclusive mask, so it
+at a v1/v2 one. `n_host_stubs_pruned` reflects pruning on the flake-inclusive mask, so it
 mixes real-crack pruning with however much of the blob's interior noise got pruned along the way.
 v3 adds six per-stage timing columns (`runtime_binarize_s`, `runtime_skeletonize_s`,
 `runtime_flaking_s`, `runtime_graph_extract_s`, `runtime_stats_s`, `runtime_total_s`).

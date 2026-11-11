@@ -54,24 +54,24 @@ in the mask, so these come from specks too big for the fill), or **short edges**
 that sit close together. The full reasoning (measurements, rejected methods,
 references) lives in [`docs/design_notes.md`](../design_notes.md).
 
-## Settings, lines 26–45
+## Settings, lines 26–35
 
 | Line | Setting | Value | Meaning |
 |---|---|---|---|
-| 30 | `SPUR_PX_PLACEHOLDER` | 15 px = 9.1 µm | Dead ends and loose pieces shorter than this are removed. 🟢 About the largest measured agglomerate size and the typical film thickness, so shorter branches can't be told from wall roughness. See `docs/calibration_notes.md`. |
-| 35 | `HOLE_AREA_THRESHOLD_PX2` | 50 px² | Holes inside a crack smaller than this are filled first, so the skeleton doesn't loop around a speck of dust. 🔴 |
-| 41 | `CORR_THRESHOLD` | 0.99 | How steadily a branch's width must grow to count as a fake corner branch (see below). 🟡 Hand-tested at 0.8–0.99 on one image. |
-| 45 | `MIN_LEN_FOR_CORR_PX` | 4 px | Branches shorter than this skip the width test; too few points to judge. 🔴 |
+| 29 | `SPUR_PX_PLACEHOLDER` | 15 px = 9.1 µm | Dead ends and loose pieces shorter than this are removed, and dead ends need at least this much length outside their host crack. 🟢 About the largest measured agglomerate size and the typical film thickness, so shorter branches can't be told from wall roughness. See `docs/calibration_notes.md`. |
+| 35 | `DARK_SPECK_AREA_PX2` | 130 px² = 48 µm² | Dark specks inside a crack smaller than this are filled first, so the skeleton doesn't loop around them. 🟢 The area of a d90 ≈ 7.8 µm agglomerate (inks T2–T4). |
 
-## Result containers, lines 48–77
+Both are in pixels for `mm` images (0.6098 µm/px); other magnifications would need converting.
 
-- **`PrunedBranchRecord`** (line 49): one removed branch. It stores *why* it was removed
-  (`"spur"`, `"fragment"` or `"corner_artifact"`), its length and its exact pixel path, so you
-  can later draw what was cut.
-- **`SkeletonResult`** (line 61): everything this step produces. The fields that matter most:
+## Result containers, lines 38–66
+
+- **`PrunedBranchRecord`** (line 39): one removed branch. It stores *why* it was removed
+  (`"spur"`, `"fragment"` or `"host_stub"`), its length and its exact pixel path, so you can
+  later draw what was cut.
+- **`SkeletonResult`** (line 51): everything this step produces. The fields that matter most:
   - `skeleton`: the cleaned skeleton as a skan network. The next step uses this.
-  - `mask_clean`: the crack mask after specks are removed and holes filled. Crack area is
-    counted from this.
+  - `mask_clean`: the crack mask after bright specks are removed and dark specks filled. Crack
+    area is counted from this.
   - `medial_radius`: the **width map**. For every crack pixel, its distance to the nearest crack
     edge, which is half the local crack width. Every width number in the project comes from
     this.
@@ -79,70 +79,59 @@ references) lives in [`docs/design_notes.md`](../design_notes.md).
 
 ---
 
-## `_tip_ordered_width_profile(...)`, line 80
+## `_length_outside_host(...)`, line 70
 
-**For**: listing the crack width at each pixel along one branch, **starting from its loose end**,
-so the next function can ask "does the width grow as you walk in from the tip?"
-
-| Line | Code | What it means |
-|---|---|---|
-| 80–86 | header | Inputs: the skeleton, the width map, which branch (`path_index`), and its two endpoint IDs. Returns a list of widths. The leading `_` means "internal helper". |
-| 92 | `coords = skel.path_coordinates(int(path_index))` | The branch's pixels in order, from its stored start point to its end point. |
-| 93 | `if skel.degrees[int(node_id_dst)] == 1:` | Is the *end* point a loose end? (Degree 1 = only one branch touches it.) |
-| 94 | `coords = coords[::-1]` | If so, flip the list so it starts at the tip. `[::-1]` = reversed. |
-| 95 | `rr, cc = path_pixel_indices(coords, medial_radius.shape)` | Positions → whole-number pixel indices (rows, columns), clamped inside the image. Helper from `graph.py`. |
-| 96 | `return 2.0 * medial_radius[rr, cc]` | Look up the half-width at every pixel at once, and double it. |
-
-**Small blind spot.** For an isolated piece with two loose ends, line 94 always flips it, so the
-direction is arbitrary. The next function only flags width that *rises*, so a piece ramping the
-other way isn't caught. That rarely matters, since short isolated pieces are removed by length
-anyway.
-
-## `is_corner_tracing_artifact(widths, ...)`, line 99
-
-**The idea.** Thinning sends a branch into every sharp inward corner of a crack's outline, even
-where no crack exists. Along such a fake branch, the width climbs steadily toward the corner.
-Along a real crack, the width wobbles around a constant value.
+**The idea.** Thinning sends a short branch from a crack's centre line into every bump or corner
+on its wall, even where no new crack starts. Such a branch never leaves the crack it starts in. A
+real side crack does leave it. So this helper measures **how much of a dead end lies outside the
+crack it branches from** (its host).
 
 | Line | Code | What it means |
 |---|---|---|
-| 109–111 | `if n < min_len_px: return False` | Too short to judge → keep it. |
-| 112–113 | `if widths.std() == 0: return False` | Perfectly constant width → not growing → keep it. (Also avoids dividing by zero.) |
-| 114–115 | `corr = np.corrcoef(positions, widths)[0, 1]` | **The key line.** Correlation between "position along the branch" and "width": near 0 = flat (real), near +1 = steady growth (fake). |
-| 116 | `return bool(corr > corr_threshold)` | Fake if above 0.99. |
+| 86 | `j = node_id_dst if ... >= 3 else node_id_src` | Which end of the dead end is the junction (3+ branches meet there). |
+| 88 | `r_blob = ...` | The width map at the junction pixel: the radius of the blob where the cracks meet. |
+| 90–98 | loop over the junction's other branches | These are the host. Collect their pixels, and the width map along them **1–3 blob radii out from the junction**, so the extra-wide blob doesn't count. |
+| 101 | `r_host = float(np.median(widths))` | The host crack's half-width near the junction. |
+| 103 | `d_host = cKDTree(...).query(coords)[0]` | For every pixel of the dead end, its distance to the nearest host centre-line pixel. `cKDTree` is SciPy's fast nearest-neighbour lookup. |
+| 105 | `steps[d_host[1:] > r_host].sum()` | Add up the path length of the pixels farther than `r_host` from the host centre line: the part **outside** the host. |
 
-Correlation tests for a *trend*. That's why it replaced an earlier "share of pixels wider than
-the tip" test, which behaved like a coin flip on real noisy cracks. See `docs/design_notes.md`.
+Measuring length outside the host, rather than how far the tip gets, also keeps **hooks**: real
+cracks that curl round and run alongside their host just past its wall. They never get far from
+the host, but most of their length is outside it.
 
-## `skeletonize_and_prune(mask, ...)`, line 119: the main function
+## `skeletonize_and_prune(mask, ...)`, line 108: the main function
 
 **Preparation**
 
 | Line | Code | What it means |
 |---|---|---|
-| 128 | `remove_small_objects(mask, min_size=min_object_px)` | Delete specks under 4 pixels. |
-| 129 | `remove_small_holes(..., area_threshold=HOLE_AREA_THRESHOLD_PX2)` | Fill holes under 50 px² inside cracks. |
-| 130 | `skel_image = skeletonize(mask_clean)` | **The thinning.** Zhang–Suen, via scikit-image. |
-| 138 | `medial_radius = distance_transform_edt(mask_clean)` | The width map. On a full image this takes about 13 seconds, the slowest single step. |
-| 140 | `skel = skan.Skeleton(skel_image, source_image=source_image)` | Hand the skeleton to skan, which turns pixels into branches and junctions. |
+| 117 | `remove_small_objects(mask, min_size=min_object_px)` | Delete bright specks under 4 pixels. |
+| 118 | `remove_small_holes(..., area_threshold=DARK_SPECK_AREA_PX2)` | Fill dark specks under 130 px² inside cracks. |
+| 119 | `skel_image = skeletonize(mask_clean)` | **The thinning.** Zhang–Suen, via scikit-image. |
+| 127 | `medial_radius = distance_transform_edt(mask_clean)` | The width map. On a full image this takes about 13 seconds, the slowest single step. |
+| 129 | `skel = skan.Skeleton(skel_image, source_image=source_image)` | Hand the skeleton to skan, which turns pixels into branches and junctions. |
 
-**The cleanup loop, line 148.** It repeats up to 10 times and stops early when a round removes
+**The cleanup loop, line 137.** It repeats up to 10 times and stops early when a round removes
 nothing.
 
 | Line | Code | What it means |
 |---|---|---|
-| 149 | `summary = skan.summarize(skel, separator="_")` | A table with one row per branch: length (`branch_distance`) and **type**. Type 0 = isolated piece, 1 = dead end, 2 = junction to junction, 3 = closed loop. |
-| 152 | `is_spur = (type == 1) & (length < spur_px)` | Short dead ends. |
-| 153 | `is_fragment = (type == 0) & (length < spur_px)` | Short isolated pieces. |
-| 164–177 | corner check | For dead ends and isolated pieces that *weren't* already too short, run the width-growth test on each. |
-| 179–180 | `if ... == 0: break` | Nothing flagged → done. |
-| 181–200 | record | Save each flagged branch's length and pixel path *before* removing it, because skan renumbers branches after every removal. |
-| 203 | `skel = skel.prune_paths(...)` | **Remove all flagged branches.** skan returns a fresh, cleaned skeleton. |
+| 138 | `summary = skan.summarize(skel, separator="_")` | A table with one row per branch: length (`branch_distance`) and **type**. Type 0 = isolated piece, 1 = dead end, 2 = junction to junction, 3 = closed loop. |
+| 141 | `is_spur = (type == 1) & (length < spur_px)` | Short dead ends. |
+| 142 | `is_fragment = (type == 0) & (length < spur_px)` | Short isolated pieces. |
+| 149–163 | host-stub check | For dead ends that *weren't* already too short, measure their length outside the host (above). Less than `spur_px` → a **host stub**, removed. `incidence` (lines 151–154) lists which branches touch each junction, so the helper can find the host. |
+| 165–166 | `if ... == 0: break` | Nothing flagged → done. |
+| 167–186 | record | Save each flagged branch's length and pixel path *before* removing it, because skan renumbers branches after every removal. |
+| 189 | `skel = skel.prune_paths(...)` | **Remove all flagged branches.** skan returns a fresh, cleaned skeleton. |
 
-**Why repeat?** Removing one spur can turn a junction into a plain bend, which can make a
+**Why repeat?** Removing one branch can turn a junction into a plain bend, which can make a
 neighbouring branch into a new short dead end. The next round catches it.
 
-**Return, line 208.** Packs everything into `SkeletonResult`.
+Spurs and host stubs are one rule: a dead end needs at least `spur_px` outside its host. A dead
+end shorter than `spur_px` can't have that much outside, so it's caught by the cheaper length
+check first and reported as a spur.
+
+**Return, line 194.** Packs everything into `SkeletonResult`.
 
 ### What gets removed on real images
 
@@ -150,43 +139,43 @@ neighbouring branch into a new short dead end. The next round catches it.
 
 Three examples of each removal reason, from 2048 × 2048 px centre crops of three micrographs,
 chosen at the 25th, 50th and 95th length percentile of their group. "Width" is the crack width at
-the branch's loose end → at its other end; "corr" is the number the corner test checks.
+the branch's loose end → at its other end.
 
 - **Spurs** (top row, orange): short dead ends. Most are stubs from the centre line to a bump or
-  corner on the crack wall, like the middle and right examples. Some are the start of a real
-  faint side crack whose rest fell below the Otsu cutoff, like the left example.
+  corner on the crack wall. Some are the start of a real faint side crack whose rest fell below
+  the Otsu cutoff.
 - **Fragments** (middle row, purple): short isolated pieces. These are mostly bits of real faint
   cracks that thresholding broke into dashes, not noise.
-- **Corner branches** (bottom row, red): longer than 15 px, so the length rule misses them, but
-  the width climbs steadily from the tip to the junction (here 4 → 28 px up to 6 → 42 px). The
-  correlation is 0.99–1.00.
+- **Host stubs** (bottom row, red): longer than 15 px, so the length rule misses them, but they
+  run from a wide crack's centre line to its wall and stop there (width 4 → 30 px up to
+  2 → 31 px from tip to junction).
 
 **The numbers** (same three crops, `spur_px` = 15):
 
-| Image | Spurs | Fragments | Corner branches | Skeleton length removed |
+| Image | Spurs | Fragments | Host stubs | Skeleton length removed |
 |---|---|---|---|---|
-| T3-PTFE_v1 (dense, wide cracks) | 162 | 44 | 48 | 5.4% |
-| T4-M_H95_v1 (dense, membrane) | 66 | 6 | 13 | 1.9% |
-| T5-PTFE_H95_v1 (sparse, thin cracks) | 39 | 130 | 0 | 6.9% |
+| T3-PTFE_v1 (dense, wide cracks) | 160 | 44 | 85 | 7.0% |
+| T4-M_H95_v1 (dense, membrane) | 66 | 6 | 49 | 3.2% |
+| T5-PTFE_H95_v1 (sparse, thin cracks) | 39 | 130 | 7 | 7.8% |
 
 | Reason | Count | Median length | Range |
 |---|---|---|---|
-| Spur | 267 | 9 px | 1–15 px |
+| Spur | 265 | 9 px | 1–15 px |
 | Fragment | 180 | 4 px | 1–15 px |
-| Corner branch | 61 | 20 px | 15–44 px |
+| Host stub | 141 | 19 px | 15–34 px |
 
-For corner branches, the width at the junction end is a median 7.6× the width at the tip, and
-the median correlation is 0.996.
+For host stubs, the width at the junction end is a median 7.1× the width at the tip.
 
 **What this means for the statistics.** On wide-crack images, most of what gets removed is
-spurs and corner branches, which are artifacts. On thin-crack images such as T5-PTFE_H95, most is
-fragments of real faint cracks. Removing them lowers total crack length (6.9% here) and the
-component count `N`, because each fragment would otherwise count as its own component. So
-fragment pruning is a choice about what counts as a crack, not just cleanup.
+spurs and host stubs, which are artifacts. On thin-crack images such as T5-PTFE_H95, most is
+fragments of real faint cracks. Removing them lowers total crack length and the component count
+`N`, because each fragment would otherwise count as its own component. So fragment pruning is a
+choice about what counts as a crack, not just cleanup.
 
-Not every corner branch is caught. Some with a correlation just under 0.99 survive as short dead
-ends. A check on six crops found about 27 such misses, mostly on T3-PTFE and T4-M_H95, which
-shorten the median edge length `ledge` by up to about 9% on those images.
+The host-stub rule replaced an earlier correlation test (width rising steadily along the branch,
+correlation > 0.99), which missed many stubs just under 0.99 and removed some real cracks cut off
+by the image edge. Removing the extra stubs raises the median edge length `ledge` by up to about
+20% on dense wide-crack images. See `CHANGELOG.md`.
 
 These figures and numbers come from `scripts/docs/make_walkthrough_figures.py`. They skip the
 flaking exclusion that the batch export applies, so they won't match the export exactly.
@@ -201,8 +190,10 @@ flaking exclusion that the batch export applies, so they won't match the export 
   sit next to a dark speck (a real small loop); the rest are short segments between close
   junctions. See `docs/design_notes.md`.
 - **Everything is in pixels.** Converting to µm happens in the exporter.
-- **Tests**: `tests/test_skeleton.py` (8 tests):
-  - width ramps are flagged; flat and noisy widths and short branches are not
-  - a synthetic wedge is pruned only when the corner test is on
-  - small holes are filled and large ones aren't Many other test files use `spur_px=3` instead of 15, so the default value
-  itself isn't validated.
+- **Tests**: `tests/test_skeleton.py` (7 tests):
+  - a stub from a wide crack's centre line into a small bump on its wall is removed (and kept
+    with the rule off); a real side crack, a long tapering wedge and a plain line are kept
+  - small dark specks are filled and large dark regions aren't
+
+  Many other test files use `spur_px=3` instead of 15, so the default value itself isn't
+  validated by tests; its justification is physical (see Settings).

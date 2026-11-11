@@ -26,11 +26,11 @@ def _make_skeleton_result(pruned_branches):
         n_fragments_pruned=0,
         pruned_fragment_lengths=[],
         spur_px_threshold=15.0,
-        n_corner_artifacts_pruned=sum(1 for b in pruned_branches if b.reason == "corner_artifact"),
-        pruned_corner_artifact_lengths=[
-            b.branch_distance for b in pruned_branches if b.reason == "corner_artifact"
+        n_host_stubs_pruned=sum(1 for b in pruned_branches if b.reason == "host_stub"),
+        pruned_host_stub_lengths=[
+            b.branch_distance for b in pruned_branches if b.reason == "host_stub"
         ],
-        corner_artifact_corr_threshold=0.99,
+        prune_host_stubs=True,
         pruned_branches=pruned_branches,
         iters_used=1,
     )
@@ -55,7 +55,7 @@ def test_round_trip_preserves_arrays_and_pruned_branches(tmp_path):
     pruned_branches = [
         PrunedBranchRecord(reason="spur", branch_distance=8.0, coords=np.array([[1.0, 1.0], [1.0, 2.0]])),
         PrunedBranchRecord(
-            reason="corner_artifact",
+            reason="host_stub",
             branch_distance=42.5,
             coords=np.array([[3.0, 3.0], [4.0, 4.0], [5.0, 5.0]]),
         ),

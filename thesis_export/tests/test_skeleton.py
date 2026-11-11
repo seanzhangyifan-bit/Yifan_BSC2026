@@ -1,33 +1,46 @@
-"""Correctness checks for stage 2 pruning, in particular the
-correlation-based corner-tracing-artifact criterion: a synthetic wedge
-(width ramps monotonically from a free tip to a T-junction, mimicking a
-medial-axis branch tracing into a concave mask-boundary corner) must be
-pruned when the criterion is enabled and survive when it's disabled; a
-genuine constant-width line must never be flagged.
+"""Correctness checks for stage 2 pruning, in particular the host-stub rule:
+a dead end is removed if less than spur_px of its length lies outside the
+crack it branches from. A stub from a wide crack's centre line into a small
+bump on its wall must be removed (and survive with the rule off); a real side
+crack or a long tapering wedge sticking out of its host must be kept; a plain
+line has nothing to remove. Also checks the dark-speck fill.
 """
 
 import numpy as np
 from skimage.draw import polygon
 
-from src.crackgraph.skeleton import HOLE_AREA_THRESHOLD_PX2, is_corner_tracing_artifact, skeletonize_and_prune
-
-import skan
+from src.crackgraph.skeleton import DARK_SPECK_AREA_PX2, SPUR_PX_PLACEHOLDER, skeletonize_and_prune
 
 
-def _wedge_artifact_mask(size: int = 260) -> np.ndarray:
-    """A long, constant-width horizontal host line (two ~120px arms either
-    side of a T-junction) with a triangular wedge fused to its underside:
-    base (width 30px) coincides with the host, apex is a free point ~60px
-    below. Skeletonizing this yields a T-junction with one arm (the wedge)
-    whose width ramps from ~0 at the free tip up to host width at the
-    junction -- the same shape as the real corner-tracing artifact this
-    criterion was designed against (see skeleton.py module docstring), not
-    a literal concave-corner mask. The host arms are made long relative to
-    the junction-blob region so their own near-junction width bump (a real,
-    separate effect -- junction blobs are locally wider than their arms)
-    stays a small fraction of each arm's profile and doesn't itself trend
-    with correlation > CORR_THRESHOLD: measured directly, host-arm
-    correlation ~0.48 vs. wedge correlation ~0.99 at these proportions."""
+def _wide_band(shape=(160, 260)) -> np.ndarray:
+    """A 40 px wide horizontal crack (half-width 20 px), cols 10-250."""
+    mask = np.zeros(shape, dtype=bool)
+    mask[30:70, 10:250] = True
+    return mask
+
+
+def _band_with_bump() -> np.ndarray:
+    """Wide band plus an 8 x 12 px bump on its lower wall. Thinning sends a
+    ~23 px branch from the centre line into the bump, but only the bump's
+    8 px lie outside the band -- under spur_px -- so it's a host stub."""
+    mask = _wide_band()
+    mask[70:78, 120:132] = True
+    return mask
+
+
+def _band_with_side_crack() -> np.ndarray:
+    """Wide band plus a real 5 px wide side crack leaving its lower wall and
+    running 55 px beyond it."""
+    mask = _wide_band()
+    mask[70:125, 128:133] = True
+    return mask
+
+
+def _thin_line_with_wedge(size: int = 260) -> np.ndarray:
+    """A 7 px host line with a triangular wedge (base 30 px, apex ~63 px below)
+    fused to its underside: a tapering branch that sticks ~60 px out of its
+    host. It was the corner-artifact fixture under the old correlation test;
+    under the host-stub rule it reads as a real tapering side crack and stays."""
     mask = np.zeros((size, size), dtype=bool)
     mask[120:127, 10:250] = True
     rr, cc = polygon(np.array([127, 127, 190]), np.array([115, 145, 130]), shape=mask.shape)
@@ -35,89 +48,61 @@ def _wedge_artifact_mask(size: int = 260) -> np.ndarray:
     return mask
 
 
-def _has_branch_near_length(skel: skan.Skeleton, branch_type: int, length: float, tol: float) -> bool:
-    summary = skan.summarize(skel, separator="_")
-    if len(summary) == 0:
-        return False
-    matches = summary[summary["branch_type"] == branch_type]
-    return bool((abs(matches["branch_distance"] - length) < tol).any())
+def test_stub_into_wall_bump_is_pruned():
+    result = skeletonize_and_prune(_band_with_bump())
+    assert result.n_host_stubs_pruned == 1
+    (record,) = [b for b in result.pruned_branches if b.reason == "host_stub"]
+    assert record.branch_distance >= SPUR_PX_PLACEHOLDER  # the length rule alone wouldn't catch it
+    assert record.coords.shape[1] == 2 and len(record.coords) > 1
+    # no skeleton left between the centre line and the bump
+    assert not result.skel_image[52:80, 110:142].any()
 
 
-def test_ramp_is_flagged_as_corner_artifact():
-    widths = np.linspace(2.0, 40.0, 30)
-    assert is_corner_tracing_artifact(widths, corr_threshold=0.99) is True
+def test_stub_into_wall_bump_survives_with_rule_off():
+    result = skeletonize_and_prune(_band_with_bump(), prune_host_stubs=False)
+    assert result.n_host_stubs_pruned == 0
+    assert result.skel_image[52:80, 110:142].any()
 
 
-def test_flat_noisy_width_is_not_flagged():
-    rng = np.random.default_rng(0)
-    widths = 6.0 + rng.normal(0.0, 0.3, size=30)
-    assert is_corner_tracing_artifact(widths, corr_threshold=0.99) is False
+def test_real_side_crack_is_kept():
+    result = skeletonize_and_prune(_band_with_side_crack())
+    assert result.n_host_stubs_pruned == 0
+    assert result.skel_image[80:125, 120:140].any()
 
 
-def test_short_branch_is_never_flagged_regardless_of_shape():
-    # A perfect ramp, but shorter than MIN_LEN_FOR_CORR_PX -- no data, no
-    # constraint, per METHODOLOGY.md's near-120-deg-junction precedent.
-    widths = np.array([2.0, 40.0])
-    assert is_corner_tracing_artifact(widths, corr_threshold=0.99, min_len_px=4) is False
+def test_tapering_wedge_sticking_out_of_host_is_kept():
+    result = skeletonize_and_prune(_thin_line_with_wedge())
+    assert result.n_host_stubs_pruned == 0
+    assert result.skel_image[140:185, 120:140].any()
 
 
-def test_wedge_pruned_when_criterion_enabled():
-    mask = _wedge_artifact_mask()
-    # Uses the real production default (CORR_THRESHOLD=0.99), not a
-    # test-loosened value -- the mask was sized so the wedge (~0.99
-    # correlation) clears it while the host arms (~0.48) stay well under.
-    result = skeletonize_and_prune(mask, spur_px=3, corner_artifact_corr_threshold=0.99)
-    assert result.n_corner_artifacts_pruned >= 1
-    assert not _has_branch_near_length(result.skeleton, branch_type=1, length=60.0, tol=10.0)
-
-    corner_records = [b for b in result.pruned_branches if b.reason == "corner_artifact"]
-    assert len(corner_records) == 1
-    record = corner_records[0]
-    assert abs(record.branch_distance - 60.0) < 10.0
-    assert record.coords.shape[1] == 2
-    assert len(record.coords) > 1
-
-
-def test_wedge_survives_when_criterion_disabled():
-    mask = _wedge_artifact_mask()
-    result = skeletonize_and_prune(mask, spur_px=3, corner_artifact_corr_threshold=None)
-    assert result.n_corner_artifacts_pruned == 0
-    assert _has_branch_near_length(result.skeleton, branch_type=1, length=60.0, tol=10.0)
-    assert [b for b in result.pruned_branches if b.reason == "corner_artifact"] == []
-
-
-def test_constant_width_line_is_never_flagged_as_corner_artifact():
+def test_plain_line_has_no_host_stubs():
     mask = np.zeros((260, 260), dtype=bool)
-    mask[120:127, 10:250] = True  # straight line only, no wedge
-    result = skeletonize_and_prune(mask, spur_px=3, corner_artifact_corr_threshold=0.8)
-    assert result.n_corner_artifacts_pruned == 0
+    mask[120:127, 10:250] = True
+    result = skeletonize_and_prune(mask)
+    assert result.n_host_stubs_pruned == 0
 
 
-def test_small_enclosed_hole_is_filled_before_skeletonize():
-    # A crack-like band (not a filled blob -- skeletonize_and_prune on a
-    # solid block degenerately prunes to nothing) with a tiny fully-
-    # enclosed background hole well below HOLE_AREA_THRESHOLD_PX2 -- should
-    # be filled by remove_small_holes before skeletonize() ever sees it,
-    # per the user's own observation that small black specks were
-    # surviving into the real pass untouched.
+def test_small_dark_speck_is_filled_before_skeletonize():
+    # A dark speck fully enclosed in a crack, below DARK_SPECK_AREA_PX2, must be
+    # filled before skeletonize() sees it, so the skeleton doesn't loop round it.
     mask = np.zeros((100, 200), dtype=bool)
     mask[40:60, 10:190] = True  # 20px-thick horizontal band
-    hole_side = 5  # 25 px^2, well under the 50 px^2 threshold
-    assert hole_side * hole_side < HOLE_AREA_THRESHOLD_PX2
-    mask[47:47 + hole_side, 95:95 + hole_side] = False
+    speck_side = 5  # 25 px^2
+    assert speck_side * speck_side < DARK_SPECK_AREA_PX2
+    mask[47:47 + speck_side, 95:95 + speck_side] = False
 
     result = skeletonize_and_prune(mask, spur_px=3)
-    assert result.mask_clean[47:47 + hole_side, 95:95 + hole_side].all()
+    assert result.mask_clean[47:47 + speck_side, 95:95 + speck_side].all()
 
 
-def test_large_enclosed_hole_is_not_filled():
-    # A hole above the threshold must survive -- filling has to be
-    # size-gated, not unconditional.
+def test_large_dark_region_is_not_filled():
+    # A dark region above the limit must survive -- filling is size-gated.
     mask = np.zeros((100, 200), dtype=bool)
-    mask[30:70, 10:190] = True  # 40px-thick band, wide enough to enclose the hole
-    hole_side = 12  # 144 px^2, well over the 50 px^2 threshold
-    assert hole_side * hole_side > HOLE_AREA_THRESHOLD_PX2
-    mask[44:44 + hole_side, 95:95 + hole_side] = False
+    mask[30:70, 10:190] = True  # 40px-thick band, wide enough to enclose the region
+    side = 13  # 169 px^2
+    assert side * side > DARK_SPECK_AREA_PX2
+    mask[44:44 + side, 95:95 + side] = False
 
     result = skeletonize_and_prune(mask, spur_px=3)
-    assert not result.mask_clean[44:44 + hole_side, 95:95 + hole_side].any()
+    assert not result.mask_clean[44:44 + side, 95:95 + side].any()

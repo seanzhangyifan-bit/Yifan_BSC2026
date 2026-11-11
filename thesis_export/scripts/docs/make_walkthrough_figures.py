@@ -256,8 +256,8 @@ REAL_IMAGES = [
     "characterization2_ptfe/T5-PTFE_H95_v1_mm000001.jpg",
 ]
 REAL_CROP_PX = 2048  # centre crop, to keep the run short
-REASON_LABEL = {"spur": "spur", "fragment": "fragment", "corner_artifact": "corner branch"}
-REASON_COLOR = {"spur": "#e8743b", "fragment": "#9467bd", "corner_artifact": "#d62728"}
+REASON_LABEL = {"spur": "spur", "fragment": "fragment", "host_stub": "host stub"}
+REASON_COLOR = {"spur": "#e8743b", "fragment": "#9467bd", "host_stub": "#d62728"}
 
 
 def _find_data_dir() -> Path | None:
@@ -269,15 +269,14 @@ def _find_data_dir() -> Path | None:
 
 
 def _branch_numbers(coords, medial_radius, kept_skel):
-    """Width at each end and the |correlation| between position and width,
-    oriented tip-first (the end farther from the kept skeleton)."""
+    """Crack width at each end of a branch, tip first (the end farther from the
+    kept skeleton)."""
     c = np.round(coords).astype(int)
     dist_to_kept = distance_transform_edt(~kept_skel)
     if dist_to_kept[c[0, 0], c[0, 1]] < dist_to_kept[c[-1, 0], c[-1, 1]]:
         c = c[::-1]
     widths = 2.0 * medial_radius[c[:, 0], c[:, 1]]
-    corr = float(np.corrcoef(np.arange(len(widths)), widths)[0, 1]) if widths.std() > 0 else 0.0
-    return widths[0], widths[-1], corr
+    return widths[0], widths[-1]
 
 
 def real_pruned_branches_figure(data_dir: Path):
@@ -295,11 +294,11 @@ def real_pruned_branches_figure(data_dir: Path):
         kept = sr.skeleton.skeleton_image.astype(bool)
         name = Path(rel).stem.replace("_mm000001", "")
         for pb in sr.pruned_branches:
-            w_tip, w_end, corr = _branch_numbers(pb.coords, sr.medial_radius, kept)
+            w_tip, w_end = _branch_numbers(pb.coords, sr.medial_radius, kept)
             records.append(dict(img=name, gray=gray, kept=kept, coords=pb.coords, reason=pb.reason,
-                                length=pb.branch_distance, w_tip=w_tip, w_end=w_end, corr=corr))
+                                length=pb.branch_distance, w_tip=w_tip, w_end=w_end))
         removed_len = sum(pb.branch_distance for pb in sr.pruned_branches)
-        rows.append((name, sr.n_spurs_pruned, sr.n_fragments_pruned, sr.n_corner_artifacts_pruned,
+        rows.append((name, sr.n_spurs_pruned, sr.n_fragments_pruned, sr.n_host_stubs_pruned,
                      100 * removed_len / (removed_len + kept.sum())))
 
     # Three examples per reason, picked by length percentile (deterministic).
@@ -309,7 +308,7 @@ def real_pruned_branches_figure(data_dir: Path):
         return co.min() >= margin and co.max() <= REAL_CROP_PX - 1 - margin
 
     picks = []
-    for reason in ("spur", "fragment", "corner_artifact"):
+    for reason in ("spur", "fragment", "host_stub"):
         pool = sorted((r for r in records if r["reason"] == reason and away_from_edge(r)),
                       key=lambda r: r["length"])
         picks += [pool[int(q * (len(pool) - 1))] for q in (0.25, 0.5, 0.95)]
@@ -326,7 +325,7 @@ def real_pruned_branches_figure(data_dir: Path):
         ax.scatter(xs, ys, s=0.6, c=SKEL)
         ax.plot(co[:, 1] - c0, co[:, 0] - r0, color=REASON_COLOR[r["reason"]], lw=2.2)
         ax.set_title(f"{REASON_LABEL[r['reason']]} · {r['img']}\n{r['length']:.0f} px long · width "
-                     f"{r['w_tip']:.0f} → {r['w_end']:.0f} px · corr {r['corr']:.2f}", fontsize=8)
+                     f"{r['w_tip']:.0f} → {r['w_end']:.0f} px", fontsize=8)
         ax.axis("off")
     fig.suptitle("Branches removed by the cleanup loop (coloured) and the skeleton that stays (green)",
                  fontsize=10)
@@ -335,21 +334,20 @@ def real_pruned_branches_figure(data_dir: Path):
     plt.close(fig)
 
     # Numbers for the walkthrough text.
-    print("| Image | Spurs | Fragments | Corner branches | Skeleton length removed |")
+    print("| Image | Spurs | Fragments | Host stubs | Skeleton length removed |")
     print("|---|---|---|---|---|")
     for name, n_s, n_f, n_c, pct in rows:
         print(f"| {name} | {n_s} | {n_f} | {n_c} | {pct:.1f}% |")
     print(f"\nspur_px = {SPUR_PX_PLACEHOLDER}")
-    for reason in ("spur", "fragment", "corner_artifact"):
+    for reason in ("spur", "fragment", "host_stub"):
         rs = [r for r in records if r["reason"] == reason]
         L = np.array([r["length"] for r in rs])
         print(f"{reason}: n={len(rs)} length median {np.median(L):.0f} px, range {L.min():.0f}-{L.max():.0f} px")
-        if reason == "corner_artifact":
+        if reason == "host_stub":
             ratio = np.array([r["w_end"] / max(r["w_tip"], 1) for r in rs])
-            print(f"  width end/tip median {np.median(ratio):.1f}x, corr median "
-                  f"{np.median([r['corr'] for r in rs]):.3f}")
+            print(f"  width end/tip median {np.median(ratio):.1f}x")
     for r in picks:
-        print(f"pick: {r['reason']:15s} {r['img']:15s} L={r['length']:.0f} w {r['w_tip']:.0f}->{r['w_end']:.0f} corr {r['corr']:.2f}")
+        print(f"pick: {r['reason']:15s} {r['img']:15s} L={r['length']:.0f} w {r['w_tip']:.0f}->{r['w_end']:.0f}")
 
 
 if __name__ == "__main__":

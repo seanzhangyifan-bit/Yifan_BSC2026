@@ -21,9 +21,11 @@ from src.crackgraph.synthetic import (
 WIDTH_RECOVERY_TOL_PX = 2.0
 
 
-def _run(gray, spur_px=3.0, **kwargs):
+def _run(gray, spur_px=3.0, prune_host_stubs=True, **kwargs):
     binarize_result = binarize(gray)
-    skeleton_result = skeletonize_and_prune(binarize_result.mask, source_image=gray, spur_px=spur_px)
+    skeleton_result = skeletonize_and_prune(
+        binarize_result.mask, source_image=gray, spur_px=spur_px, prune_host_stubs=prune_host_stubs
+    )
     graph_result = extract_graph(skeleton_result.skeleton)
     result = compute_edge_metrics(
         skeleton_result.skeleton,
@@ -77,7 +79,7 @@ def test_width_trim_flags_too_short_edge():
     # Abutter too short (4px) to survive trimming max(5px placeholder,
     # local junction-blob half-width) off both ends.
     gray = generate_t_junction(angle_deg=90.0, arm_length=4.0)
-    result, _, graph_result = _run(gray, spur_px=0.5)
+    result, _, graph_result = _run(gray, spur_px=0.5, prune_host_stubs=False)  # the host-stub rule would also remove this deliberately tiny branch
     short_edges = [
         m for m in result.per_edge.values() if m.length_px < 10.0
     ]

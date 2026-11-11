@@ -93,8 +93,8 @@ DEFINITIONS = [
     ("flaking_n_edges_omitted",
      "Number of graph edges with any pixel inside a flaking-exclusion region, omitted entirely -- from both the stats columns above AND the connectivity graph itself (n_components/giant_component_fraction). This is crack_stats_v3's key methodology difference from v1, which keeps these edges in the graph and only drops them from length/width stats.",
      "count", "measured"),
-    ("n_corner_artifacts_pruned",
-     "Number of skeleton branches removed during pruning because their local width trends monotonically along their length (a medial-axis branch tracing into a concave mask-boundary corner), rather than because they were short.",
+    ("n_host_stubs_pruned",
+     "Number of dead-end skeleton branches removed during pruning because less than spur_px (15 px = 9.1 um) of their length lies outside the crack they branch from -- stubs from a crack's centre line to bumps and corners on its wall -- rather than because they were short overall.",
      "count", "interpreted"),
 ]
 
