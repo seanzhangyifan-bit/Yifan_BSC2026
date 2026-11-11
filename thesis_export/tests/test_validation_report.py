@@ -27,11 +27,11 @@ def test_groups_cases_by_method(tmp_path):
     results = [
         _case("t90", "junction", True),
         _case("t75", "junction", True),
-        _case("kink60", "kink", True),
+        _case("cc90", "corner", True),
     ]
     html = render_validation_report(results, tmp_path / "report.html").read_text()
     assert html.count('<section class="method">') == 2
-    assert "t90" in html and "t75" in html and "kink60" in html
+    assert "t90" in html and "t75" in html and "cc90" in html
 
 
 def test_pass_and_fail_badges_rendered(tmp_path):
@@ -56,6 +56,6 @@ def test_metric_expected_measured_row_rendered(tmp_path):
 
 
 def test_summary_counts_passed_cases(tmp_path):
-    results = [_case("a", "junction", True), _case("b", "junction", False), _case("c", "kink", True)]
+    results = [_case("a", "junction", True), _case("b", "junction", False), _case("c", "corner", True)]
     html = render_validation_report(results, tmp_path / "report.html").read_text()
     assert "2/3 cases pass" in html

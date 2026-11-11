@@ -381,7 +381,7 @@ def main():
     )
     print(
         f"Candidates found: {len(flaking_result.candidates)}    "
-        "[interpreted -- width+solidity flagged, not junction-blob-filtered yet]"
+        "[interpreted -- flagged by local width only, not junction-blob-filtered yet]"
     )
     for c in flaking_result.candidates:
         print(f"  area={c.area_px2} px2  solidity={c.solidity:.3f}  bbox={c.bbox}")
@@ -439,7 +439,7 @@ def main():
     else:
         print(
             f"Scan window: {curvature_result.window_px:.1f} px    "
-            "[PLACEHOLDER -- not calibrated to real h/um-per-px; see scripts/curvature_window_sweep.py]"
+            "[PLACEHOLDER -- not calibrated to real h/um-per-px; see scripts/validation/curvature_window_sweep.py]"
         )
         tortuosity_mean, tortuosity_median = tortuosity_stats(curvature_result)
         curvature_mean, curvature_max = curvature_stats(curvature_result)

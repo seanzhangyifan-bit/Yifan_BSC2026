@@ -2,7 +2,7 @@
 src/crackgraph/validation_cases.py) through the real measurement pipeline
 and compile the results into one browsable HTML gallery.
 
-Unlike scripts/overview_figure.py or src/analyze_image.py, this script does
+Unlike scripts/spatial_overview/overview_figure.py or src/analyze_image.py, this script does
 not take an image path -- the whole point is a self-contained battery of
 known-ground-truth synthetic patterns, not a real micrograph.
 

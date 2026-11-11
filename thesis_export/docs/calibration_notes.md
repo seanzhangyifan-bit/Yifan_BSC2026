@@ -14,20 +14,20 @@ referenced sweep script), not just the one-line pointer left in the source file.
 > calibrated um-per-px (none exists yet -- same project-phase caveat as
 > SPUR_PX_PLACEHOLDER in skeleton.py). Revisit once calibration lands.
 
-Not swept by either `scripts/window_sweep.py` or `scripts/corner_window_sweep.py` — both
+Not swept by either `scripts/validation/window_sweep.py` or `scripts/validation/corner_window_sweep.py` — both
 hold `INNER_RADIUS_PX = 5.0` fixed while sweeping other parameters. No dedicated
 inner-radius sweep exists.
 
 ## ANNULUS_OUTER_PX_PLACEHOLDER
 
-`src/crackgraph/junctions.py:84` — value `60.0`
+`src/crackgraph/junctions.py:79` — value `60.0`
 
 > Not derived from real film thickness h (METHODOLOGY.md's general spec is "~h/2"; no
 > h/um-per-px exists yet) -- in documented tension with METHODOLOGY.md's "local approach
 > direction, not far-field" intent, and cannot be checked against h until calibration
 > lands.
 >
-> Chosen from a measured bias/variance/RMSE sweep (scripts/window_sweep.py,
+> Chosen from a measured bias/variance/RMSE sweep (scripts/validation/window_sweep.py,
 > deterministic/seeded), not asserted. Worst-case (minimax) RMSE of recovered arm bearing
 > vs ground truth, across straight T's at 60/90/120 deg and curved-host T's at radius
 > 30/60 px, at jitter levels 0/0.5/1.0 px (smooth, spatially-correlated synthetic wobble
@@ -50,7 +50,7 @@ Also referenced in `junctions.py`'s module docstring: "...so the default window 
 (~60 px, see ANNULUS_OUTER_PX_PLACEHOLDER) and short bands degrade to a line fit rather
 than an unstable quadratic (see fit_degree)."
 
-`scripts/window_sweep.py` docstring: "Justify ANNULUS_OUTER_PX_PLACEHOLDER (junctions.py)
+`scripts/validation/window_sweep.py` docstring: "Justify ANNULUS_OUTER_PX_PLACEHOLDER (junctions.py)
 with a measured bias/variance/RMSE sweep, instead of asserting a window length from a
 single eyeballed census." Sweeps `WINDOWS = [20.0, 30.0, 40.0, 60.0, 80.0]`,
 `JITTER_LEVELS = [0.0, 0.5, 1.0]`, `N_SEEDS_WHEN_JITTERED = 6`, over straight-T geometries
@@ -61,14 +61,14 @@ Runs the real pipeline end to end and prints `Recommended ANNULUS_OUTER_PX_PLACE
 
 `tests/test_junction_angle.py`'s `test_default_window_recovers_bearing_under_jitter`:
 "Locks in the ANNULUS_OUTER_PX_PLACEHOLDER=60 choice (justified by
-scripts/window_sweep.py's measured bias/variance/RMSE sweep) as a regression test:
+scripts/validation/window_sweep.py's measured bias/variance/RMSE sweep) as a regression test:
 fixed-seed jittered synthetics, at the shipped default annulus radii, must still recover
 each arm's known bearing within the sweep's measured worst-case RMSE ballpark (~10 deg),
 generously rounded up for single-sample (not aggregate) margin."
 
 ## QUAD_MIN_SPAN_PX
 
-`src/crackgraph/junctions.py:108` — value `15.0`
+`src/crackgraph/junctions.py:81` — value `15.0`
 
 > Minimum arc-length span of band points for the quadratic (curvature) term to have
 > enough lever arm; below this the fit degrades to a line (a short arm cannot reveal its
@@ -80,7 +80,7 @@ QUAD_MIN_SPAN_PX:`).
 
 ## Y_ANGLE_TOL_DEG_PLACEHOLDER
 
-`src/crackgraph/junctions.py:113` — value `15.0`
+`src/crackgraph/junctions.py:83` — value `15.0`
 
 > Generous enough to absorb skeleton-pixel jitter plus the natural angle spread of real
 > desiccation Y-junctions around the ideal 120 deg, tight enough to stay diagnostic. Not
@@ -91,7 +91,7 @@ explicitly as `y_angle_tol_deg=15.0` in `tests/test_corners.py`.
 
 ## T_STRAIGHT_TOL_DEG_PLACEHOLDER
 
-`src/crackgraph/junctions.py:119` — value `20.0`
+`src/crackgraph/junctions.py:85` — value `20.0`
 
 > tolerance on how collinear the two candidate host arms must be (pairwise angle near
 > 180 deg) before they're accepted as "the host".
@@ -101,7 +101,7 @@ No dedicated sweep script. Used explicitly in `tests/test_corners.py`
 
 ## T_RIGHT_TOL_DEG_PLACEHOLDER
 
-`src/crackgraph/junctions.py:123` — value `20.0`
+`src/crackgraph/junctions.py:87` — value `20.0`
 
 > tolerance on how close to 90 deg the abutter's approach to each host arm must be.
 
@@ -116,16 +116,16 @@ No dedicated sweep script. Used explicitly in `tests/test_corners.py`
 > exceed typical crack half-width (the T notch's corner separation) so both notch corners
 > are found; not yet tied to a calibrated h.
 
-Held fixed (not swept) in `scripts/corner_window_sweep.py` (`SEARCH_RADIUS_PX = 25.0`) —
+Held fixed (not swept) in `scripts/validation/corner_window_sweep.py` (`SEARCH_RADIUS_PX = 25.0`) —
 that script sweeps `CORNER_WINDOW_PX`, not this constant. No dedicated search-radius
 sweep exists.
 
 ## CORNER_WINDOW_PX
 
-`src/crackgraph/corners.py:64` — value `10.0`
+`src/crackgraph/corners.py:60` — value `10.0`
 
 > chord half-window (arc length) used to measure each wall's direction on either side of
-> a candidate corner point. Chosen from scripts/corner_window_sweep.py's measured sweep
+> a candidate corner point. Chosen from scripts/validation/corner_window_sweep.py's measured sweep
 > (straight T's at 60/90/120 deg, curved-host T's at radius 30/60 px, jitter 0/0.5/1.0
 > px), scoring each window by worst-case RMSE *and* worst-case unresolved fraction
 > together (a small window that "resolves" cleanly on the easy cases but fails to find
@@ -137,14 +137,14 @@ sweep exists.
 Also referenced in `corners.py`'s module docstring: "This does NOT make the method immune
 to curvature bias, though: each wall direction is still a chord over CORNER_WINDOW_PX, so
 a severely curved host wall biases it exactly the way a too-long annulus window biased
-the tangent fit (measured directly: scripts/corner_window_sweep.py's radius=30 px cases
+the tangent fit (measured directly: scripts/validation/corner_window_sweep.py's radius=30 px cases
 show real bias at the window chosen for jitter robustness). The advantage over the
 tangent fit is narrower and specific: no junction-blob/skeleton-jitter problem, not a
 general cure for curvature-vs-window tradeoffs."
 
-`scripts/corner_window_sweep.py` docstring: "Justify CORNER_WINDOW_PX (corners.py) with a
+`scripts/validation/corner_window_sweep.py` docstring: "Justify CORNER_WINDOW_PX (corners.py) with a
 measured bias/variance/RMSE sweep, the same method used for
-ANNULUS_OUTER_PX_PLACEHOLDER (scripts/window_sweep.py) -- not an eyeballed guess." Sweeps
+ANNULUS_OUTER_PX_PLACEHOLDER (scripts/validation/window_sweep.py) -- not an eyeballed guess." Sweeps
 `WINDOWS = [3.0, 4.0, 6.0, 8.0, 10.0, 12.0]` across the same geometry/jitter grid,
 additionally tracking a "resolution rate" (fraction of junctions where corner
 count/pairing produced an answer), combining `combined = worst_rmse +
@@ -166,17 +166,17 @@ hardest case there is."
 
 ## CORNER_MIN_TURN_DEG
 
-`src/crackgraph/corners.py:77` — value `45.0`
+`src/crackgraph/corners.py:62` — value `45.0`
 
 > minimum turning angle (a chord-based turning-angle scan) to accept a contour
 > point as a real wall corner rather than boundary noise. Not calibrated.
 
-Held fixed (not swept) in `scripts/corner_window_sweep.py` (`MIN_TURN_DEG = 45.0`). No
+Held fixed (not swept) in `scripts/validation/corner_window_sweep.py` (`MIN_TURN_DEG = 45.0`). No
 dedicated sweep for this specific constant.
 
 ## ABUTTER_AGREEMENT_TOL_DEG
 
-`src/crackgraph/corners.py:82` — value `30.0`
+`src/crackgraph/corners.py:64` — value `30.0`
 
 > in the T-like (2-corner) case, the two corners' independent estimates of the abutter's
 > bearing must agree within this tolerance or the pairing is treated as inconsistent
@@ -187,7 +187,7 @@ agreement check (`if abs(_angle_diff(abutter_a, abutter_b)) > ABUTTER_AGREEMENT_
 
 ## BEARING_MATCH_TOL_DEG
 
-`src/crackgraph/corners.py:88` — value `30.0`
+`src/crackgraph/corners.py:66` — value `30.0`
 
 > in the Y-like (3-corner) case, the greedy bearing-matching used to pair up the 6 raw
 > wall bearings into 3 arm bearings requires the matched pair to agree within this
@@ -206,8 +206,8 @@ No dedicated sweep script found; used at `corners.py`'s bearing-matching step
 > elsewhere, so as to not eat real short branches. Must be revisited once calibration
 > lands.
 
-No sweep script targets this constant. Note that in both `scripts/window_sweep.py` and
-`scripts/corner_window_sweep.py`, and in essentially all synthetic tests
+No sweep script targets this constant. Note that in both `scripts/validation/window_sweep.py` and
+`scripts/validation/corner_window_sweep.py`, and in essentially all synthetic tests
 (`tests/test_junction_angle.py`, `tests/test_corners.py`), the
 pipeline is invoked with `spur_px=3` (an override, not the placeholder default) — i.e.
 the sweep/test harnesses deliberately bypass this constant's default value rather than

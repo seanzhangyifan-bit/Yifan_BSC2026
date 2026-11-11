@@ -375,7 +375,7 @@ exactly where a global area/length ratio and a true per-pixel median are expecte
 
 ## 10. v3: independent single-pass methodology
 
-`scripts/export_crack_stats_v3.py` is a second, independent implementation of the crack-stats
+`scripts/batch_stats/export_crack_stats_v3.py` is a second, independent implementation of the crack-stats
 export, alongside `scripts/batch_stats/export_crack_stats.py` ("v1" by contrast) — both remain
 runnable, neither replaces the other. The methodology difference is in how a flaked/delaminated
 region gets excluded (see §4b):

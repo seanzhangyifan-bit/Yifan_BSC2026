@@ -4,7 +4,7 @@ stage 4/5) to that image's existing entry in the master HTML report.
 
 Deliberately does not run analyze_image.py itself: this script only wires
 already-produced PNGs into the report. The image must already have an
-entry (created by scripts/overview_figure.py) and the two PNGs must
+entry (created by scripts/spatial_overview/overview_figure.py) and the two PNGs must
 already exist at analyze_image.py's standard --full-image naming
 convention (outputs/<coating>/<stem>_full_overlay.png and
 ..._full_precedence.png) before running this.

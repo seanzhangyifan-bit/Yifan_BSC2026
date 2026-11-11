@@ -110,11 +110,11 @@ def case_t_y_junction(out_dir: Path) -> dict:
         "image": out_path_a.name,
         "image_b": out_path_b.name,
         "desc": "Already covered by existing generators (generate_t_junction, generate_y_junction) "
-                "and their own tests/validation_gallery.py -- shown "
+                "and their own scripts/validation/validation_gallery.py -- shown "
                 "here for completeness against the original 9-case matrix, not as new coverage. "
                 "Rendered with the same opt-in tapered-tip parameter as every other case on this "
                 "page (default off elsewhere, so stage-4's own calibrated tests are unaffected). "
-                "No new ground truth on this page; see scripts/validation_gallery.py for the "
+                "No new ground truth on this page; see scripts/validation/validation_gallery.py for the "
                 "actual angle-recovery ground truth these already carry.",
         "rows": [
             _row("status", "reused from existing generators, not new this step"),
@@ -275,7 +275,7 @@ def case_jpeg_blocking(out_dir: Path) -> dict:
         "image_b": out_path_b.name,
         "desc": "A REAL JPEG encode/decode round-trip (Pillow, quality=15) applied to case 4's "
                 "clean 'survives pruning' image -- shown clean (left) vs. degraded (right). Closes "
-                "a named, already-acknowledged gap: scripts/skeleton_loop_sweep.py:25 states no "
+                "a named, already-acknowledged gap: scripts/validation/skeleton_loop_sweep.py:25 states no "
                 "synthetic case reproduces JPEG-compression boundary noise. No fabricated ground "
                 "truth for the degraded pixel values (lossy by construction) -- pipeline behavior "
                 "under this degradation is a later step.",

@@ -131,7 +131,7 @@ spreadsheets from real runs against the private micrograph collection (proof thi
 actually exercised on real data, not just unit-tested — these specifically can't be regenerated
 from this export alone, since that needs the private `data/raw/` source images), plus
 `examples/validation_gallery.html` — a self-contained copy of the synthetic-pattern validation
-gallery (14 ground-truth cases across all 5 measurement methods, see deliverable #4 below). Open
+gallery (12 ground-truth cases across 4 measurement methods, see deliverable #4 below). Open
 it directly in a browser, no server needed. See `examples/README.md` for exactly what's here and
 how each file was produced.
 

@@ -51,7 +51,7 @@ window blurs together genuinely different local curvatures into one
 number, the same bias/smoothing tradeoff documented for the annulus fit
 in junctions.py / generate_curved_t_junction. The window is therefore a
 real bias-vs-jitter-noise tradeoff on real (non-constant-curvature) data,
-to be *measured* via scripts/curvature_window_sweep.py -- which, because
+to be *measured* via scripts/validation/curvature_window_sweep.py -- which, because
 generate_curved_t_junction is exactly circular, can only validate the
 noise-averaging side of that tradeoff, not the varying-curvature blur; it
 sweeps window_px against generate_curved_t_junction's exact known 1/radius
@@ -71,7 +71,7 @@ CURVATURE_WINDOW_PX_PLACEHOLDER = 10.0
 # Same jitter-averaging scale reasoning as corners.py's CORNER_WINDOW_PX
 # and junctions.py's annulus radii; not derived from calibrated h/um-per-px
 # (none exists yet, so this is still a pixel-space placeholder, not a
-# um/h-anchored value). scripts/curvature_window_sweep.py's minimax sweep
+# um/h-anchored value). scripts/validation/curvature_window_sweep.py's minimax sweep
 # over windows [5,8,10,15,20] px, radii [15,30,60,100] px, jitter [0,0.5,1]
 # px picked window_px=10 (worst-case relative RMSE 86%, at radius=15/
 # jitter=1.0 -- a small-radius, heavily-jittered stress case; RMSE is much

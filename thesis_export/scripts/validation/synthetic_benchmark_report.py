@@ -1,6 +1,6 @@
 """Synthetic-benchmark matrix, step 2: measured pipeline results, all 9 cases.
 
-Extends scripts/synthetic_benchmark_raw_gallery.py's case-dict/HTML pattern:
+Extends scripts/validation/synthetic_benchmark_raw_gallery.py's case-dict/HTML pattern:
 each case now actually runs through binarize -> skeletonize_and_prune ->
 extract_graph (at the pipeline's own PRODUCTION defaults -- spur_px =
 SPUR_PX_PLACEHOLDER, sanity_band = binarize()'s own default) and reports

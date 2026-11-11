@@ -2,7 +2,7 @@
 
 Short, one-line definitions for the substantive stats columns (crack area,
 width, edge length, connectivity, flaking, pruning-count), condensed from
-`docs/crack_stats_schema.md`'s existing per-column reference (`crack_stats.xlsx`'s
+`docs/batch_stats/crack_stats_schema.md`'s existing per-column reference (`crack_stats.xlsx`'s
 schema doc) -- reusing that already-vetted text rather than re-deriving
 definitions from scratch. Deliberately skips pure identifier/provenance
 columns (`image_filename`, `source_folder`, `image_width_px`/`image_height_px`,
@@ -31,7 +31,7 @@ from openpyxl import load_workbook
 
 # (column, definition, unit, evidence tag) -- tag legend matches this
 # project's own convention (measured / interpreted / calibrated), see
-# docs/crack_stats_schema.md Sec. 5.
+# docs/batch_stats/crack_stats_schema.md Sec. 5.
 DEFINITIONS = [
     ("crack_area_pct",
      "Share of image pixels classified as crack by Otsu thresholding, after flaking exclusion and despeckling.",
@@ -85,10 +85,10 @@ DEFINITIONS = [
      "giant_component_span_px converted to microns via the 0.6098 um/px calibration factor.",
      "um", "calibrated"),
     ("flaking_excluded_area_pct",
-     "Share of image area identified as flaking/delamination (catalyst layer physically missing, not fractured) and excluded before skeletonization even runs.",
+     "Share of image area identified as flaking/delamination (catalyst layer physically missing, not fractured). crack_stats_v3 skeletonizes once on the uncorrected mask, then omits every edge touching this area (see flaking_n_edges_omitted).",
      "% of image area", "measured"),
     ("flaking_n_candidates",
-     "Number of flaking/delamination regions identified (local width far exceeding the image's own typical crack width, grown back out to their true boundary). Read as 'candidates passing the width test', not a confirmed count -- see docs/crack_stats_schema.md Sec. 4b for a known false-positive gap.",
+     "Number of flaking/delamination regions identified (local width far exceeding the image's own typical crack width, grown back out to their true boundary). Read as 'candidates passing the width test', not a confirmed count -- see docs/batch_stats/crack_stats_schema.md Sec. 4b for a known false-positive gap.",
      "count", "interpreted"),
     ("flaking_n_edges_omitted",
      "Number of graph edges with any pixel inside a flaking-exclusion region, omitted entirely -- from both the stats columns above AND the connectivity graph itself (n_components/giant_component_fraction). This is crack_stats_v3's key methodology difference from v1, which keeps these edges in the graph and only drops them from length/width stats.",

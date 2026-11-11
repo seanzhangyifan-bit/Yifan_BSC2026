@@ -40,7 +40,7 @@ def _run_pipeline(gray, spur_px=3, **kwargs):
 
 def test_default_window_recovers_bearing_under_jitter():
     # Locks in the ANNULUS_OUTER_PX_PLACEHOLDER=60 choice (justified by
-    # scripts/window_sweep.py's measured bias/variance/RMSE sweep) as a
+    # scripts/validation/window_sweep.py's measured bias/variance/RMSE sweep) as a
     # regression test: fixed-seed jittered synthetics, at the shipped
     # default annulus radii, must still recover each arm's known bearing
     # within the sweep's measured worst-case RMSE ballpark (~10 deg),

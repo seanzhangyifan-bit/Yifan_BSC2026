@@ -6,7 +6,7 @@ or curvature. Those stages exist for this repo's own ordering/poset work;
 this export is for a different consumer (an external agent that doesn't
 know this pipeline and shouldn't need to) that only wants area, width,
 edge length, and network-connectivity summary stats. See
-docs/crack_stats_schema.md for the full column reference this script's
+docs/batch_stats/crack_stats_schema.md for the full column reference this script's
 output is documented against -- keep the two in sync if either changes.
 
 Usage:
@@ -69,7 +69,7 @@ CONFIRMED_SCALE_BAR_IMAGES = ["T5-M_H190_v2_mm000001.jpg"]
 # Sample where the default *_mm000001.jpg index is the wrong (undersized) capture --
 # this sample's actual mm000000/mm000001 pair is 4429x3322, not the standard ~7300x7600
 # every other row has. mm000002/mm000003 are the standard-sized pair; mm000002 carries
-# the blue scale bar, mm000003 doesn't (directly verified). See docs/crack_stats_schema.md
+# the blue scale bar, mm000003 doesn't (directly verified). See docs/batch_stats/crack_stats_schema.md
 # S7b.
 ADDITIONAL_IMAGES = ["humidity_loading_ptfe/23RH_PTFE_v1_mm000003.jpg"]
 

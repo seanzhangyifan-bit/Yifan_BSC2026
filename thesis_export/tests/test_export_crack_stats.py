@@ -1,6 +1,6 @@
 """Correctness checks for the per-pixel median-width helper added on top of
 scripts/batch_stats/export_crack_stats.py's existing area/length avg_width_px -- see
-docs/crack_stats_schema.md section 4 and the module docstring on
+docs/batch_stats/crack_stats_schema.md section 4 and the module docstring on
 median_pixelwise_width_px for why this exists alongside, not instead of,
 the older ratio-based estimate. Also covers the thesis-notation additions
 (median_edge_length_px, giant_component_nodes, giant_component_span_px)

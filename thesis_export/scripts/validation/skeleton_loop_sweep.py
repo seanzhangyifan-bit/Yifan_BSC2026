@@ -51,7 +51,7 @@ from src.crackgraph.skeleton import skeletonize_and_prune
 RAW_GLOB = "**/*_mm000001.jpg"  # relative to --data-dir
 
 # Same folder->substrate mapping already established for this dataset (see
-# docs/crack_stats_schema.md S3): T5/, aquivion_t2_membran/,
+# docs/batch_stats/crack_stats_schema.md S3): T5/, aquivion_t2_membran/,
 # characterization2_membran/, humidity_loading/ are Membran; everything
 # with "_ptfe" in the folder name is PTFE.
 MEMBRAN_FOLDERS = {"T5", "aquivion_t2_membran", "characterization2_membran", "humidity_loading"}

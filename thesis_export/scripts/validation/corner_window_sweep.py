@@ -1,6 +1,6 @@
 """Justify CORNER_WINDOW_PX (corners.py) with a measured bias/variance/RMSE
 sweep, the same method used for ANNULUS_OUTER_PX_PLACEHOLDER
-(scripts/window_sweep.py) -- not an eyeballed guess.
+(scripts/validation/window_sweep.py) -- not an eyeballed guess.
 
 Deterministic and seeded. Run from the repo root:
 

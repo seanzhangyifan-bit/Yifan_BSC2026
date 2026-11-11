@@ -1,6 +1,6 @@
 """Run the curvature/anisotropy slice of the pipeline (binarize ->
-skeletonize -> graph -> curvature -> anisotropy -- NOT junctions/kinks/
-corner-cross-check, which this overview figure doesn't need) across a
+skeletonize -> graph -> curvature -> anisotropy -- NOT junctions or the
+corner cross-check, which this overview figure doesn't need) across a
 coarse grid of sections of one full image, plus once on the whole image,
 and compile every resulting rose diagram + curvature histogram into a
 single overview figure. Also updates one master HTML report (one page for
@@ -8,13 +8,13 @@ all coatings/images, see crackgraph/html_report.py) with this image's
 section.
 
 This is deliberately a separate script from src/analyze_image.py: that CLI
-runs the *full* stage 1-5 pipeline (junctions, kinks, corner cross-check,
+runs the *full* stage 1-5 pipeline (junctions, corner cross-check,
 optional xlsx export) on exactly one region per invocation. Pulling those
 stages into this script would be scope creep the overview figure doesn't
 need.
 
 Usage:
-    python3 -m scripts.spatial_overview.overview_figure <image_path> [--n-rows 4] [--n-cols 4] [--out-dir outputs]
+    python3 -m scripts.spatial_overview.overview_figure <image_path> [--n-rows 2] [--n-cols 2] [--out-dir outputs]
 
 Output layout (mirrors analyze_image.py's per-coating nesting):
     outputs/<coating>/<image_stem>_overview.png   -- this run's figure

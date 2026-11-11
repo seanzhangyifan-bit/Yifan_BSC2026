@@ -12,7 +12,7 @@ Two modes:
   mask cleaning + skeletonize + prune consolidated into one panel, flake
   identification, and the final graph.
 
-Reuses scripts/export_crack_stats_v3.py's exact stage functions (binarize,
+Reuses scripts/batch_stats/export_crack_stats_v3.py's exact stage functions (binarize,
 skeletonize_and_prune, exclude_flaking_regions, extract_graph,
 flake_touching_path_indices) in the same order compute_row() calls them --
 this script only adds a render step after each stage instead of proceeding
@@ -77,7 +77,7 @@ CROP_PADDING_FLOOR_PX = 400
 
 # SKELETON_DILATE_PX / SKELETON_COLOR / OMITTED_EDGE_COLOR / FLAKING_TINT_COLOR /
 # KEPT_NODE_COLOR / EXCLUDED_NODE_COLOR now live in src/crackgraph/pipeline_figures.py
-# (imported above), shared with scripts/synthetic_benchmark_report.py.
+# (imported above), shared with scripts/validation/synthetic_benchmark_report.py.
 
 # Single undifferentiated "pruned" color -- spur/fragment/corner-artifact are
 # deliberately not distinguished here (that would need a 3-color legend for a

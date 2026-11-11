@@ -1,5 +1,5 @@
 """Correctness checks for crack_stats_v3's two departures from
-scripts/export_crack_stats.py (v1): flaking.flake_touching_path_indices
+scripts/batch_stats/export_crack_stats.py (v1): flaking.flake_touching_path_indices
 (omit-by-membership, no distance buffer) and building the connectivity
 graph from the OMITTED-filtered edge set rather than the full summary.
 See docs/batch_stats/crack_stats_schema.md section 10 for the full

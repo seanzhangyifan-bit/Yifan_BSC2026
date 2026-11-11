@@ -15,7 +15,7 @@ as a more realistic stretch goal.
 
 ## 2. Measured runtime baseline (real numbers, not estimates)
 
-Per-stage timing was already instrumented in `scripts/export_crack_stats_v3.py`'s `compute_row()`
+Per-stage timing was already instrumented in `scripts/batch_stats/export_crack_stats_v3.py`'s `compute_row()`
 (`runtime_binarize_s`, `runtime_skeletonize_s`, `runtime_flaking_s`, `runtime_graph_extract_s`,
 `runtime_stats_s`, `runtime_total_s`) and is available in `outputs/crack_stats_v3_batch_bcd.xlsx`
 for the 19-image batch B/C/D run -- full 7300x7600px (~55.6 megapixel) static micrographs, not

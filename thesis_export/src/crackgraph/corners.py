@@ -15,7 +15,7 @@ directions there, entirely avoiding the junction blob.
 This does NOT make the method immune to curvature bias, though: each wall
 direction is still a chord over CORNER_WINDOW_PX, so a severely curved
 host wall biases it exactly the way a too-long annulus window biased the
-tangent fit (measured directly: scripts/corner_window_sweep.py's
+tangent fit (measured directly: scripts/validation/corner_window_sweep.py's
 radius=30 px cases show real bias at the window chosen for jitter
 robustness). The advantage over the tangent fit is narrower and specific:
 no junction-blob/skeleton-jitter problem, not a general cure for

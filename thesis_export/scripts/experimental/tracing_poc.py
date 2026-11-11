@@ -1,5 +1,5 @@
 """Bare-minimum, throwaway proof of concept for the tracing idea in
-docs/dynamic_tracking_hypothetical.md Sec. 5 ("a no-matrix alternative to
+docs/experimental/dynamic_tracking_hypothetical.md Sec. 5 ("a no-matrix alternative to
 Steger's method").
 
 **Nothing here is validated or integrated with the real pipeline.** It exists

@@ -49,7 +49,7 @@ def apply_jpeg_blocking(gray: np.ndarray, quality: int = 15) -> np.ndarray:
     """A REAL JPEG encode/decode round-trip (via Pillow), not a hand-
     simulated blockiness filter -- this is the only way to genuinely
     reproduce DCT block-boundary artifacts, closing the gap named in
-    scripts/skeleton_loop_sweep.py:25 ("no synthetic case reproduces
+    scripts/validation/skeleton_loop_sweep.py:25 ("no synthetic case reproduces
     JPEG-compression boundary noise"). Lossy and libjpeg-version-
     dependent by construction -- no closed-form ground truth for the
     output pixel values, only a clean-vs-degraded comparison downstream.

@@ -6,7 +6,7 @@ known right answer" with actual numbers, not eyeballing. See `../../CALIBRATION.
 status of every tunable constant this tier justifies.
 
 **Synthetic ground-truth galleries** (known right answer, human-reviewable + numeric):
-- `validation_gallery.py [--out-dir outputs/validation]`: 14 synthetic cases across all 5
+- `validation_gallery.py [--out-dir outputs/validation]`: 12 synthetic cases across 4
   measurement methods, run through the real pipeline, compiled into one browsable HTML page with
   expected-vs-measured tables. Includes two cases that show a known method limitation honestly
   (severely curved host defeats the corner cross-check; an orthogonal grid reads as isotropic

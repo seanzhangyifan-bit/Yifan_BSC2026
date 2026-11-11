@@ -1,5 +1,5 @@
 """One-off crack_stats_v3 run over three specific thesis batches (B/C/D),
-not the full default dataset scripts/export_crack_stats_v3.py's own main()
+not the full default dataset scripts/batch_stats/export_crack_stats_v3.py's own main()
 covers.
 
 Batch B -- T5 gap-height variation, PTFE (8 files, characterization2_ptfe/):

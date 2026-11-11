@@ -1,5 +1,5 @@
 """Coarse N x M grid tiling of a full image into non-overlapping sections,
-for the multi-section overview figure (scripts/overview_figure.py).
+for the multi-section overview figure (scripts/spatial_overview/overview_figure.py).
 
 Deliberately separate from region.py's default_corner_crop: that is the
 pipeline's single validated analysis window (corner_frac of image width,

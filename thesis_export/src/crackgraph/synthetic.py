@@ -32,7 +32,7 @@ def _smooth_jitter_1d(
 
     Independent per-pixel noise (tried first) rasterizes into a jagged
     boundary that skeletonizes into dozens of spurious spur branches per
-    arm -- confirmed empirically (see scripts/window_sweep.py's git
+    arm -- confirmed empirically (see scripts/validation/window_sweep.py's git
     history / dev notes: an early version of this jitter model produced
     40-170 "junctions" per single-junction test image at jitter_px=0.5-1.0,
     i.e. it was testing topology breakage, not angle-estimation noise).
@@ -75,7 +75,7 @@ def _draw_rotated_arm(
     a model of realistic skeletonization wobble with a known nominal
     ground truth, NOT a claim about the exact pixel-level boundary of any
     real crack. It exists so the tangent-fit estimator's robustness to
-    jitter can be measured (see scripts/window_sweep.py) instead of
+    jitter can be measured (see scripts/validation/window_sweep.py) instead of
     asserted. The start point (t=0) is always exact/unperturbed, so
     `bearing_deg` remains the nominal ground-truth direction at the vertex.
 
@@ -876,7 +876,7 @@ def generate_grid_with_flakes(
 # ~1500px range as every generator above; feature-size *ratios* (line
 # width, spacing) are kept proportional to this project's own real-dataset
 # medians (avg_width_px~=16px, avg_edge_length_px~=67-138px, per
-# docs/crack_stats_schema.md) rather than picked arbitrarily. --
+# docs/batch_stats/crack_stats_schema.md) rather than picked arbitrarily. --
 
 
 def generate_tapered_line(
@@ -907,7 +907,7 @@ def generate_tapered_line(
     with" role -- one skeleton path, one seed.
 
     `max_thickness` defaults to this project's real-dataset median
-    avg_width_px (~16px, see docs/crack_stats_schema.md); `min_thickness`
+    avg_width_px (~16px, see docs/batch_stats/crack_stats_schema.md); `min_thickness`
     to a thin-but-still->=1px tip.
 
     Rasterized directly via a rotated-frame mgrid (t = distance along the

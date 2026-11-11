@@ -1,8 +1,8 @@
 """Renders a battery of ValidationCaseResult (see validation_cases.py) into
-one static HTML gallery page, grouped by method (junction/kink/corner/
+one static HTML gallery page, grouped by method (junction/corner/
 curvature/anisotropy). Unlike html_report.py's report.html, this is not
 registry-backed/incrementally upserted across sessions -- the case battery
-is fixed and fully re-run each time scripts/validation_gallery.py is
+is fixed and fully re-run each time scripts/validation/validation_gallery.py is
 invoked, so the HTML is simply built fresh from whatever results that run
 produced. Same plain-CSS, no-JS visual idiom as html_report.py.
 """
@@ -13,7 +13,6 @@ from .validation_cases import ValidationCaseResult
 
 _METHOD_TITLES = {
     "junction": "Junction classification (T / Y / angle recovery)",
-    "kink": "Kink detection",
     "corner": "Corner cross-check",
     "curvature": "Curvature / tortuosity",
     "anisotropy": "Anisotropy",

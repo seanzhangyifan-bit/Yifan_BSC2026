@@ -36,7 +36,7 @@ class ImageEntry:
     timestamp_iso: str
     # Attached later by attach_full_analysis_images(), once analyze_image.py
     # --full-image has been run separately (stage 4/5, not part of
-    # scripts/overview_figure.py's lighter curvature/anisotropy-only slice).
+    # scripts/spatial_overview/overview_figure.py's lighter curvature/anisotropy-only slice).
     full_overlay_png_relpath: str | None = None
     full_precedence_png_relpath: str | None = None
 
@@ -134,7 +134,7 @@ def _render_html(entries: list[dict]) -> str:
 <p>One section per coating (source subfolder under data/raw/), one image
 block per analyzed image. Each image block holds its multi-section
 overview figure (per-section + whole-image rose diagrams and
-curvature/tortuosity histograms, see scripts/overview_figure.py) and,
+curvature/tortuosity histograms, see scripts/spatial_overview/overview_figure.py) and,
 where attached, the full-image skeleton overlay and precedence graph
 from `analyze_image.py --full-image` (stage 4/5 -- exploratory on a
 full image, see METHODOLOGY.md's scope-discipline notes; validated so far
@@ -190,7 +190,7 @@ def attach_full_analysis_images(
 ) -> Path:
     """Attach the full-image overlay/precedence-graph paths (from a
     separate `analyze_image.py --full-image` run -- stage 4/5, not part of
-    scripts/overview_figure.py's lighter slice) to an *existing* image
+    scripts/spatial_overview/overview_figure.py's lighter slice) to an *existing* image
     entry, and rewrite the HTML. Only updates those two fields on the
     matching entry, leaving everything else (including a previously
     attached pair, if re-run) untouched. Raises if no matching entry
@@ -210,7 +210,7 @@ def attach_full_analysis_images(
     else:
         raise ValueError(
             f"No existing entry for coating={coating!r} image_stem={image_stem!r} -- "
-            "run update_master_report() (e.g. via scripts/overview_figure.py) first."
+            "run update_master_report() (e.g. via scripts/spatial_overview/overview_figure.py) first."
         )
 
     _save_registry(json_path, entries)

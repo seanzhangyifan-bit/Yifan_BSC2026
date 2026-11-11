@@ -1,7 +1,7 @@
 """Synthetic-mesh validation gallery for the crack_stats pipeline
 specifically (stage 1-3 + flaking.py -- the modules
-scripts/export_crack_stats.py actually imports), as opposed to
-scripts/validation_gallery.py's battery, which covers stage 4
+scripts/batch_stats/export_crack_stats.py actually imports), as opposed to
+scripts/validation/validation_gallery.py's battery, which covers stage 4
 (junction/corner/curvature/anisotropy) and is not part of
 crack_stats.xlsx at all.
 
@@ -251,7 +251,7 @@ def main():
 <html><head><meta charset="utf-8"><title>crack_stats: mesh/network synthetic gallery</title>
 <style>{CSS}</style></head><body>
 <h1>crack_stats: mesh/network synthetic gallery</h1>
-<p class="note">Scoped to exactly what scripts/export_crack_stats.py imports (binarize, skeleton,
+<p class="note">Scoped to exactly what scripts/batch_stats/export_crack_stats.py imports (binarize, skeleton,
 graph, flaking) -- no junction/curvature/anisotropy layer. Companion to
 tests/test_grid_synthetic.py, for visual review of the same cases.</p>
 {''.join(render_case_html(c) for c in cases)}

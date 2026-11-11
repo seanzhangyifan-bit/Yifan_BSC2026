@@ -1,7 +1,7 @@
 """Shared pipeline-stage panel-drawing functions.
 
-Extracted from scripts/pipeline_stage_figures.py (the real-image walkthrough
-script) so both that script and scripts/synthetic_benchmark_report.py render
+Extracted from scripts/validation/pipeline_stage_figures.py (the real-image walkthrough
+script) so both that script and scripts/validation/synthetic_benchmark_report.py render
 raw/binarized/skeleton/graph panels with the same code instead of duplicating
 it. Only the panels genuinely shared between a real-image walkthrough and a
 synthetic-case report live here -- the real-image script's flaking-specific

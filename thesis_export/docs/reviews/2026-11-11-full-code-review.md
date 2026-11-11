@@ -7,7 +7,7 @@
 - **Baseline**: commit `08d6e83`, plus the uncommitted doc tidy-up in `skeleton.py`,
   `flaking.py`, `CALIBRATION.md`, `METHODOLOGY.md`, `docs/calibration_notes.md` and the new
   `docs/design_notes.md`.
-- **Status**: findings 1–3 are fixed (see their sections). Everything else is still open. All 157
+- **Status**: findings 1–8 are fixed (see their sections). Everything else is still open. All 157
   tests passed on the baseline.
 
 ## Summary
@@ -46,11 +46,11 @@ the code but didn't run it.
 | 1 | High | ~~Corner cross-check flips west-pointing cracks to east~~ **Fixed** | `corners.py:205`, `:237` |
 | 2 | High | ~~Batch exporters crash: image folder hard-coded, no way to point at your own~~ **Fixed** | `export_crack_stats.py:67–69, 361–365` |
 | 3 | High | ~~Every exported row claims "scale bar visually confirmed"~~ **Fixed** | `export_crack_stats.py:309`, `export_crack_stats_v3.py:202` |
-| 4 | Medium | v3 definitions sheet describes the v1 method, not v3 | `add_definitions_sheet.py:88` |
-| 5 | Medium | Docs still describe the deleted kink feature | 4 docs, example gallery, `CALIBRATION.md` |
-| 6 | Medium | 20 wrong line numbers in the calibration docs; table shows stray backslashes | `CALIBRATION.md`, `docs/calibration_notes.md` |
-| 7 | Medium | 63 references to file paths that no longer exist | 15 paths, across `src/`, `scripts/`, docs |
-| 8 | Medium | Console report names a flaking criterion that was dropped | `analyze_image.py:384` |
+| 4 | Medium | ~~v3 definitions sheet describes the v1 method, not v3~~ **Fixed** | `add_definitions_sheet.py:88` |
+| 5 | Medium | ~~Docs still describe the deleted kink feature~~ **Fixed** | 4 docs, example gallery, `CALIBRATION.md` |
+| 6 | Medium | ~~20 wrong line numbers in the calibration docs; table shows stray backslashes~~ **Fixed** | `CALIBRATION.md`, `docs/calibration_notes.md` |
+| 7 | Medium | ~~63 references to file paths that no longer exist~~ **Fixed** | 15 paths, across `src/`, `scripts/`, docs |
+| 8 | Medium | ~~Console report names a flaking criterion that was dropped~~ **Fixed** | `analyze_image.py:384` |
 | 9 | Medium | Two steps get very slow on a full image | `edge_metrics.py:272`, `corners.py:282` |
 | 10 | Medium | GUI shows crack stats and pipeline results for different image regions | `app.py` |
 | 11 | Medium | `--n-rows`/`--n-cols` accepted, but anything other than 2×2 crashes at the end | `overview_figure.py:44–45` |
@@ -144,7 +144,13 @@ kind of thing `CLAUDE.md`'s evidence-level discipline rules out.
 
 ## Medium
 
-### 4. v3 definitions sheet describes the v1 method (from reading)
+### 4. v3 definitions sheet describes the v1 method (from reading) — FIXED
+
+> **Fixed 2026-11-11** (findings 4–8). Definitions-sheet wording and the console label corrected;
+> kink leftovers removed and case counts updated to 12 cases / 4 methods; the example gallery was
+> regenerated (12/12 pass, images inlined); calibration docs now use plain names and correct line
+> numbers (totals now 3 🟡 / 15 🔴); 59 old paths updated. The only remaining old paths are quoted on
+> purpose in this review and the July review.
 
 `add_definitions_sheet.py:88` says the flaking area is "excluded before skeletonization even
 runs". That describes v1's two-pass method. v3, the method this sheet is written for,
@@ -152,7 +158,7 @@ skeletonizes **once on the uncorrected mask** and drops flake-touching edges aft
 it to match v3, for example: "identified after a single skeletonization pass; edges touching it
 are omitted".
 
-### 5. Docs still describe the deleted kink feature (verified)
+### 5. Docs still describe the deleted kink feature (verified) — FIXED
 
 The kink module was removed in `58682f6`, but:
 - `README.md:133`, `examples/README.md:12,25`, `METHODOLOGY.md:104` and
@@ -168,7 +174,7 @@ The kink module was removed in `58682f6`, but:
 **Fix:** regenerate the example gallery, update the four "14/5" mentions, and delete the two
 `CALIBRATION.md` rows and the leftover mentions.
 
-### 6. Calibration docs: wrong line numbers and stray backslashes (verified)
+### 6. Calibration docs: wrong line numbers and stray backslashes (verified) — FIXED
 
 - **20 of 34** `file:line` pointers in `CALIBRATION.md` and `docs/calibration_notes.md` are
   wrong. All the `junctions.py` and `corners.py` settings are off by 4–27 lines, because the
@@ -182,7 +188,7 @@ The kink module was removed in `58682f6`, but:
 since those go stale every time a comment changes. A small script (the one used for this
 review) can re-check them.
 
-### 7. 63 references to file paths that no longer exist (verified)
+### 7. 63 references to file paths that no longer exist (verified) — FIXED
 
 The folder reorganisation moved scripts into `scripts/batch_stats/`, `scripts/validation/` and so
 on, but comments and docs still use the old paths. There are 15 distinct dead paths, 63 mentions
@@ -200,7 +206,7 @@ in total. The most common are:
 **Fix:** a find-and-replace pass. It's mechanical and safe, and it's what broke the v3 imports
 in October.
 
-### 8. Console report names a dropped flaking criterion (from reading)
+### 8. Console report names a dropped flaking criterion (from reading) — FIXED
 
 `analyze_image.py:384` prints `[interpreted -- width+solidity flagged ...]` for flaking
 candidates. Solidity was dropped as a criterion; `flaking.py` uses width only. Anyone reading a

@@ -275,8 +275,8 @@ def flake_touching_path_indices(
     indices of edges with AT LEAST ONE pixel physically inside
     excluded_mask -- no distance buffer beyond the mask itself. Exists
     alongside cut_adjacent_path_indices, not instead of it -- v1
-    (scripts/export_crack_stats.py) keeps using the buffer version
-    unchanged; v3 (scripts/export_crack_stats_v3.py) uses this one. See
+    (scripts/batch_stats/export_crack_stats.py) keeps using the buffer version
+    unchanged; v3 (scripts/batch_stats/export_crack_stats_v3.py) uses this one. See
     docs/batch_stats/crack_stats_schema.md section 10 for why v3 needs no buffer at all: it
     never re-skeletonizes on a corrected mask, so excluded_mask itself (not
     a margin around it) is the only region whose skeleton pixels are

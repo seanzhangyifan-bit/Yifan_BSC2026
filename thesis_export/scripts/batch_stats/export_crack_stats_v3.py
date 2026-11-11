@@ -1,5 +1,5 @@
 """crack_stats_v3: a simplified, single-pass variant of
-scripts/export_crack_stats.py's flaking exclusion. Does NOT modify or
+scripts/batch_stats/export_crack_stats.py's flaking exclusion. Does NOT modify or
 replace that script -- both pipelines coexist, produce separate outputs,
 and are independently runnable. See docs/batch_stats/crack_stats_schema.md
 section 10 for the full methodology writeup and rationale.
