@@ -160,7 +160,20 @@ def _edge_direction(
     if not node_is_src:
         coords = coords[::-1]
     vertex = coords[0]  # exact vertex coordinate
+    # Only the stretch of path before it first leaves the outer radius belongs
+    # to this arm's approach. Points further along can come back into the ring
+    # (a curving crack, or a loop returning to its own junction) and would mix
+    # a second, unrelated direction into the fit. A self-loop (both ends at
+    # this vertex) is also cut at its midpoint, so a small loop that never
+    # leaves the ring still contributes only its near end.
+    is_self_loop = len(coords) > 2 and np.array_equal(coords[0], coords[-1])
+    if is_self_loop:
+        coords = coords[: (len(coords) + 1) // 2]
     d = np.linalg.norm(coords - vertex, axis=1)
+    exits = np.flatnonzero(d > outer_radius_px)
+    if exits.size:
+        coords = coords[: exits[0] + 1]  # keep the first outside point so max_d still exceeds the ring
+        d = d[: exits[0] + 1]
     band_mask = (d >= inner_radius_px) & (d <= outer_radius_px)
     n_in_band = int(band_mask.sum())
     max_d = float(d.max())

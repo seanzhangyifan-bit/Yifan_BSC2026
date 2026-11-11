@@ -234,3 +234,35 @@ def test_short_abutter_flagged_insufficient_not_crashed():
     c = result.classifications[0]
     assert c.label == "insufficient_data"
     assert c.failure_reason == "edge_shorter_than_inner_radius"
+
+
+def _lollipop_image(ring_radius_px: int = 40) -> "np.ndarray":
+    """A straight stem from the west meeting a closed ring at the ring's
+    westmost point: one degree-3 node whose loop arm returns to it."""
+    import numpy as np
+    from skimage.draw import circle_perimeter, line
+    from skimage.morphology import binary_dilation, disk
+
+    img = np.zeros((220, 260), dtype=bool)
+    cy, x_junction = 110, 100
+    rr, cc = line(cy, 10, cy, x_junction)
+    img[rr, cc] = True
+    rr, cc = circle_perimeter(cy, x_junction + ring_radius_px, ring_radius_px)
+    img[rr, cc] = True
+    return (binary_dilation(img, disk(1)) * 255).astype(np.uint8)
+
+
+def test_loop_arm_uses_only_its_near_end():
+    # Review finding 13: the fit band used to take every path point within
+    # 5-60 px of the vertex, so the far half of a loop that returns to its
+    # own junction was mixed into each loop arm's fit. Here the loop leaves
+    # the junction straight north and south (tangent to the ring at its
+    # westmost point) and the stem arrives from the west: a T, stem abutting.
+    result = _run_pipeline(_lollipop_image())
+    deg3 = [c for c in result.classifications if c.label != "insufficient_data" or c.edge_directions]
+    assert len(deg3) == 1
+    c = deg3[0]
+    assert c.label == "T", (c.label, c.sector_gaps_deg)
+    bearings = sorted(abs(ed.bearing_deg) for ed in c.edge_directions)
+    assert abs(bearings[0] - 90.0) < 15.0 and abs(bearings[1] - 90.0) < 15.0
+    assert abs(bearings[2] - 180.0) < 10.0

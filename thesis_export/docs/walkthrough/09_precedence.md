@@ -1,6 +1,6 @@
 # 9. Precedence graph: which crack came first
 
-**File**: `src/crackgraph/precedence.py` (238 lines)
+**File**: `src/crackgraph/precedence.py` (246 lines)
 
 **What it does.** It collects every T-junction's local fact, "the host was there before the
 abutter", into one **directed graph**:
@@ -36,12 +36,12 @@ this abutter":
 | Both say T but **disagree on the abutter** | **No arrows.** Counted as a conflict, not decided by coin flip |
 | Neither says T | Nothing |
 
-## Setting, line 58
+## Setting, line 59
 
 `CORNER_TO_TANGENT_BEARING_TOL_DEG = 45°` 🔴: how closely a corner-method arm must line up with a
 tangent-fit arm to be treated as the same segment.
 
-## Result containers, lines 61–78
+## Result containers, lines 62–79
 
 - **`PrecedenceArc`**: one arrow:
   - the junction it came from
@@ -54,13 +54,13 @@ tangent-fit arm to be treated as the same segment.
   - cycles (`nontrivial_sccs`)
   - each segment's generation
 
-## `_corner_claim_to_path_indices(...)`, line 86
+## `_corner_claim_to_path_indices(...)`, line 87
 
 The corner method only knows *directions*, not which skeleton segment each direction belongs
 to. This function translates:
 
 1. Re-run the T rule on the corner method's three directions to find which one is the abutter.
-2. **Lines 112–126**: match each corner direction to the nearest tangent-fit arm direction. Take
+2. **Lines 113–127**: match each corner direction to the nearest tangent-fit arm direction. Take
    the closest pairs first, use each arm once, and stop beyond 45°.
 3. All three matched → return the abutter segment and the two host segments. Otherwise →
    unmapped, with a reason.
@@ -68,24 +68,25 @@ to. This function translates:
 This needs all three tangent-fit arms measured. If one was too short, the corner claim is left
 unmapped rather than guessed.
 
-## `_compute_generations(graph)`, line 136
+## `_compute_generations(graph)`, line 137
 
 1. **Strongly connected components** (`networkx`): groups where every segment can reach every
-   other by following arrows. A group of more than one segment is a cycle.
+   other by following arrows. A group of more than one segment is a cycle. So is a single segment
+   with an arrow to itself: a loop whose two ends meet at one T, one end abutting the other.
 2. **Condensation**: squash each group into a single node. The result never has cycles.
 3. **Topological generations**: generation 0 = nothing points to it (oldest); generation 1 =
    only generation-0 nodes point to it; and so on.
 4. Segments inside a cycle get generation `None`, meaning undetermined, rather than a forced
    number.
 
-## `build_precedence_graph(...)`, line 153: the main function
+## `build_precedence_graph(...)`, line 161: the main function
 
 | Lines | What happens |
 |---|---|
-| 169–206 | For each junction, gather both methods' claims and apply the table above. |
-| 208–217 | One arrow per host: a T gives two arrows, abutter after each host side. |
-| 219–226 | Build the graph with arrows **host → abutter** (older → younger). The comment spells out why it's this direction. |
-| 228 | Generations and cycles. |
+| 177–214 | For each junction, gather both methods' claims and apply the table above. |
+| 216–225 | One arrow per host: a T gives two arrows, abutter after each host side. |
+| 227–234 | Build the graph with arrows **host → abutter** (older → younger). The comment spells out why it's this direction. |
+| 236 | Generations and cycles. |
 
 ## Worth knowing
 
@@ -94,7 +95,7 @@ unmapped rather than guessed.
 - **The two sides of a straight crack through a junction are separate segments** and can get
   different generations. That's deliberate ("arcs, not whole cracks"). Merging them into one
   crack would need evidence, and it's not implemented.
-- **Tests**: `tests/test_precedence.py` (6 tests):
+- **Tests**: `tests/test_precedence.py` (7 tests):
   - a synthetic T gives agreeing arrows and generations; a Y gives none
   - a simple chain gets generations; a 3-segment cycle leaves them undetermined
   - conflicting abutters emit no arrow

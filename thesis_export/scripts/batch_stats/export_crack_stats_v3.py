@@ -54,6 +54,7 @@ from scripts.batch_stats.export_crack_stats import (
     SCALE_BAR_NOT_CHECKED,
     UM_PER_PX_MM_TAG,
     add_batch_args,
+    crack_network_graph,
     find_batch_images,
     giant_component_nodes,
     giant_component_span_px,
@@ -147,10 +148,7 @@ def compute_row(
     # blob's own spurious interior mileage when candidates exist, so an
     # unfiltered sum would silently deflate giant_component_fraction.
     kept_summary = summary.loc[~summary.index.isin(omitted)]
-    G = nx.from_pandas_edgelist(
-        kept_summary, source="node_id_src", target="node_id_dst",
-        edge_attr="branch_distance",
-    )
+    G = crack_network_graph(kept_summary)
     n_components = nx.number_connected_components(G)
     full_total_length_px = float(kept_summary["branch_distance"].sum())
     gc_nodes = giant_component_nodes(G)

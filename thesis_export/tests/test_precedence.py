@@ -91,6 +91,17 @@ def test_compute_generations_three_cycle_leaves_generation_undetermined():
     assert generation == {0: None, 1: None, 2: None}
 
 
+def test_compute_generations_self_arc_is_reported_as_cycle():
+    # A loop path whose two ends meet at one T emits "path 1 came after path
+    # 1". That is a cycle of length one: report it, don't date it.
+    graph = nx.DiGraph()
+    graph.add_edge(0, 1)
+    graph.add_edge(1, 1)
+    generation, nontrivial_sccs = _compute_generations(graph)
+    assert nontrivial_sccs == [frozenset({1})]
+    assert generation == {0: 0, 1: None}
+
+
 def _edge_dir(path_index: int, bearing_deg: float) -> EdgeDirection:
     return EdgeDirection(
         path_index=path_index,

@@ -1,5 +1,5 @@
 """Run the curvature/anisotropy slice of the pipeline (binarize ->
-skeletonize -> graph -> curvature -> anisotropy -- NOT junctions or the
+flaking exclusion -> skeletonize -> graph -> curvature -> anisotropy -- NOT junctions or the
 corner cross-check, which this overview figure doesn't need) across a
 coarse grid of sections of one full image, plus once on the whole image,
 and compile every resulting rose diagram + curvature histogram into a
@@ -14,7 +14,7 @@ stages into this script would be scope creep the overview figure doesn't
 need.
 
 Usage:
-    python3 -m scripts.spatial_overview.overview_figure <image_path> [--n-rows 2] [--n-cols 2] [--out-dir outputs]
+    python3 -m scripts.spatial_overview.overview_figure <image_path> [--out-dir outputs]
 
 Output layout (mirrors analyze_image.py's per-coating nesting):
     outputs/<coating>/<image_stem>_overview.png   -- this run's figure
@@ -30,6 +30,7 @@ from pathlib import Path
 from src.crackgraph.anisotropy import compute_anisotropy
 from src.crackgraph.binarize import binarize
 from src.crackgraph.curvature import compute_edge_curvature
+from src.crackgraph.flaking import exclude_flaking_regions
 from src.crackgraph.graph import extract_graph
 from src.crackgraph.html_report import update_master_report
 from src.crackgraph.io_utils import load_image
@@ -44,12 +45,25 @@ def parse_args():
     p.add_argument("--n-rows", type=int, default=2)
     p.add_argument("--n-cols", type=int, default=2)
     p.add_argument("--out-dir", type=str, default="outputs")
-    return p.parse_args()
+    args = p.parse_args()
+    # The figure layout places each quadrant in its matching corner, so only a
+    # 2x2 grid can be drawn. Fail here, not after the whole analysis has run.
+    if (args.n_rows, args.n_cols) != (2, 2):
+        p.error("the overview figure only supports a 2x2 grid (--n-rows 2 --n-cols 2)")
+    return args
 
 
 def _run_pipeline_slice(gray):
     binarize_result = binarize(gray, sanity_band=(0.01, 0.15))
     skeleton_result = skeletonize_and_prune(binarize_result.mask, source_image=gray)
+    # Same flaking exclusion as every other entry point: without it, a flaked
+    # patch's own interior skeleton mesh would be counted in the rose diagram
+    # and tortuosity histogram as if it were crack.
+    flaking_result = exclude_flaking_regions(
+        skeleton_result.mask_clean, skeleton_result.skel_image, skeleton_result.medial_radius,
+    )
+    if flaking_result.candidates:
+        skeleton_result = skeletonize_and_prune(flaking_result.mask_corrected, source_image=gray)
     graph_result = extract_graph(skeleton_result.skeleton)
     curvature_result = compute_edge_curvature(skeleton_result.skeleton, graph_result)
     anisotropy_result = compute_anisotropy(skeleton_result.skeleton, graph_result)

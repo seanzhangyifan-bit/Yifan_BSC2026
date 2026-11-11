@@ -1,6 +1,6 @@
 # 7. Junction classification
 
-**File**: `src/crackgraph/junctions.py` (476 lines)
+**File**: `src/crackgraph/junctions.py` (489 lines)
 
 **What it does.** At every three-way junction, it measures the directions of the three arms and
 labels the junction:
@@ -76,42 +76,42 @@ the same node appears twice, once per end.
 | Lines | What happens |
 |---|---|
 | 159–162 | Get the arm's pixels, ordered *outward* from the junction. |
-| 163–164 | Pick the pixels whose straight-line distance from the junction is between the inner and outer ring radius. |
-| 169–190 | No pixels in the ring → fail with a reason. |
-| 196–199 | `s`: distance *along* the arm from the junction, used as the fitting variable. |
-| 213–229 | **Enough points and span → parabola.** Fit row(s) and column(s) as parabolas in `s`. The slope at `s = 0` is the arm's direction at the junction. The second derivative gives the signed curvature. |
-| 230–240 | **Fewer points → straight line.** Direction only, no curvature. |
-| 241–246 | **One point → a straight chord** from the junction to it. |
-| 248–283 | Turn the direction into a unit vector and a bearing, and return. |
+| 163–177 | Cut the arm at the first pixel that leaves the outer ring (and a loop back to this same junction at its midpoint), then pick the pixels whose straight-line distance from the junction is between the inner and outer ring radius. Cutting first stops a curving arm or a loop's far end from re-entering the ring and joining the fit (review finding 13). |
+| 182–203 | No pixels in the ring → fail with a reason. |
+| 209–212 | `s`: distance *along* the arm from the junction, used as the fitting variable. |
+| 226–242 | **Enough points and span → parabola.** Fit row(s) and column(s) as parabolas in `s`. The slope at `s = 0` is the arm's direction at the junction. The second derivative gives the signed curvature. |
+| 243–253 | **Fewer points → straight line.** Direction only, no curvature. |
+| 254–259 | **One point → a straight chord** from the junction to it. |
+| 261–296 | Turn the direction into a unit vector and a bearing, and return. |
 
 The fit is deliberately **not forced through the junction pixel**. That pixel sits inside the
 blob and is slightly off-centre, and forcing through it skewed every direction.
 
-## `_bearing_deg`, `sector_gaps_deg_from_bearings`, lines 286–316
+## `_bearing_deg`, `sector_gaps_deg_from_bearings`, lines 299–329
 
 - **Bearing**: `atan2(−drow, dcol)` in degrees. 0° = right, 90° = up.
 - **Sector gaps**: sort the three bearings around the circle and return each neighbouring pair's
   gap, wrapping round, plus which arms bound it. They always sum to 360°.
 
-## `classify_from_gaps(gaps, y_tol, t_straight_tol, t_right_tol)`, line 319
+## `classify_from_gaps(gaps, y_tol, t_straight_tol, t_right_tol)`, line 332
 
 | Lines | Rule |
 |---|---|
-| 332–333 | All three gaps within `y_tol` of 120° → **Y**. Checked first, so Y wins if loose cut-offs ever let both match. |
-| 338–344 | Take the largest gap. If it's within `t_straight_tol` of 180°, the two arms around it are the **hosts** and the third arm is the **abutter**. If both host–abutter gaps are within `t_right_tol` of 90° → **T**. |
-| 346 | Otherwise → **ambiguous**. |
+| 345–346 | All three gaps within `y_tol` of 120° → **Y**. Checked first, so Y wins if loose cut-offs ever let both match. |
+| 351–357 | Take the largest gap. If it's within `t_straight_tol` of 180°, the two arms around it are the **hosts** and the third arm is the **abutter**. If both host–abutter gaps are within `t_right_tol` of 90° → **T**. |
+| 359 | Otherwise → **ambiguous**. |
 
 This function is shared with `corners.py` and `precedence.py`, so every method labels junctions
 with the identical rule.
 
-## `classify_junctions(...)`, line 349: the main function
+## `classify_junctions(...)`, line 362: the main function
 
 For each degree-3 node:
-1. **Lines 392–398**: if the width map is supplied, widen the inner ring radius to the local
+1. **Lines 405–411**: if the width map is supplied, widen the inner ring radius to the local
    half-width. On thick cracks, the junction blob can be wider than 5 px.
-2. **Lines 400–415**: not exactly 3 arms → `insufficient_data`.
-3. **Lines 417–436**: measure each arm. If any fails → `insufficient_data`, with the reasons.
-4. **Lines 438–461**: compute the gaps, classify, and record the abutter and hosts for a T.
+2. **Lines 413–428**: not exactly 3 arms → `insufficient_data`.
+3. **Lines 430–449**: measure each arm. If any fails → `insufficient_data`, with the reasons.
+4. **Lines 451–474**: compute the gaps, classify, and record the abutter and hosts for a T.
 
 Then it counts each label.
 
@@ -123,8 +123,5 @@ Then it counts each label.
   See the sensitivity write-up.
 - **The arm directions are labelled `[measured]`, but they're extrapolated from a fit.**
   `[interpreted]` would be more accurate (review finding 12).
-- **The ring is picked by straight-line distance**, which mixes up both ends of a loop that
-  comes back to its own junction. That never happened on two real images tested (review finding
-  13).
-- **Tests**: `tests/test_junction_angle.py` (11 tests): straight, angled, curved and noisy
+- **Tests**: `tests/test_junction_angle.py` (12 tests): straight, angled, curved and noisy
   synthetic T's and Y's with known angles.

@@ -48,12 +48,12 @@ Skeleton and marker coordinates are multiplied by the same scale factor instead.
 
 ## `xlsx_report.py`
 
-`append_chunk_to_workbook(...)` (line 218) adds one row per `analyze_image --xlsx-out` run:
+`append_chunk_to_workbook(...)` (line 219) adds one row per `analyze_image --xlsx-out` run:
 - one sheet per image
 - about 55 columns, from the run settings to junction counts and corner-check agreement
 - thumbnails of the rose, histogram and overlay embedded in the row
 
-The small helpers at lines 121–157 compute summary numbers. `analyze_image.py` uses the same
+The small helpers at lines 122–158 compute summary numbers. `analyze_image.py` uses the same
 helpers, so the printed report and the spreadsheet can't disagree:
 - `tortuosity_stats`, `curvature_stats`
 - `corner_agreement_counts`
@@ -63,15 +63,16 @@ The rest handles Excel's sheet-name rules (31 characters, no `[]:*?/\`).
 
 ## `cache_io.py`
 
-- **`save_analysis_cache(...)`** (line 79) writes six files per image into `cache_dir/<image>/`:
+- **`save_analysis_cache(...)`** (line 83) writes six files per image into `cache_dir/<image>/`:
   - the stats row (`stats.json`)
   - the corrected mask, final skeleton and excluded-flake mask, as compressed arrays
   - the flake candidates
   - every pruned branch with its reason and pixel path
-- **`load_analysis_cache(...)`** (line 126) reads them back.
+- **`load_analysis_cache(...)`** (line 130) reads them back.
 
-The width map isn't saved, because it's big and quick to recompute. See review finding 15 for a
-caveat on recomputing it.
+The width map isn't saved, because it's big and quick to recompute. On a v1 run that found
+flakes, recompute it after re-running the skeleton step's small-object/small-hole cleanup on
+`mask_corrected`, or it can differ by a few pixels (the module description explains).
 
 ## `summary_plots.py`
 
@@ -110,10 +111,10 @@ thickened **for display only**, so it stays visible when shrunk.
 
 ## `scripts/spatial_overview/`
 
-- **`overview_figure.py <image>`** runs binarize → skeleton → graph → curvature → anisotropy
-  (no flaking exclusion, no junctions) on the whole image and on each quadrant, timing both. It
-  draws the 2×2 overview figure and updates `outputs/report.html`. Only 2×2 works (review
-  finding 11).
+- **`overview_figure.py <image>`** runs binarize → skeleton → flaking exclusion → graph →
+  curvature → anisotropy (no junctions) on the whole image and on each quadrant, timing both. It
+  draws the 2×2 overview figure and updates `outputs/report.html`. Other grid sizes are rejected
+  up front.
 - **`attach_full_analysis.py <image>`** adds an existing `analyze_image --full-image` overlay
   and precedence picture to that image's HTML entry.
 

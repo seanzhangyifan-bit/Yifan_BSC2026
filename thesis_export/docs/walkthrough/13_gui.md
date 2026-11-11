@@ -1,6 +1,6 @@
 # 13. The GUI
 
-**File**: `app.py` (442 lines)
+**File**: `app.py` (468 lines)
 
 ```
 python3 -m streamlit run app.py
@@ -21,21 +21,21 @@ out.
 
 ## How the code is organised
 
-**Pipeline side (lines 70–196).** These functions take no Streamlit objects, so they work on
+**Pipeline side (lines 81–207).** These functions take no Streamlit objects, so they work on
 their own.
 
 | Function | Line | What it does |
 |---|---|---|
-| `_format_duration` | 70 | "75" → "1m 15s", rounded down. It's a rough estimate, so no false precision. |
-| `_run_streaming` | 80 | Runs a command and passes each line of its output on **as it arrives**, instead of waiting for the end. |
-| `run_single_image_analysis` | 97 | Runs `src.analyze_image` as a **separate process**, with `--skip-*` flags for unchecked boxes, then finds the pictures it wrote. It's a separate process because `analyze_image` is one big command-line script (review R1). That way the GUI can't break it. |
-| `run_spatial_overview` | 151 | The same for the overview figure. |
-| `_make_stage_progress_callback` | 178 | Watches the output for known section headers (`STAGE_MARKERS`, line 46) and moves the progress bar one step per header. |
+| `_format_duration` | 81 | "75" → "1m 15s", rounded down. It's a rough estimate, so no false precision. |
+| `_run_streaming` | 91 | Runs a command and passes each line of its output on **as it arrives**, instead of waiting for the end. |
+| `run_single_image_analysis` | 108 | Runs `src.analyze_image` as a **separate process**, with `--skip-*` flags for unchecked boxes, then finds the pictures it wrote. It's a separate process because `analyze_image` is one big command-line script (review R1). That way the GUI can't break it. |
+| `run_spatial_overview` | 162 | The same for the overview figure. |
+| `_make_stage_progress_callback` | 189 | Watches the output for known section headers (`STAGE_MARKERS`, line 46) and moves the progress bar one step per header. |
 
 The crack stats are computed **in the same process**, by calling `compute_row` directly. Its
 `on_stage` callback drives the progress bar.
 
-**Streamlit side: `main()`, line 199.**
+**Streamlit side: `main()`, line 210.**
 1. A file uploader for one or more images.
 2. Checkboxes for what to run. Corner check and precedence are greyed out unless junctions are on.
 3. "Advanced options": full image, fit-detail overlay.
@@ -59,4 +59,5 @@ because early steps aren't representative.
 - **Uploads are always recorded as `scale_bar_check = "not checked"`**, because nobody has
   looked at them.
 - **The temporary folder is deleted when the run finishes.** Download anything you want to keep.
-- **No tests cover the GUI** (review finding 16).
+- **Tests**: `tests/test_entry_points.py` checks that the GUI starts without errors (Streamlit's
+  `AppTest`). It doesn't click through an upload.

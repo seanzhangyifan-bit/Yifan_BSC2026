@@ -152,6 +152,20 @@ def median_edge_length_px(summary, cut_adjacent: set[int], node_filter: set | No
     return float(lengths.median())
 
 
+def crack_network_graph(summary: pd.DataFrame) -> nx.MultiGraph:
+    """Junction/endpoint nodes joined by one graph edge per skeleton segment.
+
+    A MultiGraph, not a Graph: two different segments can join the same pair
+    of junctions (the two sides of a small cell). A plain Graph keeps only one
+    of them, so the giant component's length came out short while the total
+    length counted both, biasing giant_component_fraction low (by up to 0.007
+    on the images checked, 2026-11-11)."""
+    return nx.from_pandas_edgelist(
+        summary, source="node_id_src", target="node_id_dst",
+        edge_attr="branch_distance", create_using=nx.MultiGraph,
+    )
+
+
 def giant_component_nodes(G: nx.Graph) -> set:
     """Node ids belonging to the connected component with the largest
     total skeleton length -- the same 'giant' definition
@@ -292,10 +306,7 @@ def compute_row(
     # to the single largest one. Uses the FULL graph (including
     # cut-adjacent stub edges) -- they're real topology, only their
     # reported length is untrustworthy, not their existence.
-    G = nx.from_pandas_edgelist(
-        summary, source="node_id_src", target="node_id_dst",
-        edge_attr="branch_distance",
-    )
+    G = crack_network_graph(summary)
     n_components = nx.number_connected_components(G)
     full_total_length_px = float(summary["branch_distance"].sum())
     gc_nodes = giant_component_nodes(G)

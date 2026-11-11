@@ -7,7 +7,7 @@ invocation); this tier deliberately runs a lighter slice (binarize → skeletoni
 curvature → anisotropy, no junctions/ordering) over a coarse grid of sections plus the whole
 image, so you can eyeball spatial variation quickly.
 
-- **`overview_figure.py <image_path> [--n-rows 2] [--n-cols 2] [--out-dir outputs]`**: compiles
+- **`overview_figure.py <image_path> [--out-dir outputs]`**: compiles
   one figure — the raw micrograph in the center, each quadrant's rose diagram + tortuosity
   histogram positioned in the figure corner matching that quadrant's real position in the source
   image, and the whole image's own rose/tortuosity result in a row below. Also updates one master

@@ -31,50 +31,51 @@ spreadsheet. Every column is defined in
 2. Minus the scale-bar images, printing a notice for each one skipped.
 3. If nothing is left, it stops with a message telling you to pass `--data-dir`.
 
-### Small helpers, lines 114–197
+### Small helpers, lines 114–211
 
 | Function | Line | What it computes |
 |---|---|---|
 | `median_pixelwise_width_px` | 114 | **Median crack width**: 2 × half-width at every skeleton pixel of every segment *not* next to a flaking cut, then the median. A direct per-pixel measurement. |
 | `median_edge_length_px` | 136 | Median segment length, skipping segments next to the cut. Optionally restricted to one connected piece of the network (see below). |
-| `giant_component_nodes` | 155 | Finds the **giant component**: the connected piece of the network with the most total crack length. Returns its node IDs. |
-| `giant_component_span_px` | 174 | The straight-line distance between the two farthest-apart points of a set. It only checks points on the outer boundary (the convex hull), which is much faster and gives the same answer. |
+| `crack_network_graph` | 155 | Builds the crack network from the segment table: junctions and ends as nodes, one connection per segment. A `MultiGraph`, so two different segments joining the same two junctions both count. |
+| `giant_component_nodes` | 169 | Finds the **giant component**: the connected piece of the network with the most total crack length. Returns its node IDs. |
+| `giant_component_span_px` | 188 | The straight-line distance between the two farthest-apart points of a set. It only checks points on the outer boundary (the convex hull), which is much faster and gives the same answer. |
 
 A **connected component** is a piece of the network you can travel through without leaving the
 cracks. A well-connected network has one giant component holding nearly all the length. A
 fragmented one has many separate islands.
 
-### `compute_row(image_path, ...)`, line 202: one image → one row
+### `compute_row(image_path, ...)`, line 216: one image → one row
 
 This is the heart of the export. Step by step:
 
 | Lines | Step |
 |---|---|
-| 224 | `report = on_stage or (lambda _stage: None)`: if the GUI passed a progress callback, use it; otherwise do nothing. `report("...")` appears after each stage. |
-| 225–228 | Load the image and binarize (page 1). |
-| 235–240 | **Scout pass**: skeletonize (page 2), then find flakes (page 3). |
-| 242–245 | If flakes were found, **skeletonize again** on the corrected mask. Otherwise reuse the scout result. |
-| 247 | Build the graph (page 4). |
-| 255–258 | Flag segments next to the flaking cut (page 3). |
-| 262 | `crack_area_px2`: count of crack pixels in the cleaned mask. |
-| 263–264 | Total length and number of segments, **excluding** cut-adjacent segments. |
-| 266 | `avg_width_px = area / length`: a rough width. If a crack were a perfect strip, area ÷ length = width. |
-| 267–269 | `avg_edge_length_px = length / number of segments`. |
-| 274–276 | `median_width_px`: the direct per-pixel width, which reuses the width map the skeleton step already made. |
-| 282–285 | Crack area as % of the area we actually have evidence about (image minus flakes). |
-| 295–298 | Build the network as a `networkx` graph, **including** cut-adjacent segments. They're real connections, even if their lengths aren't trustworthy. |
-| 299–308 | Number of separate pieces, and the giant component's share of total length. |
-| 315–316 | Median segment length, overall and inside the giant component. |
-| 326–334 | The giant component's span, measured over *every pixel* of its segments, not just its nodes. A closed loop with no junctions has only one node, but real physical size. |
-| 336–347 | Convert to µm / mm² with the calibration, unless the file is a known bad frame. |
-| 351–378 | Assemble the row: one dictionary entry per column. |
-| 380–390 | If `cache_dir` was given, also save intermediate arrays and an overlay picture (page 12). |
+| 238 | `report = on_stage or (lambda _stage: None)`: if the GUI passed a progress callback, use it; otherwise do nothing. `report("...")` appears after each stage. |
+| 239–242 | Load the image and binarize (page 1). |
+| 249–254 | **Scout pass**: skeletonize (page 2), then find flakes (page 3). |
+| 256–259 | If flakes were found, **skeletonize again** on the corrected mask. Otherwise reuse the scout result. |
+| 261 | Build the graph (page 4). |
+| 269–272 | Flag segments next to the flaking cut (page 3). |
+| 276 | `crack_area_px2`: count of crack pixels in the cleaned mask. |
+| 277–278 | Total length and number of segments, **excluding** cut-adjacent segments. |
+| 280 | `avg_width_px = area / length`: a rough width. If a crack were a perfect strip, area ÷ length = width. |
+| 281–283 | `avg_edge_length_px = length / number of segments`. |
+| 288–290 | `median_width_px`: the direct per-pixel width, which reuses the width map the skeleton step already made. |
+| 296–299 | Crack area as % of the area we actually have evidence about (image minus flakes). |
+| 309 | Build the network with `crack_network_graph` (a `MultiGraph`, so two different segments joining the same two junctions both count), **including** cut-adjacent segments. They're real connections, even if their lengths aren't trustworthy. |
+| 310–319 | Number of separate pieces, and the giant component's share of total length. |
+| 326–327 | Median segment length, overall and inside the giant component. |
+| 337–345 | The giant component's span, measured over *every pixel* of its segments, not just its nodes. A closed loop with no junctions has only one node, but real physical size. |
+| 347–358 | Convert to µm / mm² with the calibration, unless the file is a known bad frame. |
+| 362–389 | Assemble the row: one dictionary entry per column. |
+| 391–401 | If `cache_dir` was given, also save intermediate arrays and an overlay picture (page 12). |
 
 **Two width numbers, on purpose.** `avg_width_px` (area ÷ length) and `median_width_px`
 (per-pixel) are different estimates. Area ÷ length runs high where junction blobs add area
 without adding length. The schema doc explains when to use which.
 
-### Command-line part, lines 395–end
+### Command-line part, lines 406–end
 
 - **`add_batch_args`**: adds `--data-dir` and `--scale-bars-checked`. Every batch script shares
   these.
@@ -100,7 +101,7 @@ v3 exists to cross-check v1 with a different way of handling flakes. Both are ke
 | Crack area from | the re-cleaned corrected mask | `mask_corrected` (not re-cleaned) |
 | Extra columns | none | `runtime_*` timings per stage |
 
-**`compute_row`**, line 65, follows the same outline as v1. The differences are in the table
+**`compute_row`**, line 66, follows the same outline as v1. The differences are in the table
 above. The comments explain why each v3 choice is needed. One example is why the giant
 component total must also skip flake segments: in v3 they're still in the skeleton.
 
@@ -129,7 +130,8 @@ v3 differs from v1.
 
 - **Everything is computed on the full image**, not the corner crop that `analyze_image.py`
   uses by default.
-- **Tests**: `tests/test_export_crack_stats.py` (13 tests) checks the helpers against shapes
-  with known answers. `tests/test_export_crack_stats_v3.py` checks v3's flake rule. Nothing runs
-  `compute_row` end to end on a real image (review finding 16).
+- **Tests**: `tests/test_export_crack_stats.py` (14 tests) checks the helpers against shapes
+  with known answers. `tests/test_export_crack_stats_v3.py` checks v3's flake rule.
+  `tests/test_entry_points.py` runs both `compute_row`s end to end on a small synthetic image
+  with a flake.
 - **Example outputs**: `examples/crack_stats_v1_full_dataset.xlsx` and friends are real runs.

@@ -11,6 +11,119 @@ Commit IDs link each entry to its full details in `git log`. Findings are number
 
 ## 2026-11-11
 
+The entries down to "Added: entry-point smoke tests" are one bug-fix pass (review findings 9,
+11, 13–19). All 174 tests pass.
+
+### Fixed: giant-component share read low when two segments join the same junctions
+
+**Changes results**: `giant_component_fraction` in every crack-stats export (v1, v2 and v3).
+Review finding 17.
+
+The exporters built the crack network as a `networkx.Graph`. When two different segments join
+the same two junctions, such as the two sides of a small cell, a `Graph` keeps only one of them.
+The giant component's length came out short, while the total length counted both, so the share
+read low. The network is now a `MultiGraph`, which keeps every segment.
+
+On the 41-image thesis batch: 27 of 41 images have at least one such pair. On 17, the value rises
+at the 4th decimal place or above; the largest rises are 75RH_PTFE_v1 (0.9907 → 0.9973), T3-PTFE_v1
+(0.9732 → 0.9784) and T4-M_H95_v1 (0.9937 → 0.9988). No image's giant component changed. These
+shifts are small next to the differences between conditions, but any `fgc` value quoted from an
+older export should be re-run.
+
+- **Affected outputs**: `giant_component_fraction` (thesis notation `fgc`). The shipped example
+  spreadsheets in `examples/` predate this fix.
+- **Not affected**: `n_components`, and every length, width and area column.
+
+### Fixed: overview figure counted flaked patches as crack
+
+**Changes results**: overview figures of images with flaking. Review finding 18.
+
+`overview_figure.py` skipped the flaking exclusion that every other entry point runs, so a
+flaked patch's own interior skeleton went into the rose diagrams and tortuosity histograms.
+It now runs the same two-pass exclusion as `analyze_image.py`.
+
+### Fixed: per-image totals included segments cut short by the flaking correction
+
+**Changes results**: `analyze_image.py`'s console totals on images where a flake touches the
+analysed region. Review finding 15.
+
+The batch exporter leaves segments next to a flaking cut out of its length and width numbers,
+because our own correction cut them short. `analyze_image.py` didn't, so the two disagreed on
+flaked images. Now:
+
+- Total length, the width counts, the length-weighted mean width and the length density leave
+  those segments out. The report says how many there were and their total length.
+- The edge-metrics CSV keeps every segment and has a new `near_flaking_cut` column.
+- Area totals are unchanged; those pixels are real crack.
+
+Neither of the two corner crops checked touches a flake, so both reports came out unchanged.
+The per-run spreadsheet row (`--xlsx-out`) doesn't use these totals.
+
+### Fixed: junction arm fit could mix in a loop's far end
+
+**No change to results** on the thesis images (checked). Review finding 13.
+
+Each arm's direction is fitted to the skeleton pixels 5–60 px from the junction. That used to
+mean every such pixel along the segment, so a crack curving back into the ring, or a loop
+returning to its own junction, mixed a second direction into the fit. Each arm is now cut at
+its first pixel beyond 60 px, and a loop at its midpoint. A new test shows a synthetic lollipop
+now reads as T (it read "ambiguous" before). Re-running the T/Y sensitivity sweep on all 41
+images and 17 cut-off settings gave identical counts.
+
+### Fixed: a crack ordered before itself is reported as a cycle
+
+**No change to results** on the images checked (no such case seen). Review finding 19.
+
+A loop segment whose two ends meet at one T can come out as both host and abutter: "X came after
+X". The cycle report only listed groups of two or more segments, so X got a generation number
+instead. It's now reported as a cycle, with generation undetermined.
+
+### Fixed: one validation-gallery row always said PASS
+
+**No change to results.** Review finding 14.
+
+The dominant-direction row of `anisotropy_aligned` now checks the measured direction against the
+test suite's 10° tolerance. `examples/validation_gallery.html` was regenerated: 12/12 pass, with
+178.3° measured against 0° expected (1.7° apart on the 0–180° circle).
+
+### Fixed: overview script accepted grid sizes it can't draw
+
+**No change to results.** Review finding 11.
+
+`--n-rows`/`--n-cols` other than 2×2 used to run the whole analysis, then crash while drawing.
+They're now rejected before anything runs.
+
+### Changed: per-image analysis about 3× faster on full images
+
+**No change to results** (checked). Review finding 9.
+
+- Segment areas are counted in one pass over the image instead of one pass per segment.
+- The corner cross-check skips crack-free outlines too far from a junction to matter.
+
+On a full T5 image, `analyze_image --full-image` went from 194 s to 61 s. The report and the
+edge table (1,853 segments) came out identical.
+
+### Changed: small consistency fixes
+
+**No change to results**, except the console wording noted below. Review findings 15 and R5.
+
+- The console now uses the spreadsheet's anisotropy cut-off (0.15, was 0.2) to say "dominant
+  direction not meaningful". An image between 0.15 and 0.2 no longer gets both "intermediate"
+  and "no preferred direction".
+- `curvature.py` defines its `ok` flag; overlays look segments up by their ID rather than their
+  position in the table; `cache_io.py` states when a recomputed width map can differ.
+- Deleted an unused helper (`_chord_scan.suppress_non_max`).
+- The walkthrough's line numbers now match the code.
+
+### Added: entry-point smoke tests
+
+**No change to results.** Review finding 16.
+
+`tests/test_entry_points.py` runs `analyze_image.py`, both crack-stats `compute_row`s, the
+overview figure, `region.py` and the GUI on a small synthetic grid with a flake. It checks that
+they run and write their files, not their numbers. The broken v3 import found in October would
+have failed here.
+
 ### Changed: junction results say they cover a corner sample
 
 **No change to results** (labels only). Review finding 10.

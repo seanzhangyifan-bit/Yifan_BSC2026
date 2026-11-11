@@ -4,8 +4,12 @@ why" diagnostic view without re-running binarize/skeletonize/prune on the
 full-resolution image.
 
 Deliberately not caching medial_radius -- a full-resolution float array,
-large, and cheap to regenerate on demand from mask_corrected
-(scipy.ndimage.distance_transform_edt, a single vectorized call), unlike
+large, and cheap to regenerate (scipy.ndimage.distance_transform_edt, a
+single vectorized call). Caveat: on a v1 run where flaking was found, the
+width map the stats used came from mask_corrected *after* the second pass's
+own small-object/small-hole cleanup, so an EDT of the cached mask_corrected
+can differ by a few pixels. Re-run that cleanup first for an exact match.
+This is unlike
 everything else here which is either expensive to reproduce (skeletonize +
 iterative pruning) or a small, fully-specified record (pruned_branches,
 stats).

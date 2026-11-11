@@ -138,8 +138,8 @@ def render_overlay(
     n_edges = len(graph_result.summary)
     if n_edges > 0:
         segments = []
-        for i in range(n_edges):
-            coords = skel.path_coordinates(i) * scale  # (row, col)
+        for path_index in graph_result.summary.index:
+            coords = skel.path_coordinates(int(path_index)) * scale  # (row, col)
             segments.append(coords[:, ::-1])  # -> (col, row) == (x, y)
         lc = LineCollection(segments, colors="lime", linewidths=0.6, zorder=2)
         ax.add_collection(lc)
@@ -400,8 +400,8 @@ def render_crack_stats_overlay(
     if n_edges > 0:
         kept_segments = []
         cut_segments = []
-        for i, path_index in enumerate(graph_result.summary.index):
-            coords = skel.path_coordinates(i) * scale  # (row, col)
+        for path_index in graph_result.summary.index:
+            coords = skel.path_coordinates(int(path_index)) * scale  # (row, col)
             seg = coords[:, ::-1]  # -> (col, row) == (x, y)
             if int(path_index) in cut_adjacent_path_indices:
                 cut_segments.append(seg)
@@ -538,15 +538,14 @@ def render_precedence_overlay(
         norm = None
 
     mr_h, mr_w = medial_radius.shape
-    n_edges = len(graph_result.summary)
     segments = []
     colors = []
     linewidths = []
-    for i in range(n_edges):
-        coords_full = skel.path_coordinates(i)
+    for path_index in graph_result.summary.index:
+        coords_full = skel.path_coordinates(int(path_index))
         coords = coords_full * scale
         segments.append(coords[:, ::-1])
-        gen = precedence_result.generation.get(i)
+        gen = precedence_result.generation.get(int(path_index))
         colors.append(cmap(norm(gen)) if gen is not None and norm is not None else (0.6, 0.6, 0.6, 1.0))
 
         rows = np.clip(coords_full[:, 0].round().astype(int), 0, mr_h - 1)

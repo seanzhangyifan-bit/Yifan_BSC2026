@@ -282,13 +282,23 @@ def cross_check_junctions(
     disagreement can only come from the input bearings, not from two
     different classification rules.
     """
+    # Corners only come from contour points within search_radius_px of the
+    # vertex, so a contour whose bounding box lies entirely farther away can't
+    # contribute. Skipping those gives identical results without scanning
+    # every contour for every junction (slow on a full image).
+    bbox_lo = np.array([c.min(axis=0) if len(c) else (np.inf, np.inf) for c in contours]).reshape(-1, 2)
+    bbox_hi = np.array([c.max(axis=0) if len(c) else (-np.inf, -np.inf) for c in contours]).reshape(-1, 2)
+
     results = []
     for jc in junction_result.classifications:
         vertex = np.array(jc.coord)
         corners: list[WallCorner] = []
-        for ci, contour in enumerate(contours):
+        gap = np.maximum(np.maximum(bbox_lo - vertex, vertex - bbox_hi), 0.0)
+        nearby = np.flatnonzero(np.hypot(gap[:, 0], gap[:, 1]) <= search_radius_px)
+        for ci in nearby:
+            contour = contours[ci]
             corners.extend(
-                _scan_contour_for_corners(contour, ci, vertex, search_radius_px, window_px, min_turn_deg)
+                _scan_contour_for_corners(contour, int(ci), vertex, search_radius_px, window_px, min_turn_deg)
             )
 
         arm_bearings, unresolved_reason = _resolve_arm_bearings(corners)

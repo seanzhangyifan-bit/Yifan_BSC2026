@@ -108,6 +108,10 @@ class EdgeCurvature:
     curvature_profile_px_inv: np.ndarray | None  # [measured] kappa(s); None if edge < 2*window_px
     mean_abs_curvature_px_inv: float | None  # [measured]
     max_abs_curvature_px_inv: float | None  # [measured]
+    # ok is False only when the edge has too few points to measure anything.
+    # failure_reason names whatever single measurement is missing, so it can be
+    # set while ok is True: a closed loop (chord ~0) still has an arc length and
+    # a curvature profile, just no tortuosity.
     ok: bool
     failure_reason: str | None
 

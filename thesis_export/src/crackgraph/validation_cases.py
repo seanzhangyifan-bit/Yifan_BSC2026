@@ -49,6 +49,7 @@ CURVATURE_RECOVERY_REL_TOL = 0.25  # tests/test_curvature.py::CURVATURE_RECOVERY
 TORTUOSITY_RECOVERY_REL_TOL = 0.10  # tests/test_curvature.py::TORTUOSITY_RECOVERY_REL_TOL
 ANISOTROPY_LOW_TOL = 0.15  # tests/test_anisotropy.py::ANISOTROPY_LOW_TOL
 ANISOTROPY_HIGH_MIN = 0.8  # tests/test_anisotropy.py::ANISOTROPY_HIGH_MIN
+CIRCULAR_BEARING_TOL_DEG = 10.0  # tests/test_anisotropy.py::CIRCULAR_BEARING_TOL_DEG
 
 
 @dataclass
@@ -59,6 +60,13 @@ class ValidationCaseResult:
     image_relpath: str  # relative to the report's own directory
     rows: list[tuple[str, str, str, bool]]  # (metric, expected, measured, passed)
     passed: bool  # all(row.passed)
+
+
+def _axial_diff_deg(a: float, b: float) -> float:
+    """Smallest difference between two axial angles (period 180 deg), as in
+    tests/test_anisotropy.py::_circular_diff_deg."""
+    d = abs(a - b) % 180.0
+    return min(d, 180.0 - d)
 
 
 def _row(metric: str, expected: str, measured: str, passed: bool) -> tuple[str, str, str, bool]:
@@ -320,7 +328,12 @@ def case_anisotropy_aligned(out_dir: Path) -> ValidationCaseResult:
 
     rows = [
         _row("anisotropy index A", f"> {ANISOTROPY_HIGH_MIN}", f"{anisotropy_res.anisotropy_index:.3f}", anisotropy_res.anisotropy_index > ANISOTROPY_HIGH_MIN),
-        _row("dominant bearing (deg)", "0.0", f"{anisotropy_res.dominant_bearing_deg:.1f}", True),
+        _row(
+            "dominant bearing (deg)",
+            f"0.0 ± {CIRCULAR_BEARING_TOL_DEG:.0f} (axial)",
+            f"{anisotropy_res.dominant_bearing_deg:.1f}",
+            _axial_diff_deg(anisotropy_res.dominant_bearing_deg, 0.0) < CIRCULAR_BEARING_TOL_DEG,
+        ),
     ]
     return ValidationCaseResult(
         name, "anisotropy",

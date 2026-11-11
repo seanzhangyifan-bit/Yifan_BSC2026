@@ -24,7 +24,6 @@ pixel-to-pixel.
 |---|---|---|
 | `arc_length(coords)` | 16 | Running distance along a path: 0 at the start, adding each step's length. |
 | `chord_pair_at(coords, s, k, window_px)` | 22 | At point `k`, the straight line ("chord") from `window_px` *behind* to `k`, and from `k` to `window_px` *ahead*. Returns `None` if there isn't room on both sides. |
-| `suppress_non_max(...)` | 42 | Keep-the-sharpest-and-drop-neighbours filter. **Not used anywhere**: `corners.py` has its own copy (review R5). |
 
 The angle between the incoming and outgoing chord is how much the path **turns** at `k`.
 
@@ -49,22 +48,22 @@ curvature, so both are kept.
 | `CHORD_LENGTH_EPS_PX` | 1 px | Ends closer than this → no tortuosity (dividing by nearly zero). |
 | `TORTUOSITY_MIN_CHORD_PX_PLACEHOLDER` | 10 px | Segments shorter than this are left out of **summary stats and plots**. Their tortuosity is real but dominated by pixel staircasing at the ends. |
 
-### `reliable_tortuosities(...)`, line 122
+### `reliable_tortuosities(...)`, line 126
 
 The *one* place the "long enough" filter is applied, so the spreadsheet and the plots can't
 disagree.
 
-### `compute_edge_curvature(skel, graph_result, window_px)`, line 134
+### `compute_edge_curvature(skel, graph_result, window_px)`, line 138
 
 For each segment:
-1. **Lines 189–198**: path length and straight-line length → tortuosity, or `None` if the ends
+1. **Lines 193–202**: path length and straight-line length → tortuosity, or `None` if the ends
    nearly touch.
-2. **Lines 205–230**: if the segment is at least 2 windows long, scan every interior point with
+2. **Lines 209–234**: if the segment is at least 2 windows long, scan every interior point with
    `chord_pair_at`, convert the turn angle to curvature, and keep the mean and max.
 
 **Why turn ÷ (span / 2)?** On a circle, the chord from `s − w` to `s` is parallel to the circle's
 direction at the chord's midpoint, `s − w/2`. So the two chords' angle is the turn over a
-distance of about `w`, not `2w`. The comment at lines 150–159 explains it.
+distance of about `w`, not `2w`. The comment at lines 154–163 explains it.
 
 **Limitation (lines 43–58).** On a perfect circle the window choice doesn't bias the result. On
 real cracks, whose bend changes along their length, a bigger window blurs nearby bends together.

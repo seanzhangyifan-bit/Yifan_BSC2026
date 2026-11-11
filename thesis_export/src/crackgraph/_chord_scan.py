@@ -37,19 +37,3 @@ def chord_pair_at(
     if np.linalg.norm(v_in) < 1e-9 or np.linalg.norm(v_out) < 1e-9:
         return None
     return v_in, v_out
-
-
-def suppress_non_max(
-    candidates: list[tuple[float, int]], s: np.ndarray, suppress_radius_px: float
-) -> list[tuple[float, int]]:
-    """Greedy sharpest-first non-max suppression: keep a candidate only if
-    it is at least suppress_radius_px of arc length away (in s) from every
-    already-kept candidate. candidates are (score, point_index) pairs;
-    higher score is sharper/kept first. Same logic as corners.py's scan.
-    """
-    ordered = sorted(candidates, reverse=True)
-    kept: list[tuple[float, int]] = []
-    for score, k in ordered:
-        if all(abs(s[k] - s[k_kept]) >= suppress_radius_px for _, k_kept in kept):
-            kept.append((score, k))
-    return kept

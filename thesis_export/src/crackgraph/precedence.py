@@ -42,7 +42,8 @@ Cycle characterization uses networkx's condensation (each strongly-connected
 component collapsed to one supernode, which is always a DAG) rather than a
 hand-rolled minimum-feedback-arc-set solver (networkx has none, and
 METHODOLOGY.md's own steps separate "DAG/cycle check" from a later, more careful
-poset-repair step). Any path_index inside a nontrivial SCC (size > 1) gets
+poset-repair step). Any path_index inside a cycle (an SCC of size > 1, or a path
+with an arc to itself) gets
 generation=None -- undetermined, reported rather than forced -- while
 everything else gets its topological generation for free from the
 condensation's DAG structure.
@@ -74,7 +75,7 @@ class PrecedenceGraphResult:
     n_conflicting_abutter: int  # both methods resolved T but disagreed on the abutter -- no arc emitted
     conflicting_node_ids: list[int]
     n_corner_unmapped: int  # corner resolved T but couldn't be tied to path indices (see module docstring)
-    nontrivial_sccs: list[frozenset[int]]  # cyclic clusters (size > 1) -- the cycle report, not resolved
+    nontrivial_sccs: list[frozenset[int]]  # cyclic clusters (size > 1, or one path with a self-arc) -- the cycle report, not resolved
     generation: dict[int, int | None]  # path_index -> topological generation; None if undetermined
 
 
@@ -138,7 +139,14 @@ def _compute_generations(graph: nx.DiGraph) -> tuple[dict[int, int | None], list
         return {}, []
 
     sccs = list(nx.strongly_connected_components(graph))
-    nontrivial_sccs = [frozenset(s) for s in sccs if len(s) > 1]
+    # A single path with an arc to itself is a cycle too: a loop path whose
+    # two ends meet at one T, one end abutting the other, claims "X came
+    # after X". Report it like any other cycle instead of giving it a
+    # generation.
+    nontrivial_sccs = [
+        frozenset(s) for s in sccs
+        if len(s) > 1 or graph.has_edge(next(iter(s)), next(iter(s)))
+    ]
     nontrivial_nodes: set[int] = set().union(*nontrivial_sccs) if nontrivial_sccs else set()
 
     condensed = nx.condensation(graph, scc=sccs)

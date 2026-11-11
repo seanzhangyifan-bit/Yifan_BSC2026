@@ -6,8 +6,8 @@ the lines that matter.
 
 To read it formatted in VS Code, open a page and press **Ctrl+Shift+V**.
 
-Line numbers are as of commit `0043e74` (2026-11-11). If a file changes later, function names
-stay the easiest way to find your place.
+Line numbers match the code after the second 2026-11-11 bug-fix pass (see `CHANGELOG.md`). If a
+file changes later, function names stay the easiest way to find your place.
 
 ## The big picture
 

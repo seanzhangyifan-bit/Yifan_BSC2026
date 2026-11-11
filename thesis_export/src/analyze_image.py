@@ -31,7 +31,7 @@ from .crackgraph.edge_metrics import (
     compute_edge_metrics,
     write_edge_metrics_csv,
 )
-from .crackgraph.flaking import exclude_flaking_regions
+from .crackgraph.flaking import cut_adjacent_path_indices, exclude_flaking_regions
 from .crackgraph.graph import extract_graph
 from .crackgraph.io_utils import load_image
 from .crackgraph.junctions import (
@@ -47,6 +47,7 @@ from .crackgraph.precedence import build_precedence_graph
 from .crackgraph.region import default_corner_crop
 from .crackgraph.skeleton import CORR_THRESHOLD, SPUR_PX_PLACEHOLDER, skeletonize_and_prune
 from .crackgraph.xlsx_report import (
+    ANISOTROPY_MUDCRACK_LIKE_THRESHOLD,
     anisotropy_classification,
     append_chunk_to_workbook,
     corner_agreement_counts,
@@ -254,6 +255,13 @@ def main():
             graph_result,
             window_px=args.orientation_window_px,
         )
+    # Edges next to the flaking cut were truncated by our own correction, so
+    # their length/width aren't real measurements. Leave them out of the
+    # length/width totals, as the batch crack-stats export does.
+    cut_adjacent = cut_adjacent_path_indices(
+        skeleton_result.skeleton, graph_result, flaking_result.excluded_mask,
+        flaking_result.reference_width_px,
+    )
     edge_metrics_result = compute_edge_metrics(
         skeleton_result.skeleton,
         graph_result,
@@ -261,6 +269,7 @@ def main():
         skeleton_result.medial_radius,
         width_trim_inner_px=args.width_trim_inner_px,
         area_ambiguity_radius_px=args.area_ambiguity_radius_px,
+        exclude_from_stats=cut_adjacent,
     )
     junction_result = None
     if not args.skip_junctions:
@@ -473,7 +482,7 @@ def main():
             f"Anisotropy index A: {anisotropy_result.anisotropy_index:.3f} (0=isotropic, 1=perfectly aligned), "
             f"dominant bearing: {anisotropy_result.dominant_bearing_deg:.1f} deg    [measured]"
         )
-        if anisotropy_result.anisotropy_index < 0.2:
+        if anisotropy_result.anisotropy_index < ANISOTROPY_MUDCRACK_LIKE_THRESHOLD:
             print(
                 "  (dominant bearing is not meaningful at this low an anisotropy index -- "
                 "no clear preferred direction)"
@@ -508,7 +517,15 @@ def main():
         f"Area-ambiguity disk radius:       {em.area_ambiguity_radius_px:.1f} px    "
         "[PLACEHOLDER -- same reasoning]"
     )
-    print(f"Total length: {em.total_length_px:.1f} px    [measured] (= sum of branch_distance)")
+    print(
+        f"Total length: {em.total_length_px:.1f} px    [measured] (= sum of branch_distance, "
+        "excluding edges next to the flaking cut)"
+    )
+    if em.n_edges_near_flaking_cut:
+        print(
+            f"Edges next to the flaking cut, left out of length/width totals: "
+            f"{em.n_edges_near_flaking_cut} ({em.length_near_flaking_cut_px:.1f} px)    [measured]"
+        )
     print("Area estimate bracket (px2), all four methods cross-checked, not collapsed to one number:")
     print(f"  core (junction-disk-excluded): {em.total_area_core_px2}    [interpreted -- PROVEN lower bound]")
     print(f"  exact (watershed partition):   {em.total_area_px2}    [interpreted]")
@@ -694,7 +711,7 @@ def main():
             f"[interpreted -- {n_touched - n_determined} undetermined because caught in an unresolved cycle]"
         )
         print(
-            f"Nontrivial cycles (strongly-connected clusters, size > 1): "
+            f"Nontrivial cycles (strongly-connected clusters of size > 1, or a self-arc): "
             f"{len(precedence_result.nontrivial_sccs)}    "
             "[measured -- reported per METHODOLOGY.md, NOT deleted or force-resolved this pass]"
         )

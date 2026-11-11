@@ -70,7 +70,8 @@ they're precautionary checks, labelled `[speculated]`.
 - Run it with `python3 -m scripts.validation.validation_gallery`. A ready-made copy is in
   `examples/validation_gallery.html`.
 
-One row, the dominant direction in `anisotropy_aligned`, always shows PASS (review finding 14).
+Every row is a real check. The dominant direction in `anisotropy_aligned` must lie within 10° of
+0° on the 0–180° circle, the same tolerance as `tests/test_anisotropy.py`.
 
 ## `scripts/validation/`
 
@@ -93,25 +94,26 @@ a value; they show how much a 🔴 setting matters.
 
 ## `tests/`
 
-21 files, 162 tests (a few tests run several cases each). All pass. Each checks one module against synthetic cases with known
+22 files, 174 tests (a few tests run several cases each). All pass. Each checks one module against synthetic cases with known
 answers, or checks a fixed bug stays fixed.
 
 | Test file | Tests | Covers |
 |---|---|---|
-| `test_junction_angle.py` | 11 | Junction angles and labels (page 7) |
+| `test_junction_angle.py` | 12 | Junction angles and labels, incl. a loop back to its own junction (page 7) |
 | `test_corners.py` | 8 | Corner cross-check, incl. west-pointing regression (page 8) |
-| `test_precedence.py` | 6 | Precedence arrows, conflicts, cycles (page 9) |
-| `test_edge_metrics.py` | 11 | Width and the four area bounds (page 6) |
+| `test_precedence.py` | 7 | Precedence arrows, conflicts, cycles incl. self-arcs (page 9) |
+| `test_edge_metrics.py` | 12 | Width, the four area bounds, and leaving flaking-cut edges out of totals (page 6) |
 | `test_skeleton.py` | 8 | Pruning and the corner-artifact test (page 2) |
 | `test_curvature.py`, `test_anisotropy.py` | 7 + 7 | Page 10 |
 | `test_grid_synthetic.py` | 9 | Topology on meshes, flaking on synthetic flakes (pages 3–4) |
-| `test_export_crack_stats.py`, `test_export_crack_stats_v3.py` | 13 + 5 | Export helpers (page 5) |
+| `test_export_crack_stats.py`, `test_export_crack_stats_v3.py` | 14 + 5 | Export helpers, incl. parallel segments in the network (page 5) |
+| `test_entry_points.py` | 8 | Smoke tests: `analyze_image.py`, both `compute_row`s, the overview figure, `region.py` and the GUI each run end to end on a small synthetic flaked grid |
 | `test_junction_tolerance_sweep.py` | 3 | The cut-off sweep's helpers |
 | `test_synthetic*.py` | 1 + 21 + 11 | The generators, and the 9-case benchmark through the pipeline |
 | `test_cache_io.py`, `test_html_report.py`, `test_xlsx_report.py`, `test_summary_plots.py`, `test_tiling.py`, `test_validation_*.py` | 2–8 each | Outputs (page 12) and the gallery |
 
-**Gaps** (review finding 16): nothing runs `analyze_image.py`, `app.py`, `region.py` or the v3
-`compute_row` from start to finish.
+The entry-point smoke tests (review finding 16) check that each entry point runs, not its
+numbers; the library tests above cover those.
 
 ## `scripts/experimental/tracing_poc.py`
 

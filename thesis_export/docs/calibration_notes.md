@@ -266,7 +266,7 @@ meaningful fraction of real corner-tracing artifacts.
 
 ## CORNER_TO_TANGENT_BEARING_TOL_DEG
 
-`src/crackgraph/precedence.py:58` — value `45.0`
+`src/crackgraph/precedence.py:59` — value `45.0`
 
 > how far apart the corner method's and the tangent-fit's independent bearing estimates
 > for the same arm may be and still be treated as "the same arm" when recovering

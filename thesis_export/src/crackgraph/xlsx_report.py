@@ -43,8 +43,9 @@ ROW_HEIGHT_FOR_THUMBNAILS = 130
 
 ANISOTROPY_GRID_LIKE_THRESHOLD = 0.5
 ANISOTROPY_MUDCRACK_LIKE_THRESHOLD = 0.15
-# [PLACEHOLDER] not calibrated against a real-image junction-type census;
-# same thresholds already used for the console report's qualitative read.
+# [PLACEHOLDER] not calibrated against a real-image junction-type census.
+# The console report (analyze_image.py) uses the 0.15 cut-off for the same
+# read: below it, the dominant bearing is reported as not meaningful.
 
 COLUMN_HEADERS: list[str] = [
     # run identity

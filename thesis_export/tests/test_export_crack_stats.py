@@ -14,6 +14,7 @@ import pandas as pd
 from scipy.ndimage import distance_transform_edt
 
 from scripts.batch_stats.export_crack_stats import (
+    crack_network_graph,
     giant_component_nodes,
     giant_component_span_px,
     median_edge_length_px,
@@ -220,3 +221,19 @@ def test_giant_component_span_handles_a_closed_loop_with_no_junctions():
     # and NaN.
     assert not np.isnan(span)
     assert 150 < span < 220
+
+
+def test_crack_network_graph_keeps_parallel_segments():
+    # Two different segments join junctions 1 and 2 (the two sides of a small
+    # cell), plus a separate short piece. A plain nx.Graph keeps only one of
+    # the parallel pair, so the giant component's length came out short.
+    summary = pd.DataFrame({
+        "node_id_src": [1, 1, 2, 7],
+        "node_id_dst": [2, 2, 3, 8],
+        "branch_distance": [40.0, 50.0, 10.0, 5.0],
+    })
+    G = crack_network_graph(summary)
+    gc = giant_component_nodes(G)
+    assert gc == {1, 2, 3}
+    gc_length = sum(d["branch_distance"] for *_, d in G.subgraph(gc).edges(data=True))
+    assert gc_length == 100.0

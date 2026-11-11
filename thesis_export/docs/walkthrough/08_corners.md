@@ -1,6 +1,6 @@
 # 8. Corner cross-check
 
-**File**: `src/crackgraph/corners.py` (~320 lines)
+**File**: `src/crackgraph/corners.py` (~330 lines)
 
 **What it does.** It measures each junction's angles a **second, completely different way**, then
 reports whether it agrees with `junctions.py`.
@@ -96,8 +96,8 @@ isn't: at real crack widths, T and Y corners are similarly close together.
 ## `cross_check_junctions(...)`, line 266: the main function
 
 For each junction from `junctions.py`:
-1. Scan every tile outline for corners near it. (Every outline for every junction, which is slow
-   on full images; review finding 9.)
+1. Scan the tile outlines for corners near it. Outlines whose bounding box is farther away than
+   the search radius are skipped up front; they couldn't contribute a corner anyway.
 2. Turn the corners into three arm directions.
 3. Compute the gaps and label them with the **same** `classify_from_gaps` as `junctions.py`, so
    any disagreement comes from the measurements, not from different rules.

@@ -32,7 +32,7 @@ rationale (relocated verbatim from its old inline comment).
 |`HOLE_AREA_THRESHOLD_PX2`|[`skeleton.py:35`](src/crackgraph/skeleton.py)|50|🔴 assumed|carried over unchanged from an earlier prototype comparison script; not independently derived or swept|
 |`CORR_THRESHOLD`|[`skeleton.py:41`](src/crackgraph/skeleton.py)|0.99|🟡 empirical, uncalibrated|4-point visual sweep (0.8/0.9/0.95/0.99) on one real image, T2-A\_membran\_v2|
 |`MIN_LEN_FOR_CORR_PX`|[`skeleton.py:45`](src/crackgraph/skeleton.py)|4|🔴 assumed|no sweep; floor for a Pearson correlation to be meaningful at all|
-|`CORNER_TO_TANGENT_BEARING_TOL_DEG`|[`precedence.py:58`](src/crackgraph/precedence.py)|45.0|🔴 assumed|comment self-documents as not yet swept|
+|`CORNER_TO_TANGENT_BEARING_TOL_DEG`|[`precedence.py:59`](src/crackgraph/precedence.py)|45.0|🔴 assumed|comment self-documents as not yet swept|
 |`WIDTH_TRIM_INNER_PX_PLACEHOLDER`|[`edge_metrics.py`](src/crackgraph/edge_metrics.py)|5.0|🔴 assumed|same "a few px" heuristic as `ANNULUS_INNER_PX_PLACEHOLDER`, no independent sweep|
 |`AREA_JUNCTION_BLOB_RADIUS_PLACEHOLDER`|[`edge_metrics.py`](src/crackgraph/edge_metrics.py)|5.0|🔴 assumed|same heuristic again, no sweep|
 
