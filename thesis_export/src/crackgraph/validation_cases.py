@@ -23,7 +23,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .anisotropy import compute_anisotropy
+from .anisotropy import compute_anisotropy, share_near
 from .binarize import binarize
 from .curvature import compute_edge_curvature
 from .graph import extract_graph
@@ -41,9 +41,9 @@ STRAIGHT_TORTUOSITY_MAX = 1.02  # tests/test_curvature.py::STRAIGHT_TORTUOSITY_M
 STRAIGHT_MEAN_CURVATURE_MAX_PX_INV = 0.002  # tests/test_curvature.py::STRAIGHT_MEAN_CURVATURE_MAX_PX_INV
 CURVATURE_RECOVERY_REL_TOL = 0.25  # tests/test_curvature.py::CURVATURE_RECOVERY_REL_TOL
 TORTUOSITY_RECOVERY_REL_TOL = 0.10  # tests/test_curvature.py::TORTUOSITY_RECOVERY_REL_TOL
-ANISOTROPY_LOW_TOL = 0.15  # tests/test_anisotropy.py::ANISOTROPY_LOW_TOL
-ANISOTROPY_HIGH_MIN = 0.8  # tests/test_anisotropy.py::ANISOTROPY_HIGH_MIN
-CIRCULAR_BEARING_TOL_DEG = 10.0  # tests/test_anisotropy.py::CIRCULAR_BEARING_TOL_DEG
+ALIGNED_SHARE_MIN = 0.75  # tests/test_anisotropy.py::ALIGNED_SHARE_MIN
+RANDOM_MAX_BIN_SHARE = 0.2  # tests/test_anisotropy.py::RANDOM_MAX_BIN_SHARE
+GRID_FAMILY_SHARE_MIN = 0.25  # tests/test_anisotropy.py::GRID_FAMILY_SHARE_MIN
 
 
 @dataclass
@@ -56,11 +56,6 @@ class ValidationCaseResult:
     passed: bool  # all(row.passed)
 
 
-def _axial_diff_deg(a: float, b: float) -> float:
-    """Smallest difference between two axial angles (period 180 deg), as in
-    tests/test_anisotropy.py::_circular_diff_deg."""
-    d = abs(a - b) % 180.0
-    return min(d, 180.0 - d)
 
 
 def _row(metric: str, expected: str, measured: str, passed: bool) -> tuple[str, str, str, bool]:
@@ -167,17 +162,16 @@ def case_anisotropy_aligned(out_dir: Path) -> ValidationCaseResult:
     render_orientation_rose(anisotropy_res, out_path)
 
     rows = [
-        _row("anisotropy index A", f"> {ANISOTROPY_HIGH_MIN}", f"{anisotropy_res.anisotropy_index:.3f}", anisotropy_res.anisotropy_index > ANISOTROPY_HIGH_MIN),
         _row(
-            "dominant bearing (deg)",
-            f"0.0 ± {CIRCULAR_BEARING_TOL_DEG:.0f} (axial)",
-            f"{anisotropy_res.dominant_bearing_deg:.1f}",
-            _axial_diff_deg(anisotropy_res.dominant_bearing_deg, 0.0) < CIRCULAR_BEARING_TOL_DEG,
+            "share of length within ±10° of 0°",
+            f"> {ALIGNED_SHARE_MIN}",
+            f"{share_near(anisotropy_res, 0.0):.3f}",
+            share_near(anisotropy_res, 0.0) > ALIGNED_SHARE_MIN,
         ),
     ]
     return ValidationCaseResult(
         name, "anisotropy",
-        "60 independent segments, all at bearing 0° (+jitter) — a fully aligned 'rectilinear' field, known high anisotropy.",
+        "60 independent segments, all at bearing 0° (+jitter): the rose plot should concentrate at 0°.",
         out_path.name, rows, all(r[3] for r in rows),
     )
 
@@ -191,17 +185,22 @@ def case_anisotropy_isotropic(out_dir: Path) -> ValidationCaseResult:
     render_orientation_rose(anisotropy_res, out_path)
 
     rows = [
-        _row("anisotropy index A", f"< {ANISOTROPY_LOW_TOL}", f"{anisotropy_res.anisotropy_index:.3f}", anisotropy_res.anisotropy_index < ANISOTROPY_LOW_TOL),
+        _row(
+            "largest 10° bin's share of length",
+            f"< {RANDOM_MAX_BIN_SHARE}",
+            f"{anisotropy_res.histogram_weighted_counts.max() / anisotropy_res.histogram_weighted_counts.sum():.3f}",
+            anisotropy_res.histogram_weighted_counts.max() / anisotropy_res.histogram_weighted_counts.sum() < RANDOM_MAX_BIN_SHARE,
+        ),
     ]
     return ValidationCaseResult(
         name, "anisotropy",
-        "60 independent segments at uniformly random bearings — a mudcrack-like isotropic field, known low anisotropy.",
+        "60 independent segments at uniformly random bearings: the rose plot should have no dominant direction.",
         out_path.name, rows, all(r[3] for r in rows),
     )
 
 
-def case_anisotropy_orthogonal_blind_spot(out_dir: Path) -> ValidationCaseResult:
-    name = "anisotropy_orthogonal_blind_spot"
+def case_anisotropy_orthogonal_grid(out_dir: Path) -> ValidationCaseResult:
+    name = "anisotropy_orthogonal_grid"
     gray = generate_oriented_segment_field(bearings_deg=[0.0, 90.0], bearing_weights=[0.5, 0.5], n_segments=80, rng_seed=3)
     skel_res, graph_res = _run_stage123(gray)
     anisotropy_res = compute_anisotropy(skel_res.skeleton, graph_res)
@@ -210,25 +209,17 @@ def case_anisotropy_orthogonal_blind_spot(out_dir: Path) -> ValidationCaseResult
 
     counts = anisotropy_res.histogram_weighted_counts
     top_two = np.argsort(counts)[-2:]
-    total = counts.sum()
-    peaks_separated = (
-        counts[top_two[0]] > 0.1 * total
-        and counts[top_two[1]] > 0.1 * total
-        and abs(int(top_two[0]) - int(top_two[1])) >= 5
-    )
+    near0, near90 = share_near(anisotropy_res, 0.0), share_near(anisotropy_res, 90.0)
+    peaks_separated = abs(int(top_two[0]) - int(top_two[1])) >= 5
 
     rows = [
-        _row(
-            "anisotropy index A (documented 2nd-order-tensor blind spot)",
-            f"≈ 0 (< {ANISOTROPY_LOW_TOL})",
-            f"{anisotropy_res.anisotropy_index:.3f}",
-            anisotropy_res.anisotropy_index < ANISOTROPY_LOW_TOL,
-        ),
-        _row("rose histogram shows 2 separated peaks (reveals the blind spot)", "True", str(peaks_separated), peaks_separated),
+        _row("share of length near 0° / near 90°", f"each > {GRID_FAMILY_SHARE_MIN}", f"{near0:.3f} / {near90:.3f}",
+             near0 > GRID_FAMILY_SHARE_MIN and near90 > GRID_FAMILY_SHARE_MIN),
+        _row("two largest bins ≥ 50° apart", "True", str(peaks_separated), peaks_separated),
     ]
     return ValidationCaseResult(
         name, "anisotropy",
-        "Equal-weight orthogonal grid (50% at 0°, 50% at 90°) — the scalar index reads isotropic (A≈0, a known limitation of a 2nd-order orientation tensor), but the rose histogram must still show two separated peaks.",
+        "Equal-weight orthogonal grid (50% at 0°, 50% at 90°): the rose plot should show two separated peaks. A single 2nd-order index would read this as random directions.",
         out_path.name, rows, all(r[3] for r in rows),
     )
 
@@ -238,7 +229,7 @@ ALL_CASES = [
     case_curvature_arc,
     case_anisotropy_aligned,
     case_anisotropy_isotropic,
-    case_anisotropy_orthogonal_blind_spot,
+    case_anisotropy_orthogonal_grid,
 ]
 
 

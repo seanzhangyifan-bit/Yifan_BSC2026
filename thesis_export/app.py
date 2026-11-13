@@ -74,7 +74,7 @@ def settings_form() -> tuple[AnalysisSettings, tuple[str, ...], str] | None:
         groups = list(CRACK_STATS_GROUPS)
     if st.checkbox("Tortuosity & curvature"):
         measurements.append("tortuosity")
-    if st.checkbox("Anisotropy (preferred crack direction)"):
+    if st.checkbox("Anisotropy (rose plot of crack directions)"):
         measurements.append("anisotropy")
     if st.checkbox("Per-segment table", help="One row per crack segment: length, width, area."):
         measurements.append("segments")

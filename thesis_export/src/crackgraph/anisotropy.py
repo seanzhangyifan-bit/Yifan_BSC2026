@@ -1,66 +1,16 @@
-"""Network-wide crack orientation anisotropy: is this network rectilinear
-/grid-like (strong preferred direction) or mudcrack-like (no preferred
-direction)? A geometry measurement of the whole network.
+"""Crack orientation: the length-weighted distribution of crack directions,
+drawn as a rose plot.
 
-Method: length-weighted axial circular statistics on edge tangent bearings
-(the standard "orientation tensor" / fabric-tensor method from structural
-geology and fracture-trace analysis). Orientation here is *axial*
-(mod 180 deg) -- a segment bearing 10 deg and one bearing 190 deg are the
-same crack direction, not opposite vectors -- so bearings are doubled
-before averaging (the standard trick that turns an axial quantity into a
-vector one Mardia & Jupp's circular-statistics treatment of axial data):
-for weighted bearings theta_i with weight w_i,
+Directions are axial (mod 180°): a segment at 10° and one at 190° are the
+same crack direction. Each segment is sampled along its length with a
+smoothed tangent (compute_orientation_samples), weighted by arc length, and
+binned into an 18-bin histogram over 0–180° (anisotropy_from_samples).
 
-    C = sum(w_i * cos(2*theta_i)) / sum(w_i)
-    S = sum(w_i * sin(2*theta_i)) / sum(w_i)
-    A = hypot(C, S)                      in [0, 1]
-    dominant_bearing = 0.5 * atan2(S, C)  mod 180 deg
-
-A naive-looking alternative -- building the 2x2 matrix
-M = sum(w_i * [[cos(2t),sin(2t)],[sin(2t),-cos(2t)]]) and taking
-(lambda1-lambda2)/(lambda1+lambda2) -- is broken: that per-sample matrix
-has trace cos(2t)-cos(2t) = 0 identically, so any weighted sum of them is
-traceless, its eigenvalues are always (lambda,-lambda), and the ratio is
-0/0 even in the perfectly-aligned case. The fix used here is the standard
-one: T = (I+M)/2 has eigenvalues (1+A)/2 and (1-A)/2 with A = hypot(C,S)
-exactly the mean resultant length of the doubled bearings -- reported
-directly rather than through an eigendecomposition, since it is already
-closed-form.
-
-[cited] This is not a novel method: length-weighted axial circular
-statistics and the doubled-angle construction are standard directional
--statistics technique (Mardia & Jupp, "Directional Statistics", Wiley,
-2000; also Fisher, "Statistical Analysis of Circular Data", Cambridge
-University Press, 1993, which is the reference more commonly used in
-earth-science fracture/joint-orientation work). The specific "2nd-order
-orientation tensor with eigenvalues (1+/-A)/2" framing is the same
-formalism as Advani & Tucker, "The Use of Tensors to Describe and Predict
-Fiber Orientation in Short Fiber Composites", Journal of Rheology, 1987 --
-the standard reference wherever an "orientation tensor" is used for fiber
-or line-like feature orientation. What is *not* drawn from a specific
-paper is the scan that turns this project's skeletonized pixel polylines
-into bearing samples in the first place (window size, one sample per
-interior pixel, arc-length weighting, near-junction exclusion) -- that is
-this project's own adaptation of the general method to this data
-structure, not itself a cited technique.
-
-Known blind spot, not a bug: this is a *2nd-order* fabric tensor, and an
-equal-weight orthogonal bimodal distribution (e.g. 50% of length at 0 deg,
-50% at 90 deg -- an idealized rectilinear grid) gives C=S=0 exactly, i.e.
-A=0, indistinguishable from true isotropy. A 2nd-order tensor simply
-cannot see 180-deg-periodic structure in the doubled-angle distribution
-(here, 90 deg apart in raw bearing space folds to exactly opposite points
-after doubling, which cancel). [cited] This is a known limitation of the
-2nd-order tensor, not particular to this implementation -- it is the same
-reason Advani & Tucker (1987) also define a 4th-order orientation tensor
-where a 2nd-order description is insufficient; the histogram is used here
-as the cheaper fix instead of a 4th-order tensor. The raw orientation histogram
-(histogram_weighted_counts) is therefore a *required* companion output,
-not decoration -- it is the only thing here that can tell "two peaks 90
-deg apart" apart from "flat" (see test_anisotropy.py's documented grid
-case). Report A as [measured]; any "grid-like"/"mudcrack-like" verbal
-classification built on it is [interpreted] and must be read alongside
-the histogram, per METHODOLOGY.md's evidence-level discipline.
+The histogram is reported as is, not reduced to one index: a single
+2nd-order index reads an equal-weight orthogonal grid as having no
+preferred direction, the same as random directions. Only the histogram
+shows the two peaks. Axial statistics: Mardia & Jupp, "Directional
+Statistics", 2000; Fisher, "Statistical Analysis of Circular Data", 1993.
 """
 
 from dataclasses import dataclass
@@ -100,37 +50,11 @@ class OrientationSample:
 
 @dataclass
 class AnisotropyResult:
-    anisotropy_index: float  # A = hypot(C, S) in [0, 1] [measured]
-    dominant_bearing_deg: float  # [measured]; meaningless when anisotropy_index is small
-    eigenvalues: tuple[float, float]  # of T = (I+M)/2: ((1+A)/2, (1-A)/2) [measured]
     total_weighted_length_px: float  # [measured]
     n_samples: int  # [measured]
-    histogram_bin_edges_deg: np.ndarray  # [0, 180], required companion output -- not decoration
+    histogram_bin_edges_deg: np.ndarray  # [0, 180]
     histogram_weighted_counts: np.ndarray  # [measured]
     window_px: float  # [PLACEHOLDER]
-
-
-def anisotropy_index_from_bearings(
-    bearings_deg: np.ndarray, weights: np.ndarray | None = None
-) -> tuple[float, float]:
-    """Pure function: (anisotropy_index, dominant_bearing_deg) from axial
-    bearings (mod 180 deg; folded here so callers need not pre-fold) and
-    optional weights (equal weight if None). Single implementation of the
-    corrected math above -- used both by compute_anisotropy() on real
-    skeleton samples and directly by tests for closed-form/Monte-Carlo
-    ground truth, so the math is verified once, not twice.
-    """
-    bearings = np.asarray(bearings_deg, dtype=np.float64)
-    w = np.ones_like(bearings) if weights is None else np.asarray(weights, dtype=np.float64)
-    total_w = float(w.sum())
-
-    theta2 = np.radians(2.0 * (bearings % 180.0))
-    C = float(np.sum(w * np.cos(theta2)) / total_w)
-    S = float(np.sum(w * np.sin(theta2)) / total_w)
-
-    anisotropy_index = float(np.hypot(C, S))
-    dominant_bearing_deg = float(np.degrees(0.5 * np.arctan2(S, C)) % 180.0)
-    return anisotropy_index, dominant_bearing_deg
 
 
 def compute_orientation_samples(
@@ -228,9 +152,8 @@ def compute_anisotropy(
     window_px: float = ORIENT_WINDOW_PX_PLACEHOLDER,
     n_hist_bins: int = ROSE_HISTOGRAM_N_BINS,
 ) -> AnisotropyResult:
-    """Network-wide anisotropy index, dominant bearing, and rose histogram
-    from all edges' orientation samples (see compute_orientation_samples).
-    """
+    """Rose histogram from every edge's orientation samples (see
+    compute_orientation_samples)."""
     samples = compute_orientation_samples(skel, graph_result, window_px=window_px)
     return anisotropy_from_samples(samples, window_px=window_px, n_hist_bins=n_hist_bins)
 
@@ -241,19 +164,14 @@ def anisotropy_from_samples(
     window_px: float = ORIENT_WINDOW_PX_PLACEHOLDER,
     n_hist_bins: int = ROSE_HISTOGRAM_N_BINS,
 ) -> AnisotropyResult:
-    """Anisotropy index, dominant bearing and rose histogram from a set of
-    orientation samples -- all of an image's, or only one region's."""
+    """Rose histogram (length-weighted, 0-180 deg) from a set of orientation
+    samples -- all of an image's, or only one region's."""
     bin_edges = np.linspace(0.0, 180.0, n_hist_bins + 1)
 
     if not samples:
-        # No orientation data at all (e.g. an empty graph). Report the
-        # isotropic default (A=0) explicitly rather than fabricate a
-        # direction -- n_samples=0 flags that this is absence of data, not
-        # a measured isotropic network.
+        # No orientation data (e.g. an empty graph): an empty histogram,
+        # flagged by n_samples=0.
         return AnisotropyResult(
-            anisotropy_index=0.0,
-            dominant_bearing_deg=0.0,
-            eigenvalues=(0.5, 0.5),
             total_weighted_length_px=0.0,
             n_samples=0,
             histogram_bin_edges_deg=bin_edges,
@@ -264,17 +182,24 @@ def anisotropy_from_samples(
     bearings = np.array([sample.bearing_deg for sample in samples])
     weights = np.array([sample.weight_px for sample in samples])
 
-    anisotropy_index, dominant_bearing_deg = anisotropy_index_from_bearings(bearings, weights)
-    eigenvalues = ((1.0 + anisotropy_index) / 2.0, (1.0 - anisotropy_index) / 2.0)
     counts, _ = np.histogram(bearings, bins=bin_edges, weights=weights)
 
     return AnisotropyResult(
-        anisotropy_index=anisotropy_index,
-        dominant_bearing_deg=dominant_bearing_deg,
-        eigenvalues=eigenvalues,
         total_weighted_length_px=float(weights.sum()),
         n_samples=len(samples),
         histogram_bin_edges_deg=bin_edges,
         histogram_weighted_counts=counts,
         window_px=window_px,
     )
+
+
+def share_near(result: AnisotropyResult, bearing_deg: float, half_width_deg: float = 10.0) -> float:
+    """Share of the weighted length in the bins whose centre lies within
+    half_width_deg of bearing_deg (axial). With 10° bins and the default,
+    that's the two bins touching bearing_deg."""
+    edges = result.histogram_bin_edges_deg
+    centres = (edges[:-1] + edges[1:]) / 2.0
+    d = np.abs(centres - bearing_deg) % 180.0
+    d = np.minimum(d, 180.0 - d)
+    total = result.histogram_weighted_counts.sum()
+    return float(result.histogram_weighted_counts[d < half_width_deg].sum() / total) if total > 0 else 0.0

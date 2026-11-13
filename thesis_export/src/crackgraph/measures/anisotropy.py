@@ -1,15 +1,10 @@
-"""Orientation anisotropy of the cracks in one region: whether they share
-a preferred direction.
+"""Crack orientation in one region: the rose histogram of crack directions.
 
 scan_orientations() takes local direction samples along every kept segment
-once per image; measure_anisotropy() combines the samples that lie inside
+once per image; anisotropy_in_region() bins the samples that lie inside
 the region. Samples are local, so they are assigned by their own position,
 not by their segment's middle. Method:
 docs/walkthrough/08_curvature_anisotropy.md.
-
-A low index doesn't rule out two perpendicular crack families (a grid):
-the index can't tell that apart from random directions. Check the rose
-plot for two peaks before calling a pattern isotropic.
 """
 
 from src.crackgraph.anisotropy import AnisotropyResult, OrientationSample, anisotropy_from_samples, compute_orientation_samples
@@ -33,9 +28,6 @@ def anisotropy_in_region(
 
 
 def measure_anisotropy(result: AnisotropyResult) -> dict:
-    return {
-        "anisotropy_index": result.anisotropy_index,
-        # Not meaningful when the index is near 0 (no preferred direction).
-        "dominant_bearing_deg": result.dominant_bearing_deg,
-        "anisotropy_n_samples": result.n_samples,
-    }
+    # The result is the rose plot (figures.py); the table only records how
+    # many samples it rests on.
+    return {"anisotropy_n_samples": result.n_samples}

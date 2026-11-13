@@ -54,17 +54,10 @@ def _plot_orientation_rose_on_ax(
     ax.set_theta_direction(1)
     ax.bar(theta_mirrored, counts_mirrored, width=bin_width_rad, color="tab:blue", edgecolor="white", linewidth=0.3)
     if compact:
-        ax.set_title(
-            f"A={anisotropy_result.anisotropy_index:.2f}, dom={anisotropy_result.dominant_bearing_deg:.0f}°",
-            fontsize=fontsize,
-        )
+        ax.set_title(f"n={anisotropy_result.n_samples}", fontsize=fontsize)
         ax.set_yticklabels([])
     else:
-        ax.set_title(
-            f"orientation rose (axial, mirrored)  [measured]\n"
-            f"A={anisotropy_result.anisotropy_index:.2f}, dominant={anisotropy_result.dominant_bearing_deg:.0f} deg",
-            fontsize=fontsize,
-        )
+        ax.set_title("crack directions (axial, mirrored)  [measured]", fontsize=fontsize)
     ax.tick_params(labelsize=fontsize - 1)
 
 

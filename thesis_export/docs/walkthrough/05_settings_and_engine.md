@@ -1,13 +1,12 @@
 # 5. Settings and the engine
 
 **Files**:
-- `src/crackgraph/settings.py` (80 lines): every setting you can change, in one object.
-- `src/crackgraph/engine.py` (109 lines): runs pages 1–4 once on a whole image.
+- `src/crackgraph/settings.py` (80 lines): every user setting, in one object.
+- `src/crackgraph/engine.py` (109 lines): runs pages 1–4 once per image.
 
-**What they do.** Every run starts with an `AnalysisSettings` object, filled in by the GUI or by
-the command line. The engine takes an image and those settings, runs binarize → skeletonize →
-flaking → graph once, and hands one result to every measurement. Crack stats, tortuosity and
-anisotropy therefore always describe the same skeleton.
+The GUI or command line fills an `AnalysisSettings`. The engine runs binarize → skeletonize →
+flaking → graph once and hands the result to every measurement, so all measurements describe the
+same skeleton.
 
 ---
 
@@ -17,43 +16,35 @@ anisotropy therefore always describe the same skeleton.
 
 | Line | Name | Meaning |
 |---|---|---|
-| 24 | `DEFAULT_UM_PER_PX` | 100/164 ≈ 0.6098 µm per pixel: the microscope calibration for the thesis images, taken from an external calibration tool. |
-| 28 | `SPUR_UM` | The spur cut-off in µm: 15 px × 0.6098 = 9.15 µm. Page 2 explains why 15 px. |
-| 29 | `DARK_SPECK_AREA_UM2` | The dark-speck limit in µm²: 130 px × 0.6098² = 48.3 µm². |
-| 33 | `CRACK_STATS_GROUPS` | The crack-stats column groups you can choose: area, width, segment length, connectivity, flaking, pruning. |
-| 34 | `MEASUREMENTS` | What can run on each region: crack stats, tortuosity, anisotropy, and the per-segment table. |
+| 24 | `DEFAULT_UM_PER_PX` | 100/164 ≈ 0.6098 µm/px, the thesis microscope (from an external calibration tool). |
+| 28 | `SPUR_UM` | Spur cut-off: 15 px × 0.6098 = 9.15 µm (why 15 px: page 2). |
+| 29 | `DARK_SPECK_AREA_UM2` | Dark-speck limit: 130 px × 0.6098² = 48.3 µm². |
+| 33 | `CRACK_STATS_GROUPS` | area, width, segment_length, connectivity, flaking, pruning. |
+| 34 | `MEASUREMENTS` | crack_stats, tortuosity, anisotropy, segments. |
 
-**Why the two thresholds are in µm.** Both are justified by a physical size: the largest
-agglomerates (page 2). An agglomerate is the same size in µm whatever the magnification, so the
-thresholds are stored in µm and converted to pixels with your µm per pixel. They're defined
-*from* their pixel values at the thesis calibration, so the default run uses exactly 15 px and
-130 px, and the thesis numbers don't change.
+**Why µm.** Both thresholds rest on agglomerate size, a physical length. Stored in µm, they're
+converted with your µm per pixel. Defined from the thesis pixel values, so the default run uses
+exactly 15 px and 130 px.
 
 ### `AnalysisSettings`, line 38
 
-A plain container (a `@dataclass`) with one field per setting:
-
 | Field | Default | Meaning |
 |---|---|---|
-| `um_per_px` | 0.6098 | Calibration. Converts every `_um` column and the two thresholds. |
-| `spur_um`, `dark_speck_area_um2` | 9.15, 48.3 | The two physical thresholds. Not in the GUI yet. |
-| `curvature_window_px`, `orientation_window_px` | 10 px each | Window sizes for page 8. Not in the GUI yet. |
-| `regions` | whole image | Which part of the image to report on (page 6). |
-| `measurements` | crack stats only | Which measurements run. |
-| `crack_stats_groups` | all six | Which crack-stats columns to include. |
-| `include_runtime` | off | Adds how long each stage took. |
+| `um_per_px` | 0.6098 | Converts `_um` columns and the two thresholds. |
+| `spur_um`, `dark_speck_area_um2` | 9.15, 48.3 | Physical thresholds. Not in the GUI yet. |
+| `curvature_window_px`, `orientation_window_px` | 10 px | Windows for page 8. Not in the GUI yet. |
+| `regions` | whole image | Page 6. |
+| `measurements` | crack stats | Which measurements run. |
+| `crack_stats_groups` | all six | Which crack-stats columns. |
+| `include_runtime` | off | Adds time per stage. |
 
-- **`__post_init__`, line 51**: runs when the object is made, and stops with a clear message if a
-  value can't work: a calibration of 0 or less, or a measurement name that doesn't exist.
-- **`spur_px`, line 62**: the spur cut-off in pixels. It's rounded to 6 decimals, so float error
-  can't turn 15 into 14.999999999999998.
-- **`dark_speck_area_px`, line 67**: the dark-speck limit in whole pixels.
+- `__post_init__` (line 51): rejects a calibration ≤ 0 or an unknown name.
+- `spur_px` (line 62): cut-off in px, rounded to 6 decimals so 15 stays 15.
+- `dark_speck_area_px` (line 67): limit in whole pixels.
 
 ### `settings_record(settings)`, line 71
 
-Every setting as a flat `{name: value}` list, plus the two derived pixel thresholds. It's
-written to the `settings` sheet of every results workbook (page 9), so you can tell how any set
-of numbers was made.
+Every setting plus the derived pixel thresholds, written to the workbook's `settings` sheet.
 
 ---
 
@@ -61,37 +52,31 @@ of numbers was made.
 
 ### `EngineResult`, line 30
 
-What the engine returns: the image size, each step's result (pages 1–4), `omitted` (the
-segments touching a flaked patch) and how long each step took. Three helpers that the
-measurements use:
+Image size, each step's result, `omitted` (flake-touching segments) and step times. Helpers:
 
 | Helper | Line | What it does |
 |---|---|---|
-| `kept_paths` | 41 | Every segment *not* touching a flaked patch. Measurements only use these. |
-| `path_pixels(p)` | 45 | The (row, column) pixels along segment `p`. Kept in memory after the first call, because several measurements ask for the same segment. |
-| `path_midpoint(p)` | 52 | The middle pixel of segment `p`. A segment belongs to the region that holds its middle pixel (page 6). |
+| `kept_paths` | 41 | Segments not touching a flake. Measurements use only these. |
+| `path_pixels(p)` | 45 | (row, col) pixels of segment `p`, cached. |
+| `path_midpoint(p)` | 52 | Middle pixel of segment `p`, which decides its region (page 6). |
 
 ### `run_engine(gray, settings, on_stage)`, line 60
 
 | Lines | Step |
 |---|---|
 | 68–71 | Binarize (page 1). |
-| 73–81 | Skeletonize (page 2), once, with the spur cut-off and dark-speck limit converted from your calibration. |
-| 83–88 | Find flaked patches from that skeleton's width map (page 3). |
+| 73–81 | Skeletonize once, with thresholds converted from your calibration (page 2). |
+| 83–88 | Find flaked patches from the width map (page 3). |
 | 90–92 | Build the graph (page 4). |
-| 94–99 | List every segment with a pixel inside a flaked patch. These are left out of every measurement. |
+| 94–99 | List segments with a pixel in a flaked patch. |
 
-`on_stage` is an optional callback: after each step the engine calls it with the step's name
-(`ENGINE_STAGES`, line 26). The GUI uses it to move its progress bar.
+`on_stage`, if given, is called after each step (`ENGINE_STAGES`, line 26); the GUI uses it for
+its progress bar.
 
 ---
 
 ## Worth knowing
 
-- **One engine run per image, whatever the regions.** A 10×10 grid costs the same as the whole
-  image: about 20–45 s for a thesis image.
-- **The same steps, in the same order, as the old crack-stats exporter.** The old exporter was
-  archived on 2026-11-13. `tests/test_unified_analysis.py` checks that the whole-image numbers
-  still match its frozen output exactly.
-- **Tests**: `tests/test_unified_analysis.py` also checks that the default calibration gives
-  exactly 15 px and 130 px, and that doubling the magnification doubles the spur cut-off.
+- One engine run per image, whatever the regions: about 20–45 s for a thesis image.
+- **Tests** (`tests/test_unified_analysis.py`): default calibration gives exactly 15 px and
+  130 px; doubling the magnification doubles the cut-off.

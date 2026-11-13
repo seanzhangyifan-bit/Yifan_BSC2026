@@ -460,26 +460,19 @@ def generate_oriented_segment_field(
     """Grayscale image with `n_segments` independent straight line segments
     at random positions/lengths, each assigned a bearing (mod 180 deg,
     since orientation here is axial) drawn from a controllable mixture --
-    the ground-truth fixture for validating a network-orientation/
-    anisotropy metric, since no existing generator produces a many-segment
-    field with a known bearing *distribution*.
+    the ground-truth fixture for validating the rose plot (a many-segment
+    field with a known bearing distribution).
 
     `bearings_deg=None` (default) draws each segment's bearing from
-    Uniform(0, 180) -- a "mudcrack-like" isotropic field with known
-    anisotropy index ~0. Passing e.g. `bearings_deg=[0.0]` draws every
-    segment at 0 deg plus `bearing_jitter_deg` noise -- a fully aligned
-    "rectilinear" field with known anisotropy index ~1. Passing
-    `bearings_deg=[0.0, 90.0]` with `bearing_weights` mixes two
-    orthogonal populations at a controllable ratio (an orthogonal-grid
-    field) -- the equal-weight case is the documented blind spot of a
-    2nd-order orientation tensor (see anisotropy.py), and the unequal
-    -weight case is the "grid, strong preferred orientation" validated
-    case; `bearing_weights=None` splits the entries of `bearings_deg`
-    equally.
+    Uniform(0, 180): a flat rose plot. Passing e.g. `bearings_deg=[0.0]`
+    draws every segment at 0 deg plus `bearing_jitter_deg` noise: one peak.
+    Passing `bearings_deg=[0.0, 90.0]` with `bearing_weights` mixes two
+    orthogonal populations at a set ratio (an orthogonal grid): two peaks.
+    `bearing_weights=None` splits the entries of `bearings_deg` equally.
 
     Segments are centered at random positions within
     [margin_px, size-margin_px] and may cross or overlap -- this is a
-    fixture for orientation-tensor statistics only, not a claim about a
+    fixture for orientation statistics only, not a claim about a
     realistic crack network topology (no junction-census meaning should be
     read from it), the same caveat _draw_rotated_arm's own docstring makes
     for its jitter model.

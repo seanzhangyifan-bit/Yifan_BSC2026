@@ -1,28 +1,16 @@
 # Glossary
 
-One line per term, no elaboration. For the reasoning behind the analysis, read
-[`METHODOLOGY.md`](METHODOLOGY.md).
-
-- **Skeleton** — the crack mask thinned to 1-pixel-wide centre lines, keeping its
-  connectivity (homotopy-preserving thinning).
-- **Node** — a junction or a loose end of the skeleton.
-- **Degree** — how many segments meet at a node: 1 = loose end, 3 = three-way junction,
-  4+ = crossing.
-- **Segment / edge / path** — one stretch of skeleton between two nodes, numbered by skan's
-  `path_index`.
-- **Junction blob** — the patch of crack pixels where several segments meet; it doesn't
-  clearly belong to any one segment, so per-segment area there is bracketed, not exact.
-- **Flaking** — patches where the catalyst layer has come off, exposing substrate; bright like
-  a crack but not a fracture, so segments touching them are left out of the stats.
-- **Giant component** — the connected piece of the crack network with the most total crack
-  length.
-- **Tortuosity** — a segment's path length divided by the straight-line distance between its
-  ends; 1 = perfectly straight.
-- **Anisotropy** — how strongly the crack segments point in one dominant direction, from the
-  length-weighted 2nd-order orientation tensor (0 = no preferred direction).
-- **Engine** — the steps every measurement shares (binarize, skeletonize, flaking exclusion,
-  graph), run once per image.
-- **Region** — the part of the image one row of numbers describes: the whole image, its centre,
-  or one cell of a grid. A region selects part of the engine's one result; it doesn't re-run it.
-- **Grid cell** — one rectangle of an N × M grid over the image, numbered 1 to N × M row by row
-  from the top left.
+- **Skeleton**: the crack mask thinned to 1-pixel centre lines, keeping its connectivity.
+- **Node**: a junction or a loose end of the skeleton.
+- **Degree**: segments meeting at a node. 1 = loose end, 3 = three-way junction, 4+ = crossing.
+- **Segment / edge / path**: skeleton between two nodes, numbered by skan's `path_index`.
+- **Junction blob**: crack pixels where segments meet; they don't clearly belong to one segment.
+- **Flaking**: patches where the catalyst layer came off. Bright like a crack but missing
+  material; segments touching them are left out.
+- **Giant component**: the connected piece of the network with the most crack length.
+- **Tortuosity**: segment path length ÷ straight-line distance between its ends. 1 = straight.
+- **Rose plot**: histogram of crack directions (0–180°), weighted by length.
+- **Engine**: binarize, skeletonize, flaking exclusion, graph; run once per image.
+- **Region**: the part of the image one row describes: whole image, centre or a grid cell. It
+  selects part of the engine's result; it doesn't re-run it.
+- **Grid cell**: one rectangle of an N × M grid, numbered 1 to N × M row by row from the top left.
