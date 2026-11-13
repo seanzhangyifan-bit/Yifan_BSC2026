@@ -125,3 +125,15 @@ def grid_cells(
                 )
             )
     return out
+
+
+def corner_crop(height: int, width: int, *, corner_frac: float = 0.125, edge_margin_frac: float = 0.02) -> Region:
+    """A square crop near the top-left corner, inset from the image edges.
+    Both sizes are fractions of the image width. Only the validation sweeps
+    (scripts/validation/) use this, so their results stay comparable with
+    earlier runs; it is not one of the user-facing region modes."""
+    margin = round(edge_margin_frac * width)
+    size = round(corner_frac * width)
+    row_end = min(margin + size, height)
+    col_end = min(margin + size, width)
+    return Region("corner", min(margin, row_end), row_end, min(margin, col_end), col_end)

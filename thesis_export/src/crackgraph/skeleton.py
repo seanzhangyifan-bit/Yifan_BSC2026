@@ -115,8 +115,8 @@ def skeletonize_and_prune(
     n_pixels_pre = int(skel_image.sum())
 
     # Local crack half-width at every mask pixel (the distance to the
-    # nearest dark pixel). Used downstream for crack widths (edge_metrics,
-    # the crack-stats export) and flaking detection, and below for
+    # nearest dark pixel). Used downstream for crack widths (the crack
+    # stats and per-segment table) and flaking detection, and below for
     # host-stub pruning: the host crack's half-width near a junction
     # decides how much of a dead end lies outside it.
     medial_radius = distance_transform_edt(mask_clean)

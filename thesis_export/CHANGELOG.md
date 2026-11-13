@@ -11,6 +11,38 @@ Commit IDs link each entry to its full details in `git log`. Findings are number
 
 ## 2026-11-13
 
+### Changed: one analysis tool with user-chosen settings and regions
+
+**No change to the crack stats** on the whole image with default settings: on T2-M_H90_v1 (with
+flaking) and T5-M_H190_v1 every column matches the old exporter exactly, and
+`tests/test_unified_analysis.py` checks this against its frozen output.
+**Changes results** of tortuosity, curvature and anisotropy slightly: segments touching a flaked
+patch are now left out without rebuilding the graph, as in the crack stats. The old per-image
+tool rebuilt the graph, which could merge two segments into one.
+
+- The crack-stats export (`export_crack_stats.py`), the per-image tool (`analyze_image.py`) and
+  the spatial overview (`scripts/spatial_overview/`) are replaced by one tool: an engine that
+  runs once per image (`engine.py`), regions (`regions.py`), measurements per region
+  (`measures/`), one settings object (`settings.py`), a command line (`src/analyze.py`) and a
+  rewritten GUI (`app.py`).
+- New choices: µm per pixel; the whole image, its centre, or chosen cells of any grid; which
+  measurements and crack-stats column groups; which figures (overlay with regions, per-region
+  rose and tortuosity panels, a colour map over the grid).
+- The spur cut-off and dark-speck limit are now stored in µm (9.15 µm, 48.3 µm²) and converted
+  with the chosen µm per pixel. At 0.6098 µm/px they're exactly 15 px and 130 px, as before.
+- Connectivity is reported for the whole image only. Grid and centre runs write it to an
+  `image_connectivity` sheet.
+- New columns: `region`, `region_rows_px`, `region_cols_px`, `region_area_pct`. Results workbooks
+  have a `settings` sheet. `runtime_stats_s` is now `runtime_measure_regions_s`; runtime columns
+  are opt-in.
+- The per-segment table keeps length, width and one area estimate. The four-method area bracket
+  (`edge_metrics.py`), the long console report, the master HTML report, the per-run xlsx report,
+  the analysis cache and the old corner-crop default are archived in the repository's
+  `archive/thesis_export_old_entry_points_2026-11-13/`, with their tests and walkthrough pages.
+  `flaking.remove_flake_touching_edges` was removed: nothing uses it any more.
+- Walkthrough pages 5–10 rewritten for the new structure. `METHODOLOGY.md` now says the
+  threshold is global Otsu; it said "adaptive" before.
+
 ### Removed: `docs/design_notes.md` and `docs/calibration_notes.md`
 
 **No change to results.** Documentation only. The code walkthrough (`docs/walkthrough/`)

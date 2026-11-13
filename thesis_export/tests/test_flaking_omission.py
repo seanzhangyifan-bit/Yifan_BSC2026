@@ -1,8 +1,7 @@
 """Correctness checks for how flaked regions are handled: an edge with a pixel
 inside the excluded region is omitted (flaking.flake_touching_path_indices,
 no distance buffer), the connectivity graph is built from the remaining
-edges only, and flaking.remove_flake_touching_edges removes them from the
-skeleton for the graph-analysis tools.
+edges only.
 """
 
 from types import SimpleNamespace
@@ -11,7 +10,7 @@ import networkx as nx
 import numpy as np
 import pandas as pd
 
-from src.crackgraph.flaking import exclude_flaking_regions, flake_touching_path_indices, remove_flake_touching_edges
+from src.crackgraph.flaking import exclude_flaking_regions, flake_touching_path_indices
 from src.crackgraph.graph import extract_graph
 from src.crackgraph.skeleton import skeletonize_and_prune
 
@@ -121,39 +120,3 @@ def test_omitting_flake_touching_edges_keeps_two_real_networks_separate():
     assert {len(c) for c in components} == {3, 3}, (
         "each surviving network is its own T-branch (junction + 2 tips), untouched by the blob"
     )
-
-
-def test_remove_flake_touching_edges_drops_them_from_the_skeleton():
-    # Same two-networks-plus-blob layout: after removal, the rebuilt graph
-    # itself (not just a filtered edge list) has two separate networks and no
-    # remaining edge touches the excluded region. (skan can leave a lone
-    # junction pixel where the removed branches met; it is not part of any edge.)
-    mask = np.zeros((260, 500), dtype=bool)
-    mask[120:128, 20:180] = True
-    mask[128:158, 96:104] = True
-    mask[60:190, 180:260] = True
-    mask[120:128, 260:420] = True
-    mask[128:158, 336:344] = True
-
-    result = skeletonize_and_prune(mask)
-    graph_result = extract_graph(result.skeleton)
-    flaking_result = exclude_flaking_regions(result.mask_clean, result.skel_image, result.medial_radius)
-
-    skeleton, new_graph, omitted = remove_flake_touching_edges(
-        result.skeleton, graph_result, flaking_result.excluded_mask,
-    )
-    assert omitted
-    assert flake_touching_path_indices(skeleton, new_graph, flaking_result.excluded_mask) == set()
-    G = nx.from_pandas_edgelist(new_graph.summary, source="node_id_src", target="node_id_dst")
-    assert nx.number_connected_components(G) == 2
-
-
-def test_remove_flake_touching_edges_is_a_no_op_without_flakes():
-    mask = np.zeros((100, 200), dtype=bool)
-    mask[45:52, 10:190] = True
-    result = skeletonize_and_prune(mask)
-    graph_result = extract_graph(result.skeleton)
-    empty = np.zeros(mask.shape, dtype=bool)
-    skeleton, new_graph, omitted = remove_flake_touching_edges(result.skeleton, graph_result, empty)
-    assert omitted == set()
-    assert skeleton is result.skeleton and new_graph is graph_result

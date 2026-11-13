@@ -1,9 +1,9 @@
-# 7. Curvature and anisotropy
+# 8. Curvature, tortuosity and anisotropy
 
 **Files**:
-- `src/crackgraph/curvature.py` (247 lines)
-- `src/crackgraph/anisotropy.py` (266 lines)
-- `src/crackgraph/_chord_scan.py` (55 lines)
+- `src/crackgraph/curvature.py` (241 lines) and `src/crackgraph/measures/tortuosity.py` (50 lines)
+- `src/crackgraph/anisotropy.py` (280 lines) and `src/crackgraph/measures/anisotropy.py` (41 lines)
+- `src/crackgraph/_chord_scan.py` (34 lines)
 
 Two **shape** measurements of the network. They say nothing about which crack came first.
 
@@ -11,7 +11,9 @@ Two **shape** measurements of the network. They say nothing about which crack ca
 - **Anisotropy**: whether the cracks tend to point in one direction (grid-like) or every
   direction (mud-crack-like).
 
-Both rely on one small shared technique, the **chord-pair scan**.
+Both rely on one small shared technique, the **chord-pair scan**. `curvature.py` and
+`anisotropy.py` hold the methods; the two files in `measures/` run them once per image and
+report them per region (end of this page).
 
 ---
 
@@ -97,19 +99,39 @@ the **rose histogram is a required companion**: only it shows two peaks.
 
 | Function | Line | What it does |
 |---|---|---|
-| `anisotropy_index_from_bearings(bearings, weights)` | 111 | The formula above. Pure maths, tested directly against known answers. |
-| `compute_orientation_samples(...)` | 134 | Direction samples from every segment. Long segments: one sample per interior point, with direction = the sum of the incoming and outgoing chord directions, which smooths the 45° pixel steps. Short segments: one end-to-end sample, weighted by length. |
-| `compute_anisotropy(...)` | 218 | Combine all samples: A, dominant direction, and an 18-bin histogram (10° bins) for the rose plot. |
+| `anisotropy_index_from_bearings(bearings, weights)` | 113 | The formula above. Pure maths, tested directly against known answers. |
+| `compute_orientation_samples(...)` | 136 | Direction samples from every segment, each with its position on the image. Long segments: one sample per interior point, with direction = the sum of the incoming and outgoing chord directions, which smooths the 45° pixel steps. Short segments: one end-to-end sample, weighted by length. |
+| `compute_anisotropy(...)` | 224 | Samples from every segment, then `anisotropy_from_samples`. |
+| `anisotropy_from_samples(samples)` | 238 | Combine a set of samples: A, dominant direction, and an 18-bin histogram (10° bins) for the rose plot. Taking samples as input lets a region combine only its own. |
 
-The verbal labels ("grid-like" ≥ 0.5, "mud-crack-like" < 0.15) live in `xlsx_report.py` and are
-`[interpreted]`. Always read them next to the histogram.
+---
+
+## Per region: `measures/tortuosity.py` and `measures/anisotropy.py`
+
+Both scan the whole image once, then report each region from that one scan. Segments touching a
+flaked patch are left out, as in the crack stats.
+
+| Function | File, line | What it does |
+|---|---|---|
+| `scan_curvature` | `tortuosity.py`, 18 | `compute_edge_curvature` on every segment, once per image. |
+| `curvature_in_region` | `tortuosity.py`, 24 | Keeps the kept segments whose middle pixel is in the region (page 6). |
+| `measure_tortuosity` | `tortuosity.py`, 33 | The region's columns: mean and median tortuosity over segments long enough to trust, mean and maximum curvature in 1/µm, and how many segments each is based on. |
+| `scan_orientations` | `anisotropy.py`, 21 | Direction samples along every kept segment, once per image. |
+| `anisotropy_in_region` | `anisotropy.py`, 28 | Combines the samples lying inside the region. Samples are local, so each goes by its own position, not its segment's middle. |
+| `measure_anisotropy` | `anisotropy.py`, 35 | The region's columns: anisotropy index, dominant bearing, number of samples. |
+
+Curvature is measured in 1/px and divided by µm per pixel to give 1/µm.
 
 ---
 
 ## Worth knowing
 
-- **Both work on the corner crop by default** (inside `analyze_image.py`). The spatial overview
-  runs them on whole images and quadrants (page 9).
+- **Flaked segments are left out without rebuilding the graph**, the same way as in the crack
+  stats. Before 2026-11-13, the per-image tool rebuilt the graph instead, which could merge two
+  segments into one, so its tortuosity and anisotropy can differ slightly from older runs.
+- **A small region has few segments.** Each row says how many segments or samples its numbers
+  rest on (`tortuosity_n_segments`, `anisotropy_n_samples`); treat values from a handful with
+  care.
 - **Tests**:
   - `tests/test_curvature.py` (7 tests): straight arms, a known circular arc, a sharp kink,
     short segments, and degenerate segments.

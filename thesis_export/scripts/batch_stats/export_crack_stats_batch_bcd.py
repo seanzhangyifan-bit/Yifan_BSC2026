@@ -1,6 +1,6 @@
 """One-off crack-stats run over three specific thesis batches (B/C/D),
-not the full default dataset scripts/batch_stats/export_crack_stats.py's own main()
-covers.
+run through the same analysis as src/analyze.py (whole image, crack
+stats, runtime columns).
 
 Batch B -- T5 gap-height variation, PTFE (8 files, characterization2_ptfe/):
     T5-PTFE_H50/H95/H145/H190, each v1/v2.
@@ -19,8 +19,10 @@ Usage:
     python3 -m scripts.batch_stats.export_crack_stats_batch_bcd [--data-dir data/raw]
         [--out outputs/crack_stats_batch_bcd.xlsx] [--scale-bars-checked]
 
-File paths below are relative to --data-dir. See export_crack_stats.py's
-docstring for --data-dir and --scale-bars-checked.
+File paths below are relative to --data-dir (default data/raw inside this
+folder; for example --data-dir ../data/raw). Pass --scale-bars-checked only
+if you have looked at every image and confirmed none carries a burned-in
+scale bar.
 """
 
 import argparse
@@ -28,7 +30,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from scripts.batch_stats.export_crack_stats import SCALE_BAR_CHECKED, SCALE_BAR_NOT_CHECKED, add_batch_args, compute_row
+from src.crackgraph.analysis import SCALE_BAR_CHECKED, SCALE_BAR_NOT_CHECKED, analyze_image
+from src.crackgraph.settings import AnalysisSettings
 
 BATCH_B_T5_GAP_HEIGHT_PTFE = [
     "characterization2_ptfe/T5-PTFE_H50_v1_mm000001.jpg",
@@ -62,14 +65,16 @@ BATCH_D_T2_T3_T4_MEMBRANE_H95 = [
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--out", type=str, default="outputs/crack_stats_batch_bcd.xlsx")
-    p.add_argument("--cache-dir", type=str, default=None)
-    add_batch_args(p)
+    p.add_argument("--data-dir", type=str, default="data/raw",
+                   help="Folder holding the micrographs (default: data/raw inside this folder).")
+    p.add_argument("--scale-bars-checked", action="store_true",
+                   help="Record scale_bar_check as visually confirmed. Only if you checked every image.")
     args = p.parse_args()
 
     repo_root = Path(__file__).resolve().parent.parent.parent
     data_dir = (repo_root / args.data_dir).resolve()
     scale_bar_check = SCALE_BAR_CHECKED if args.scale_bars_checked else SCALE_BAR_NOT_CHECKED
-    cache_dir = repo_root / args.cache_dir if args.cache_dir else None
+    settings = AnalysisSettings(include_runtime=True)
 
     groups = [
         ("B", BATCH_B_T5_GAP_HEIGHT_PTFE),
@@ -88,14 +93,13 @@ def main():
     rows = []
     for i, (label, image_path) in enumerate(all_paths, 1):
         print(f"[{i}/{len(all_paths)}] batch {label}: {image_path.relative_to(data_dir)}")
-        row = compute_row(image_path, cache_dir=cache_dir, scale_bar_check=scale_bar_check)
+        row = analyze_image(image_path, settings, scale_bar_check=scale_bar_check).rows[0]
         row["batch"] = label
         rows.append(row)
 
     out_path = repo_root / args.out
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    df = pd.DataFrame(rows)
-    df.to_excel(out_path, index=False, sheet_name="crack_stats_bcd")
+    pd.DataFrame(rows).to_excel(out_path, index=False, sheet_name="crack_stats_bcd")
     print(f"\nWrote {len(rows)} rows to {out_path}")
 
 

@@ -81,7 +81,7 @@ def draw_graph_excluded(ax, mask_crop, excluded_crop, skel, graph_result, omitte
         ax.add_collection(LineCollection(omitted_segments, colors=OMITTED_EDGE_COLOR, linewidths=1.6, zorder=3))
 
     # Node kept/excluded status: kept iff it has >=1 non-omitted edge, i.e.
-    # it survives into compute_row()'s own connectivity graph G -- computed
+    # it survives into the crack stats' connectivity graph -- computed
     # the same way, not a separate/different criterion.
     kept_summary = summary.loc[~summary.index.isin(omitted)]
     kept_node_ids = set(kept_summary["node_id_src"]).union(kept_summary["node_id_dst"])

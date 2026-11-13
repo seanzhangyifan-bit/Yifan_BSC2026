@@ -1,7 +1,6 @@
 """render_validation_report must group cases by method, show a pass/fail
 badge per case, and embed the metric/expected/measured table -- checked
-against hand-built ValidationCaseResult fixtures, no real image generation
-(mirrors test_html_report.py's style)."""
+against hand-built ValidationCaseResult fixtures, no real image generation."""
 
 from src.crackgraph.validation_cases import ValidationCaseResult
 from src.crackgraph.validation_report import render_validation_report

@@ -1,9 +1,8 @@
 """Renders a battery of ValidationCaseResult (see validation_cases.py) into
-one static HTML gallery page, grouped by method (curvature/anisotropy). Unlike html_report.py's report.html, this is not
-registry-backed/incrementally upserted across sessions -- the case battery
+one static HTML gallery page, grouped by method (curvature/anisotropy). The case battery
 is fixed and fully re-run each time scripts/validation/validation_gallery.py is
 invoked, so the HTML is simply built fresh from whatever results that run
-produced. Same plain-CSS, no-JS visual idiom as html_report.py.
+produced. Plain CSS, no JavaScript.
 """
 
 from pathlib import Path

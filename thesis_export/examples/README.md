@@ -1,12 +1,12 @@
 # Examples: already-produced outputs
 
-Two files: one real spreadsheet, produced by a real run of `scripts/batch_stats/` against the
+Two files: one real spreadsheet, produced by a real run of `scripts/batch_stats/export_crack_stats_batch_bcd.py` against the
 private micrograph collection (`data/raw/` in the parent repo — not bundled here, see the root
 README's "What's not included"), and one HTML gallery that needs no private data at all.
 
 | File | Produced by | Scope |
 |---|---|---|
-| `crack_stats_batch_bcd.xlsx` | `export_crack_stats_batch_bcd.py` | The 19 images of thesis batches B, C and D, with a `definitions` sheet. Produced before the 2026-11-11 pruning changes (see `../CHANGELOG.md`): its edge and length columns predate them, and its `n_corner_artifacts_pruned` column is now `n_host_stubs_pruned`. Re-run for current numbers. |
+| `crack_stats_batch_bcd.xlsx` | `export_crack_stats_batch_bcd.py` | The 19 images of thesis batches B, C and D, with a `definitions` sheet. Produced before the 2026-11-11 pruning changes (see `../CHANGELOG.md`): its edge and length columns predate them, and its `n_corner_artifacts_pruned` column is now `n_host_stubs_pruned`. Its columns match today's whole-image crack stats, apart from the region columns added 2026-11-13. Re-run for current numbers. |
 | `validation_gallery.html` | `scripts/validation/validation_gallery.py` | 5 synthetic ground-truth cases across 2 measurement methods (curvature, anisotropy), expected-vs-measured tables |
 
 See `../docs/batch_stats/crack_stats_schema.md` for what every crack-stats column means, exactly.
@@ -22,6 +22,4 @@ yourself any time with `python3 -m scripts.validation.validation_gallery` (write
 have to run anything to see it. One difference from a fresh regeneration: that script's own output
 references its 5 overlay/rose-diagram PNGs by relative path (broken if the HTML is moved on its
 own), so this copy has every image inlined directly into the HTML instead — same content, just
-portable as a single file. The master spatial-overview HTML report isn't bundled here for the same
-relative-path reason, and hasn't been repackaged the same way (no read demand for it yet) — if you
-need it, run `python3 -m scripts.spatial_overview.overview_figure <image_path>`.
+portable as a single file.

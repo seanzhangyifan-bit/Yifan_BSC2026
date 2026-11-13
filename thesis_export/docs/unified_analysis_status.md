@@ -50,17 +50,20 @@ app.py                       GUI
   T2-M_H90_v1 (with flaking) and T5-M_H190_v1, 0 mismatched columns. A 3×3 grid's crack area adds
   up to the whole image. Locked in by `tests/test_unified_analysis.py` on a synthetic flaked grid.
 
+- [x] Phase 1 committed (`1cf0971`).
+- [x] Old entry points archived to `archive/thesis_export_old_entry_points_2026-11-13/` with their
+  tests and walkthrough pages; the old exporter's output on the synthetic flaked grid frozen in
+  `tests/data/old_exporter_flaked_grid.json` for the parity test.
+- [x] `export_crack_stats_batch_bcd.py` and the two validation sweeps repointed; `corner_crop`
+  moved into `regions.py` (same crop as before).
+- [x] Docs: README, METHODOLOGY, CALIBRATION, GLOSSARY, the crack-stats schema (§1, §2, new §4d),
+  walkthrough pages 5–11 and index, script READMEs, CHANGELOG.
+
 ## Still to do
 
-- [ ] Commit this phase.
-- [ ] Archive the old entry points: `scripts/batch_stats/export_crack_stats.py` (after moving its
-  helpers' tests to `measures/crack_stats.py`), `src/analyze_image.py`, `scripts/spatial_overview/`,
-  `region.py`, `tiling.py`, `html_report.py`, `xlsx_report.py`, `cache_io.py` if unused, and their tests.
-- [ ] Repoint `export_crack_stats_batch_bcd.py`, `add_definitions_sheet.py` and the validation
-  scripts that import `region.default_corner_crop`.
-- [ ] Docs: README, METHODOLOGY, the crack-stats schema (new region columns, connectivity sheet),
-  walkthrough pages 5 and 8–10, GLOSSARY, CHANGELOG entry.
-- [ ] Decide which engine settings the GUI exposes.
-- [ ] Note for the CHANGELOG: tortuosity and anisotropy now leave out flake-touching segments
-  without rebuilding the graph, as crack stats do. Before, `analyze_image` rebuilt the graph, which
-  could merge segments, so their numbers can differ slightly from older runs.
+- [ ] Decide which engine settings the GUI exposes (user's call). Candidates: the spur cut-off
+  and dark-speck limit (already µm settings), the curvature and orientation windows, the flaking
+  constants.
+- [ ] Re-run `export_crack_stats_batch_bcd.py` to refresh `examples/crack_stats_batch_bcd.xlsx`
+  (it predates the 2026-11-11 pruning changes).
+- [ ] Optional: a real-image check of the grid figures on a dense image (only synthetic so far).

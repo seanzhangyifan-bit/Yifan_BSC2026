@@ -45,100 +45,97 @@ direction and review, not autonomously.
 
 ## Repo layout
 
-- **`src/`** — the library: the analysis engine itself (`src/crackgraph/`'s
-  binarize → skeletonize → flaking exclusion → graph → per-segment metrics, curvature and
-  anisotropy), plus
-  `src/analyze_image.py` as the one CLI entry point that wires those pieces together for a
-  single image. Meant to be imported, not run standalone except via that entry point.
-- **`scripts/`** — standalone tools built on top of `src/`, one per job: `batch_stats/`
-  (the spreadsheet export), `spatial_overview/` (the quadrant-comparison figure),
-  `validation/` (synthetic ground-truth galleries and calibration sweeps),
-  `experimental/` (throwaway exploratory code). Each is run directly (e.g.
-  `python3 -m scripts.batch_stats.export_crack_stats`), not imported elsewhere.
-- **`tests/`** — pytest correctness checks for `src/` (known-ground-truth synthetic
-  cases), run via `pytest tests/`. Never part of normal use — only run to confirm nothing
-  broke.
-- **`__pycache__/`** — not source code. Python auto-generates this the first time it
-  imports a file, to cache compiled bytecode for faster imports; it reappears on its own
-  and is safe to delete anytime. Already excluded from version control.
+- **`src/`**: the analysis.
+  - `src/crackgraph/`: the library. An engine that runs once per image (binarize → skeletonize
+    → flaking exclusion → crack graph), regions (whole image, centre, grid cells), and the
+    measurements made on each region (`measures/`: crack stats, tortuosity, anisotropy,
+    per-segment table).
+  - `src/analyze.py`: the command line.
+- **`app.py`**: the browser GUI. It offers the same settings as the command line.
+- **`scripts/`**: tools built on top of `src/`, one folder per job: `batch_stats/` (the thesis
+  batch spreadsheet), `validation/` (synthetic ground-truth galleries and calibration sweeps),
+  `experimental/` (throwaway exploratory code), `docs/` (the walkthrough figures).
+- **`tests/`**: pytest checks of `src/` against synthetic cases with known answers. Run them to
+  confirm nothing broke; they're not part of normal use.
+- **`__pycache__/`**: not source code. Python creates it to cache compiled files; it's safe to
+  delete, and version control ignores it.
 
-## The five deliverables
+## What it does
 
-This project isn't one pipeline — it's five semi-independent pieces of work at different
-validation levels. Each has its own folder-level README with full detail; this table is the map.
+One tool, with settings you choose:
 
-| # | Deliverable | What it does | Validation level | Where |
-|---|---|---|---|---|
-| 1 | **Per-image pipeline** | Detailed analysis of one image: per-segment length, width and area, curvature/tortuosity, orientation anisotropy | Synthetic ground-truth pytest suite + sweep-justified curvature window + real-image visual review | `src/`, run via `python3 -m src.analyze_image <image_path>` |
-| 2 | **Batch crack-stats export** | Numeric spreadsheets (crack density, width, connectivity) across many images/conditions | One method; flaked regions handled in a single pass (edges touching them omitted) | `scripts/batch_stats/` |
-| 3 | **Spatial overview & report** | First-look spatial-variation figures + one master HTML report across all analyzed images | None formal — deliberately a first look, not a citable result | `scripts/spatial_overview/` |
-| 4 | **Methodology validation & QA** | Synthetic ground-truth galleries + calibration sweeps that justify the per-image pipeline's tunable constants | This *is* the validation evidence for #1 | `scripts/validation/` |
-| 5 | **Exploratory / future work** | In-situ video-tracking hypothesis + a throwaway tracing PoC | Explicitly unvalidated, not integrated | `scripts/experimental/` |
+1. **Calibration**: µm per pixel. The default, 0.6098, is the thesis microscope.
+2. **Regions**: the whole image, its centre, or chosen cells of a grid of any size. The image is
+   analysed once; each region gets its own row of numbers from that one result, so cells are
+   measured identically and add up to the whole image.
+3. **Measurements** per region:
+   - **Crack stats**: crack area, width, segment length, flaking, pruning counts, and
+     connectivity (whole image only). On the whole image, these are the thesis's main numbers.
+   - **Tortuosity and curvature**: how bent the crack segments are.
+   - **Anisotropy**: whether the cracks share a preferred direction.
+   - **Per-segment table** (optional): length, width and area of every segment.
+4. **Figures**: the skeleton overlay with regions outlined, a rose plot and tortuosity histogram
+   per region laid out like the grid, and a colour map of any column over the grid.
 
-## Running the per-image pipeline
+Each run writes one `results.xlsx`: a row per image and region, the settings used, and, when they
+apply, whole-image connectivity and the per-segment table.
 
-```
-python3 -m src.analyze_image path/to/image.jpg
-```
+| Part | Validation | Where |
+|---|---|---|
+| The analysis | Synthetic ground-truth tests; the whole-image crack stats match the earlier exporter exactly; sweep-justified curvature window | `src/`, `app.py` |
+| Validation and QA | This *is* the evidence for the analysis | `scripts/validation/` |
+| Exploratory work | In-situ video-tracking idea and a throwaway tracing proof of concept. Not validated, not connected | `scripts/experimental/` |
 
-Binarizes, skeletonizes, excludes flaked regions, builds the crack graph, and measures every
-segment's length, width and area plus curvature/tortuosity and anisotropy — console report, a
-per-segment CSV and an overlay PNG under `outputs/<source-subfolder>/`. See `METHODOLOGY.md`'s
-"Pipeline stages" and `docs/walkthrough/08_analyze_image.md` for every CLI flag.
+## Running it
 
-**Per-image results cover a small corner sample, not the whole image.** By default the
-pipeline analyses only a top-left corner crop, about **1.5% of the image area**. The batch
-crack stats cover the **whole image**. Don't put corner numbers next to whole-image crack
-stats as if they describe the same area. The report, spreadsheet row and GUI all state the
-region. Pass `--full-image` to analyse the whole image.
-
-## GUI (optional, easiest way to try this)
-
-No command-line flags to learn: upload one or more images, choose what to run, click go.
+**GUI**, the easiest way:
 
 ```
 python3 -m streamlit run app.py
 ```
 
-(See [Setup](#setup) above if the bare `streamlit run app.py` command isn't found.) Opens
-locally at `http://localhost:8501` — runs entirely on your own machine, nothing is uploaded
-anywhere.
+It opens at `http://localhost:8501` and runs on your own computer; nothing is uploaded. (See
+[Setup](#setup) if the bare `streamlit run app.py` isn't found.) Upload micrographs, choose the
+settings above, and click **Run analysis**. You get the figures, the tables, and a download
+button for the workbook.
 
-Upload one or more micrographs, then check off what you want run on them: crack stats (density,
-width, connectivity), curvature & tortuosity, anisotropy, and spatial overview (a quadrant-comparison figure)
-— any combination. A progress bar tracks each
-image through whichever stages you selected, with a rough elapsed-time/time-remaining estimate.
+**Command line**, the same settings as options:
 
-This is a thin front-end onto deliverables #1, #2, and #3 below — same underlying scripts as the
-CLI, same validation status, not a separate method. Deliverables #4 (validation gallery) and #5
-(experimental) are intentionally **not** in the GUI: #4 is evidence *about* the pipeline's
-correctness, not something you'd run against your own image, and #5 is explicitly unvalidated
-future work, not something to present next to real results. Deliverable #2's µm/mm² columns
-assume this project's own microscope calibration, which almost certainly doesn't apply to a
-different image source — the app flags this next to those columns rather than presenting them as
-universally correct. Deliverable #3's figure carries no formal validation either, same as its row
-in the table below — the app's checkbox says so directly.
+```
+# Crack stats on the whole image, for every image in a folder
+python3 -m src.analyze ../data/raw/T5 --out-dir outputs/t5
+
+# The left column of a 3x3 grid, with tortuosity, anisotropy and the per-region figures
+python3 -m src.analyze image.jpg --regions grid --grid 3x3 --cells 1,4,7 \
+    --measure crack_stats tortuosity anisotropy --figures overlay panels map
+```
+
+`python3 -m src.analyze --help` lists every option; `docs/walkthrough/10_command_line_and_gui.md`
+explains them.
+
+**About the µm columns**: they use the µm per pixel you set. The default fits the thesis
+microscope only; for other images, set your own. The `_px` columns don't depend on it.
+
+**About small regions**: a region's numbers rest on fewer segments. Each row says how many
+segments or samples its tortuosity and anisotropy are based on. Connectivity is only reported for
+the whole image, because cutting the network at a region border splits it.
 
 ## What's not included
 
 - **`data/raw/`** — the private micrograph collection this pipeline was developed and run
-  against. Not bundled (large, and not the parent repo's own to redistribute). Point the batch
-  scripts at your own images with `--data-dir <folder>`; the per-image pipeline and GUI take an
-  image path or upload directly.
+  against. Not bundled (large, and not the parent repo's own to redistribute). Give the command
+  line your own image files or folders, or upload them in the GUI.
 - **`crack_stats_export/`** — a separate, smaller export in the parent repo, built specifically
   for the sibling `image_visualization` project to consume `crack_stats.xlsx`. Different purpose
   from this folder (a thesis-submission archive of the whole project); not duplicated here.
 
 ## `examples/`
 
-Already-produced outputs, so you can see real results without running anything yourself: three
-spreadsheets from real runs against the private micrograph collection (proof this pipeline was
-actually exercised on real data, not just unit-tested — these specifically can't be regenerated
-from this export alone, since that needs the private `data/raw/` source images), plus
-`examples/validation_gallery.html` — a self-contained copy of the synthetic-pattern validation
-gallery (12 ground-truth cases across 4 measurement methods, see deliverable #4 below). Open
-it directly in a browser, no server needed. See `examples/README.md` for exactly what's here and
-how each file was produced.
+Already-produced outputs, so you can see results without running anything: a spreadsheet from a
+real run on thesis batches B, C and D (it needs the private `data/raw/` images, so it can't be
+regenerated from this folder alone), and `validation_gallery.html`, the synthetic validation
+gallery (5 ground-truth cases for curvature and anisotropy), which opens directly in a browser.
+See `examples/README.md` for how each was produced.
 
 ## Tests
 
@@ -146,7 +143,8 @@ how each file was produced.
 python3 -m pytest tests/ -v
 ```
 
-Full suite: synthetic-ground-truth correctness checks (known crack lengths, widths,
-curvature and orientation) plus regression tests for every fix described in the docs above. All tests
+Run from this folder. Synthetic ground-truth checks (known crack lengths, widths, curvature and
+orientation), regression tests for fixed bugs, and a check that the whole-image crack stats still
+match the earlier exporter's frozen output. All tests
 pass in a fresh venv built from this folder's own `requirements.txt` alone — verified as part of
 producing this export, not assumed.

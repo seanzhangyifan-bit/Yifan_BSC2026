@@ -1,30 +1,30 @@
-# `crack_stats.xlsx` — column reference
+# Crack stats — column reference
 
 ## 1. Purpose & scope
 
-`compute_row()` (`scripts/batch_stats/export_crack_stats.py`) runs stage 1-3 of the pipeline
-(binarize → skeletonize → graph extraction, plus flaking exclusion) on one image and returns a
-row of summary numbers: image identification/provenance, crack area, crack width, edge length,
-and network-connectivity ("percolation") statistics — pixel units plus a physically-calibrated
-secondary where applicable. It deliberately leaves out anisotropy and curvature, which come from
-the per-image analysis (`src/analyze_image.py`) instead.
+The crack stats are the `crack_stats` measurement of the analysis tool (`src/crackgraph/measures/crack_stats.py`,
+run from the GUI or `python3 -m src.analyze`). They use stages 1–3 of the pipeline (binarize →
+skeletonize → graph extraction, plus flaking exclusion) and give one row of summary numbers per
+image and region: identification/provenance, crack area, crack width, segment length, and
+network-connectivity ("percolation") statistics, in pixels plus a calibrated µm/mm² twin where
+applicable. Curvature/tortuosity and anisotropy are separate measurements of the same tool; they
+add their own columns when chosen.
 
-`compute_row()` backs two scripts, both writing the columns in §4:
+The columns land in the `regions` sheet of `results.xlsx`. With the default settings (whole
+image, all column groups, 0.6098 µm/px) the numbers are exactly those of the earlier exporter,
+`scripts/batch_stats/export_crack_stats.py`, archived 2026-11-13. `scripts/batch_stats/export_crack_stats_batch_bcd.py`
+writes the same rows for three fixed thesis batches (B: T5 gap height on PTFE, C: T5 dew point on
+membrane, D: T2/T3/T4 membrane), with an extra `batch` column.
 
-- **`python3 -m scripts.batch_stats.export_crack_stats`** — every raw micrograph selected per §2,
-  one row each, written to `crack_stats.xlsx`. Not a live feed; re-run to pick up code changes.
-- **`python3 -m scripts.batch_stats.export_crack_stats_batch_bcd`** — the same rows for three
-  fixed thesis batches (B: T5 gap height on PTFE, C: T5 dew point on membrane, D: T2/T3/T4
-  membrane), with an extra `batch` column.
-
-§9 maps eight of the columns to the notation used in the thesis.
+§9 maps eight of the columns to the notation used in the thesis. §4d covers regions other than
+the whole image.
 
 ## 2. Which images are analysed
 
-The export does **not** pick images by file name. `export_crack_stats.py` gives a row to every
-image file (`.jpg`, `.jpeg`, `.png`, `.tif`, `.tiff`, `.bmp`) under `--data-dir`, in any
-subfolder; the GUI gives a row to every file you upload. Choosing *which* images belong in a
-table is your job: put only those in the folder, or upload only those.
+The tool does **not** pick images by file name. It gives rows to every image file (`.jpg`,
+`.jpeg`, `.png`, `.tif`, `.tiff`, `.bmp`) you name on the command line, in any subfolder of a
+folder you name, or that you upload in the GUI. Choosing *which* images belong in a table is your
+job.
 
 ## 4. Column reference
 
@@ -56,7 +56,7 @@ table is your job: put only those in the folder, or upload only those.
 | 24 | `median_edge_length_gc_um` | `median_edge_length_gc_px × 0.6098` | µm | `calibrated` |
 | 25 | `giant_component_span_px` | Straight-line distance between the two farthest-apart points on the giant component's own skeleton pixel path (every pixel of every edge inside it, not just its junction/endpoint nodes) — physical spatial reach, distinguishing a large multi-crack network from a single long crack. `NaN` only when the graph is entirely empty (no edges at all) — see the closed-loop caveat below for why sampling the full pixel path, not just node coordinates, matters. | px | `interpreted` |
 | 26 | `giant_component_span_um` | `giant_component_span_px × 0.6098` | µm | `calibrated` |
-| 27–32 | `runtime_binarize_s`, `runtime_skeletonize_s`, `runtime_flaking_s`, `runtime_graph_extract_s`, `runtime_stats_s`, `runtime_total_s` | Wall-clock time per stage. `runtime_total_s` is timed separately for the whole image, so it can exceed the sum of the others. | s | `measured` |
+| 27– | `runtime_binarize_s`, `runtime_skeletonize_s`, `runtime_flaking_s`, `runtime_graph_extract_s`, (`runtime_curvature_s`, `runtime_anisotropy_s` when those run), `runtime_measure_regions_s`, `runtime_total_s` | Only with the runtime option. Wall-clock time per stage, per image: every region row of one image repeats them. `runtime_total_s` is timed separately, so it can exceed the sum of the others. Before 2026-11-13, `runtime_measure_regions_s` was `runtime_stats_s`. | s | `measured` |
 
 **Caveats that matter for correct use:**
 
@@ -120,9 +120,8 @@ widening (not real flaking) can still pass the width+area test alone — see `fl
 docstring. `flaking_n_candidates` should be read as "candidates passing the current width test,"
 not a confirmed count of real flaking regions.
 
-**Two consequences of skeletonizing once.** `n_host_stubs_pruned` counts pruning over the whole
-mask, so it includes branches pruned inside flaked blobs. And a `--cache-dir`'s
-`mask_corrected.npz` (the mask minus flaked regions) is not the mask that was skeletonized.
+**A consequence of skeletonizing once.** `n_host_stubs_pruned` counts pruning over the whole
+mask, so it includes branches pruned inside flaked blobs.
 
 ### 4c. Host-stub pruning (column 17)
 
@@ -138,6 +137,40 @@ Before 2026-11-11 this column was `n_corner_artifacts_pruned` and counted branch
 different rule (width rising steadily along the branch, correlation > 0.99). The two counts are
 not comparable, and exports made before that date have lower `ledge` on dense wide-crack images
 (see `CHANGELOG.md`). Full rationale: `docs/walkthrough/02_skeleton.md`.
+
+### 4d. Regions other than the whole image
+
+Every row starts with four region columns, placed after `source_folder`:
+
+| Column | Definition |
+|---|---|
+| `region` | `whole`, `centre`, or `cell N (rRcC)`: grid cell N, numbered row by row from the top left. |
+| `region_rows_px`, `region_cols_px` | The region's first and last pixel row and column (the stop value is exclusive). |
+| `region_area_pct` | The region's share of the whole image's area. |
+
+The image is analysed once; a region selects part of that one result (see
+`docs/walkthrough/06_regions.md`). For a region that isn't the whole image:
+
+- **Pixel quantities count the pixels inside the region**: `crack_area_pct`,
+  `crack_area_pct_excl_flakes`, `crack_area_mm2`, `flaking_excluded_area_pct`, `avg_width_px`
+  (its total length is the crack length inside the region), and `median_width_px`. "% of image
+  area" in the table above then means % of the region's area. Grid cells add up to the whole image.
+- **Segment quantities take each segment whole**, assigned to the region holding its middle
+  pixel: `avg_edge_length_px`, `median_edge_length_px`, `flaking_n_edges_omitted`,
+  `n_host_stubs_pruned`. A flaked patch counts in `flaking_n_candidates` where its bounding box's
+  centre lies.
+- **Connectivity is whole-image only** (`n_components`, `giant_component_fraction`,
+  `median_edge_length_gc_px`, `giant_component_span_px` and their µm twins). Cutting the network
+  at a region border splits it, so a region's connectivity would mostly reflect the region's
+  size. When the regions don't include the whole image and connectivity is chosen, these columns
+  go to a separate `image_connectivity` sheet, one row per image.
+
+**Column groups.** The columns come in groups you can choose: `area` (6, 7, 18), `width` (8, 9,
+19, 20), `segment_length` (10, 11, 21, 22), `connectivity` (12, 13, 23–26), `flaking` (14–16),
+`pruning` (17). The identification columns (1–5 and the region columns) are always there.
+
+**Calibration.** Every `_um`/`_mm2` column uses the µm per pixel set for the run, recorded in the
+workbook's `settings` sheet. The "× 0.6098" in the table above is the default.
 
 ## 5. Evidence-level legend
 

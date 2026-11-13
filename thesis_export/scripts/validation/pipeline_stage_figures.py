@@ -12,21 +12,21 @@ Two modes:
   mask cleaning + skeletonize + prune consolidated into one panel, flake
   identification, and the final graph.
 
-Reuses scripts/batch_stats/export_crack_stats.py's exact stage functions (binarize,
+Reuses the crack-stats engine's exact stage functions (src/crackgraph/engine.py) (binarize,
 skeletonize_and_prune, exclude_flaking_regions, extract_graph,
-flake_touching_path_indices) in the same order compute_row() calls them --
+flake_touching_path_indices) in the same order src/crackgraph/engine.py calls them --
 this script only adds a render step after each stage instead of proceeding
 straight to stats.
 
 Crop selection: anchors on the largest flaking candidate the same way as
 before when the image has any (flaking_result.excluded_mask non-empty);
-otherwise falls back to src/crackgraph/region.py's default_corner_crop --
+otherwise falls back to src/crackgraph/regions.py's corner_crop --
 the project's own established "first look" region -- so this script runs on
 any image regardless of whether it has flaking, not just flaking-heavy ones.
 
 Node kept/excluded status (not drawn by src/crackgraph/overlay.py's
 render_crack_stats_overlay, which only colors edges) is computed the same
-way compute_row()'s own connectivity graph G is: a node is "kept" if it has
+way the crack stats' connectivity graph is: a node is "kept" if it has
 at least one non-omitted edge, "excluded" otherwise.
 
 Usage:
@@ -63,7 +63,7 @@ from src.crackgraph.pipeline_figures import (
     draw_raw,
     draw_skeleton,
 )
-from src.crackgraph.region import default_corner_crop
+from src.crackgraph.regions import corner_crop
 from src.crackgraph.skeleton import skeletonize_and_prune
 
 # Padding around the largest flaking candidate's bbox, in multiples of the
@@ -126,10 +126,10 @@ def compute_crop_bbox(excluded_mask, reference_width_px, image_shape):
 
 def compute_corner_crop_bbox(image_shape):
     """(y0, y1, x0, x1) for the project's established default top-left
-    corner crop (src/crackgraph/region.py) -- used as the fallback whenever
+    corner crop (src/crackgraph/regions.py) -- used as the fallback whenever
     an image has no flaking candidate to anchor a crop on."""
     h, w = image_shape
-    region = default_corner_crop(h, w)
+    region = corner_crop(h, w)
     return region.row_slice.start, region.row_slice.stop, region.col_slice.start, region.col_slice.stop
 
 

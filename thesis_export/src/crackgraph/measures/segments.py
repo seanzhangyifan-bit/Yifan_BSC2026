@@ -6,10 +6,20 @@ full length (not cut at the region border).
 
 import numpy as np
 
-from src.crackgraph.edge_metrics import estimate_edge_area_ribbon
 from src.crackgraph.engine import EngineResult
 from src.crackgraph.regions import Region
 from src.crackgraph.settings import AnalysisSettings
+
+
+def ribbon_area_px2(rr: np.ndarray, cc: np.ndarray, coords: np.ndarray, medial_radius: np.ndarray) -> float:
+    """Area of one segment: its width (2 x medial radius) integrated along
+    its centre line, trapezoid rule. [interpreted] -- runs a little high
+    where the segment passes through a wide junction."""
+    if len(coords) < 2:
+        return 0.0
+    widths = 2.0 * medial_radius[rr, cc]
+    steps = np.linalg.norm(np.diff(coords, axis=0), axis=1)
+    return float(np.sum((widths[:-1] + widths[1:]) / 2.0 * steps))
 
 
 def segment_rows(engine: EngineResult, region: Region, settings: AnalysisSettings) -> list[dict]:
@@ -24,9 +34,8 @@ def segment_rows(engine: EngineResult, region: Region, settings: AnalysisSetting
         rr, cc = engine.path_pixels(p)
         length_px = float(summary.at[p, "branch_distance"])
         width_px = float(np.median(2.0 * medial_radius[rr, cc]))
-        # [interpreted] width integrated along the centre line; runs a little
-        # high where the segment passes through a wide junction.
-        area_px2 = estimate_edge_area_ribbon(engine.skeleton.skeleton, p, medial_radius)
+        coords = engine.skeleton.skeleton.path_coordinates(p).astype(float)
+        area_px2 = ribbon_area_px2(rr, cc, coords, medial_radius)
         rows.append({
             "segment": p,
             "mid_row_px": mid_r,

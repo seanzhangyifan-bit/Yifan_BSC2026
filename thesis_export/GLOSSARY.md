@@ -20,3 +20,9 @@ One line per term, no elaboration. For the reasoning behind the analysis, read
   ends; 1 = perfectly straight.
 - **Anisotropy** — how strongly the crack segments point in one dominant direction, from the
   length-weighted 2nd-order orientation tensor (0 = no preferred direction).
+- **Engine** — the steps every measurement shares (binarize, skeletonize, flaking exclusion,
+  graph), run once per image.
+- **Region** — the part of the image one row of numbers describes: the whole image, its centre,
+  or one cell of a grid. A region selects part of the engine's one result; it doesn't re-run it.
+- **Grid cell** — one rectangle of an N × M grid over the image, numbered 1 to N × M row by row
+  from the top left.

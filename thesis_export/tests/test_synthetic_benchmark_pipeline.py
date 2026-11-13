@@ -49,8 +49,8 @@ def _run_stage123(gray: np.ndarray):
 
 def _n_components(graph_result) -> int:
     """Connected-component count via networkx on the graph's own edge
-    list -- the same construction scripts/batch_stats/export_crack_stats.py's
-    compute_row() uses for its own n_components column."""
+    list -- the same construction src/crackgraph/measures/crack_stats.py
+    uses for its n_components column."""
     G = nx.from_pandas_edgelist(
         graph_result.summary, source="node_id_src", target="node_id_dst", edge_attr="branch_distance",
     )

@@ -1,13 +1,13 @@
 """Synthetic-mesh validation gallery for the crack_stats pipeline
 specifically (stage 1-3 + flaking.py -- the modules
-scripts/batch_stats/export_crack_stats.py actually imports), as opposed to
+src/crackgraph/engine.py runs), as opposed to
 scripts/validation/validation_gallery.py's battery, which covers
 curvature/anisotropy and is not part of crack_stats.xlsx at all.
 
 Runs generate_grid (at several widths), generate_wavy_grid,
 generate_hexagonal_grid, and generate_grid_with_flakes (see
 src/crackgraph/synthetic.py) through the same binarize -> skeletonize ->
-graph chain export_crack_stats.py uses, tinting flaking-excluded regions
+graph chain src/crackgraph/engine.py uses, tinting flaking-excluded regions
 with the pipeline's own render_crack_stats_overlay, and compiles an
 expected-vs-measured HTML report -- the mesh-network counterpart to
 tests/test_grid_synthetic.py, for visual review rather than a bare pytest
@@ -174,7 +174,7 @@ def case_grid_with_flakes(out_dir: Path) -> dict:
     true_flake_mask[rr, cc] = True
     true_flake_area_px2 = int(true_flake_mask.sum())
 
-    # Same single pass export_crack_stats.py uses: edges touching the flaked
+    # Same single pass the engine uses: edges touching the flaked
     # region are omitted from the stats and the connectivity graph.
     omitted = flake_touching_path_indices(skel_res.skeleton, graph_res, flaking_result.excluded_mask)
 
@@ -246,7 +246,7 @@ def main():
 <html><head><meta charset="utf-8"><title>crack_stats: mesh/network synthetic gallery</title>
 <style>{CSS}</style></head><body>
 <h1>crack_stats: mesh/network synthetic gallery</h1>
-<p class="note">Scoped to exactly what scripts/batch_stats/export_crack_stats.py imports (binarize, skeleton,
+<p class="note">Scoped to exactly what src/crackgraph/engine.py runs (binarize, skeleton,
 graph, flaking) -- no junction/curvature/anisotropy layer. Companion to
 tests/test_grid_synthetic.py, for visual review of the same cases.</p>
 {''.join(render_case_html(c) for c in cases)}

@@ -6,37 +6,40 @@ the lines that matter.
 
 To read it formatted in VS Code, open a page and press **Ctrl+Shift+V**.
 
-Line numbers match the code after the second 2026-11-11 bug-fix pass (see `CHANGELOG.md`). If a
-file changes later, function names stay the easiest way to find your place.
+Line numbers match the code after the 2026-11-13 merge of the three analysis tools into one (see
+`CHANGELOG.md`). If a file changes later, function names stay the easiest way to find your place.
 
 ## The big picture
 
 The project turns a micrograph of a cracked catalyst layer into numbers that let crack patterns
-be compared across conditions:
-
-1. **The crack stats**: crack area, width, segment length and connectivity for each image,
-   exported to spreadsheets. These are the thesis's main numbers.
-2. **The per-image analysis**: a closer look at one image, adding per-segment width and area,
-   how bent each segment is, and whether the cracks share a direction.
-
-Both start with the same four steps:
+be compared across conditions. One run, from the GUI or the command line, goes like this:
 
 ```
+your settings (settings.py)                µm per pixel, regions, measurements, figures
+  │
 micrograph (.jpg)
   │
-  ├─ 1. load            io_utils.py         grey + colour pixel grids
-  ├─ 2. binarize        binarize.py         crack / not-crack mask
-  ├─ 3. skeletonize     skeleton.py         1-pixel centre lines, junk branches removed
-  │     └─ flaking      flaking.py          find flaked-off patches, drop segments touching them
-  ├─ 4. graph           graph.py            network of junctions + segments
+  ├─ ENGINE, once per image (engine.py)
+  │   ├─ 1. load            io_utils.py         grey + colour pixel grids
+  │   ├─ 2. binarize        binarize.py         crack / not-crack mask
+  │   ├─ 3. skeletonize     skeleton.py         1-pixel centre lines, junk branches removed
+  │   │     └─ flaking      flaking.py          find flaked-off patches, flag segments touching them
+  │   └─ 4. graph           graph.py            network of junctions + segments
   │
-  ├──► crack stats      export_crack_stats.py          area, width, length, connectivity → .xlsx
+  ├─ REGIONS (regions.py)                       whole image, centre, or chosen grid cells
   │
-  └──► per-image analysis (analyze_image.py)
-        ├─ edge_metrics.py   length, width and area per segment
-        ├─ curvature.py      how bent each segment is
-        └─ anisotropy.py     whether cracks share a direction
+  ├─ MEASUREMENTS, per region (measures/)
+  │   ├─ crack_stats.py     area, width, segment length, connectivity (whole image only)
+  │   ├─ tortuosity.py      how bent the segments are    (curvature.py)
+  │   ├─ anisotropy.py      whether cracks share a direction  (anisotropy.py)
+  │   └─ segments.py        optional: one row per segment
+  │
+  └─ OUTPUT (analysis.py, export.py, figures.py)
+        results.xlsx: one row per image and region, plus the settings used
+        figures: overlay with regions, per-region rose plots, colour map over the grid
 ```
+
+The crack stats on the whole image are the thesis's main numbers.
 
 ## Reading order
 
@@ -46,16 +49,16 @@ micrograph (.jpg)
 | 2 | [Skeletonizing](02_skeleton.md) | `skeleton.py` | Turns thick cracks into measurable lines |
 | 3 | [Flaking exclusion](03_flaking.md) | `flaking.py` | Keeps missing material out of the stats |
 | 4 | [The crack network](04_graph.md) | `graph.py` | Junctions, segments, and skan's vocabulary |
-| 5 | [Crack-stats export](05_crack_stats_export.md) | `scripts/batch_stats/` | Every spreadsheet number |
-| 6 | [Per-segment metrics](06_edge_metrics.md) | `edge_metrics.py` | Width and area per segment |
-| 7 | [Curvature and anisotropy](07_curvature_anisotropy.md) | `curvature.py`, `anisotropy.py`, `_chord_scan.py` | Shape of the network |
-| 8 | [The per-image command](08_analyze_image.md) | `analyze_image.py` | How it all runs together |
-| 9 | [Outputs and reports](09_outputs.md) | `overlay.py`, `xlsx_report.py`, `cache_io.py`, plots, HTML, tiling | Pictures, spreadsheets, caches |
-| 10 | [The GUI](10_gui.md) | `app.py` | The point-and-click front end |
+| 5 | [Settings and the engine](05_settings_and_engine.md) | `settings.py`, `engine.py` | What you can change, and the one pass every measurement shares |
+| 6 | [Regions](06_regions.md) | `regions.py` | Whole image, centre or grid cells, and how a region cuts the numbers |
+| 7 | [Crack stats](07_crack_stats.md) | `measures/crack_stats.py` | Every crack-stats number |
+| 8 | [Curvature, tortuosity and anisotropy](08_curvature_anisotropy.md) | `curvature.py`, `anisotropy.py`, `_chord_scan.py`, `measures/` | Shape of the network |
+| 9 | [One run, start to finish](09_analysis_and_outputs.md) | `analysis.py`, `measures/segments.py`, `export.py`, `figures.py` | How it all runs together, and what it writes |
+| 10 | [Command line and GUI](10_command_line_and_gui.md) | `src/analyze.py`, `app.py`, `scripts/batch_stats/` | How to run it |
 | 11 | [Validation and tests](11_validation_and_tests.md) | `synthetic*.py`, `validation_*.py`, `scripts/validation/`, `tests/` | How we know it works |
 
-Pages 1–5 cover the crack-stats path and take a few hours. Pages 6–8 cover the per-image
-analysis. Pages 9–11 are supporting material you can skim.
+Pages 1–7 cover the crack stats and take a few hours. Page 8 covers the shape measurements.
+Pages 9–11 show how a run is put together and checked.
 
 ## Ideas that come up everywhere
 

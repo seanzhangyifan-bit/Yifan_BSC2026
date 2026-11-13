@@ -80,26 +80,30 @@ Every row is a real check. The dominant direction in `anisotropy_aligned` must l
 | `crack_stats_synthetic_gallery.py` | Gallery | Synthetic grids and flakes through the crack-stats path, expected vs measured. |
 | `synthetic_benchmark_raw_gallery.py`, `synthetic_benchmark_report.py` | Gallery | A 9-case benchmark: first the raw images with exact answers, then the measured results. |
 | `pipeline_stage_figures.py` | Figures | Step-by-step panels from raw image to final graph, for a real image. |
-| `render_area_method_viewer.py` | Figures | The four area methods (page 6) drawn side by side. |
 
 The **sweeps** justify the 🟡 settings in `CALIBRATION.md`. The **sensitivity** checks don't pick
 a value; they show how much a 🔴 setting matters.
 
 ## `tests/`
 
-18 files, 142 tests (a few tests run several cases each). All pass. Each checks one module against synthetic cases with known
-answers, or checks a fixed bug stays fixed.
+14 files, 101 tests (a few tests run several cases each). All pass. Each checks one module against synthetic cases with known
+answers, or checks a fixed bug stays fixed. Run them from `thesis_export/` with `python3 -m pytest tests/`.
 
 | Test file | Tests | Covers |
 |---|---|---|
-| `test_edge_metrics.py` | 11 | Width and the four area bounds (page 6) |
 | `test_skeleton.py` | 7 | Pruning, the host-stub rule and dark-speck removal (page 2) |
-| `test_curvature.py`, `test_anisotropy.py` | 7 + 7 | Page 7 |
 | `test_grid_synthetic.py` | 9 | Topology on meshes, flaking on synthetic flakes (pages 3–4) |
-| `test_export_crack_stats.py`, `test_flaking_omission.py` | 14 + 7 | Export helpers, incl. parallel segments in the network (page 5); omitting and removing edges that touch a flaked region (page 3) |
-| `test_entry_points.py` | 7 | Smoke tests: `analyze_image.py`, `compute_row`, the overview figure, `region.py` and the GUI each run end to end on a small synthetic flaked grid |
+| `test_flaking_omission.py` | 5 | Omitting segments that touch a flaked region (page 3) |
+| `test_unified_analysis.py` | 8 | Settings, regions and the whole-image row against the old exporter's frozen output (pages 5–7) |
+| `test_crack_stats_measure.py` | 9 | Crack-stats helpers, incl. parallel segments in the network, and per-region counting (page 7) |
+| `test_curvature.py`, `test_anisotropy.py` | 7 + 7 | Page 8 |
+| `test_entry_points.py` | 3 | The command line and the GUI run end to end on a small synthetic flaked grid (page 10) |
+| `test_summary_plots.py` | 4 | Rose and histogram drawing (page 9) |
 | `test_synthetic*.py` | 1 + 21 + 11 | The generators, and the 9-case benchmark through the pipeline |
-| `test_cache_io.py`, `test_html_report.py`, `test_xlsx_report.py`, `test_summary_plots.py`, `test_tiling.py`, `test_validation_*.py` | 2–8 each | Outputs (page 9) and the gallery |
+| `test_validation_*.py` | 3 + 6 | The validation gallery |
+
+`tests/data/old_exporter_flaked_grid.json` holds the old crack-stats exporter's output on the
+synthetic flaked grid, frozen when it was archived (2026-11-13).
 
 The entry-point smoke tests (review finding 16) check that each entry point runs, not its
 numbers; the library tests above cover those.

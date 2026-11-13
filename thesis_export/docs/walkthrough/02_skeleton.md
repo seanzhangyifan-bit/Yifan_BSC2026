@@ -102,24 +102,24 @@ crack it branches from** (its host).
 
 | Line | Code | What it means |
 |---|---|---|
-| 111 | `remove_small_objects(mask, min_size=min_object_px)` | Fill **bright spots** under 4 pixels: light shining through the catalyst layer, not cracks. |
-| 112 | `remove_small_holes(..., area_threshold=DARK_SPECK_AREA_PX)` | Remove **dark specks** under 130 px inside cracks: pieces of catalyst layer or dust sitting in the crack. |
-| 113 | `skel_image = skeletonize(mask_clean)` | **The thinning.** Zhang–Suen, via scikit-image. |
-| 121 | `medial_radius = distance_transform_edt(mask_clean)` | The width map. On a full image this takes about 13 seconds, the slowest single step. |
-| 123 | `skel = skan.Skeleton(skel_image, source_image=source_image)` | Hand the skeleton to skan, which turns pixels into branches and junctions. |
+| 112 | `remove_small_objects(mask, min_size=min_object_px)` | Fill **bright spots** under 4 pixels: light shining through the catalyst layer, not cracks. |
+| 113 | `remove_small_holes(..., area_threshold=DARK_SPECK_AREA_PX)` | Remove **dark specks** under 131 px inside cracks: pieces of catalyst layer or dust sitting in the crack. |
+| 114 | `skel_image = skeletonize(mask_clean)` | **The thinning.** Zhang–Suen, via scikit-image. |
+| 122 | `medial_radius = distance_transform_edt(mask_clean)` | The width map. On a full image this takes about 13 seconds, the slowest single step. |
+| 124 | `skel = skan.Skeleton(skel_image, source_image=source_image)` | Hand the skeleton to skan, which turns pixels into branches and junctions. |
 
-**The cleanup loop, line 131.** It repeats up to 10 times and stops early when a round removes
+**The cleanup loop, line 132.** It repeats up to 10 times and stops early when a round removes
 nothing.
 
 | Line | Code | What it means |
 |---|---|---|
-| 132 | `summary = skan.summarize(skel, separator="_")` | A table with one row per branch: length (`branch_distance`) and **type**. Type 0 = isolated piece, 1 = dead end, 2 = junction to junction, 3 = closed loop. |
-| 135 | `is_spur = (type == 1) & (length < spur_px)` | Short dead ends. |
-| 136 | `is_fragment = (type == 0) & (length < spur_px)` | Short isolated pieces. |
-| 143–157 | host-stub check | For dead ends that *weren't* already too short, measure their length outside the host (above). Less than `spur_px` → a **host stub**, removed. `incidence` (lines 145–148) lists which branches touch each junction, so the helper can find the host. |
-| 159–160 | `if ... == 0: break` | Nothing flagged → done. |
-| 161–180 | record | Save each flagged branch's length and pixel path *before* removing it, because skan renumbers branches after every removal. |
-| 183 | `skel = skel.prune_paths(...)` | **Remove all flagged branches.** skan returns a fresh, cleaned skeleton. |
+| 133 | `summary = skan.summarize(skel, separator="_")` | A table with one row per branch: length (`branch_distance`) and **type**. Type 0 = isolated piece, 1 = dead end, 2 = junction to junction, 3 = closed loop. |
+| 136 | `is_spur = (type == 1) & (length < spur_px)` | Short dead ends. |
+| 137 | `is_fragment = (type == 0) & (length < spur_px)` | Short isolated pieces. |
+| 144–158 | host-stub check | For dead ends that *weren't* already too short, measure their length outside the host (above). Less than `spur_px` → a **host stub**, removed. `incidence` (lines 146–149) lists which branches touch each junction, so the helper can find the host. |
+| 160–161 | `if ... == 0: break` | Nothing flagged → done. |
+| 162–181 | record | Save each flagged branch's length and pixel path *before* removing it, because skan renumbers branches after every removal. |
+| 184 | `skel = skel.prune_paths(...)` | **Remove all flagged branches.** skan returns a fresh, cleaned skeleton. |
 
 **Why repeat?** Removing one branch can turn a junction into a plain bend, which can make a
 neighbouring branch into a new short dead end. The next round catches it.
@@ -128,7 +128,7 @@ Spurs and host stubs are one rule: a dead end needs at least `spur_px` outside i
 end shorter than `spur_px` can't have that much outside, so it's caught by the cheaper length
 check first and reported as a spur.
 
-**Return, line 188.** Packs everything into `SkeletonResult`.
+**Return, line 189.** Packs everything into `SkeletonResult`.
 
 ### What gets removed on real images
 
@@ -184,7 +184,8 @@ flaking exclusion that the batch export applies, so they won't match the export 
 - **Only types 0 and 1 are ever removed.** Junction-to-junction branches (type 2) and loops
   (type 3) are never touched. `scripts/validation/skeleton_loop_sweep.py` finds 0–55% of edges
   per image are junction-to-junction edges shorter than the crack width. 
-- **Everything is in pixels.** Converting to µm happens in the exporter.
+- **Everything is in pixels.** The engine converts the two thresholds from µm before calling
+  this (page 5); the measurements convert their results to µm (page 7).
 - **Tests**: `tests/test_skeleton.py` (7 tests):
   - a stub from a wide crack's centre line into a small bump on its wall is removed (and kept
     with the rule off); a real side crack, a long tapering wedge and a plain line are kept

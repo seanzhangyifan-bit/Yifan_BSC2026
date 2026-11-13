@@ -1,19 +1,22 @@
 """Checks for the unified analysis (settings -> engine -> regions -> measures).
 
-The main guarantee: with default settings and the whole image, the new
-crack stats equal the old exporter's (compute_row) exactly, so the thesis
-numbers don't move. Also: grid cells add up to the whole image,
+The main guarantee: with default settings and the whole image, the crack
+stats equal the old exporter's exactly, so the thesis numbers don't move.
+The old exporter (scripts/batch_stats/export_crack_stats.py, archived
+2026-11-13) was run once on the synthetic flaked grid; its output is frozen
+in tests/data/old_exporter_flaked_grid.json. Also: grid cells add up to the whole image,
 connectivity stays whole-image only, and µm/px converts the two physical
 thresholds as stated.
 """
 
+import json
 import math
+from pathlib import Path
 
 import numpy as np
 import pytest
 from PIL import Image
 
-from scripts.batch_stats.export_crack_stats import compute_row
 from src.crackgraph.analysis import analyze_image
 from src.crackgraph.regions import RegionSpec, grid_cells
 from src.crackgraph.settings import DEFAULT_UM_PER_PX, AnalysisSettings
@@ -28,18 +31,19 @@ def flaked_image(tmp_path_factory):
     return path
 
 
+OLD_EXPORTER = Path(__file__).parent / "data" / "old_exporter_flaked_grid.json"
+
+
 def _same(a, b):
-    if isinstance(a, float) and math.isnan(a):
+    if a is None:  # NaN is stored as null in the JSON
         return isinstance(b, float) and math.isnan(b)
     return a == pytest.approx(b, rel=1e-12, abs=1e-12)
 
 
 def test_whole_image_matches_old_exporter(flaked_image):
-    old = compute_row(flaked_image)
+    old = json.loads(OLD_EXPORTER.read_text())["row"]
     new = analyze_image(flaked_image, AnalysisSettings()).rows[0]
     for key, value in old.items():
-        if key.startswith("runtime"):
-            continue
         assert _same(value, new[key]), key
 
 

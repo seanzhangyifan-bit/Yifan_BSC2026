@@ -32,8 +32,6 @@ status of every tunable constant this tier justifies.
   (see `docs/walkthrough/02_skeleton.md`).
 - `segmentation_sensitivity_sweep.py`: checks how binarization threshold choice moves downstream
   stats.
-- `render_area_method_viewer.py`: interactive comparison of four cross-checked ways to compute
-  per-edge crack area.
 
 **Validation status**: every PASS/FAIL tolerance used here is *duplicated* (with a
 cross-reference comment), never imported, from the matching `tests/test_*.py` constant — tests

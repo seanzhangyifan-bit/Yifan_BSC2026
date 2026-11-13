@@ -116,7 +116,7 @@ class CurvatureScanResult:
 def reliable_tortuosities(curvature_result: CurvatureScanResult) -> list[float]:
     """Tortuosity values with a long enough chord to trust for aggregates/
     plots -- see TORTUOSITY_MIN_CHORD_PX_PLACEHOLDER. The single place this
-    filter is applied, so xlsx_report.py's tortuosity_stats() and
+    filter is applied, so measures/tortuosity.py's numbers and
     summary_plots.py's tortuosity histogram can't silently disagree."""
     return [
         e.tortuosity

@@ -43,7 +43,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from src.crackgraph.graph import extract_graph
 from src.crackgraph.io_utils import load_image
-from src.crackgraph.region import default_corner_crop
+from src.crackgraph.regions import corner_crop
 from src.crackgraph.skeleton import skeletonize_and_prune
 
 OTSU_PERTURBATIONS_PCT = [-10, -5, 0, 5, 10]
@@ -144,7 +144,7 @@ def main() -> None:
 
     gray_full, _rgb_full = load_image(args.image)
     h, w = gray_full.shape
-    region = default_corner_crop(h, w)
+    region = corner_crop(h, w)
     gray = gray_full[region.row_slice, region.col_slice]
 
     rows = run_sweep(gray)

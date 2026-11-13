@@ -4,7 +4,7 @@ crack segments in one region.
 scan_curvature() measures every segment once per image; measure_tortuosity()
 then summarises the segments whose middle pixel lies in the region, the
 same rule crack stats use for segment counts. Segments touching a flaked
-region are left out. Method: docs/walkthrough/07_curvature_anisotropy.md.
+region are left out. Method: docs/walkthrough/08_curvature_anisotropy.md.
 """
 
 import numpy as np

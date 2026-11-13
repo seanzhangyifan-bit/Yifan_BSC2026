@@ -5,7 +5,7 @@ scan_orientations() takes local direction samples along every kept segment
 once per image; measure_anisotropy() combines the samples that lie inside
 the region. Samples are local, so they are assigned by their own position,
 not by their segment's middle. Method:
-docs/walkthrough/07_curvature_anisotropy.md.
+docs/walkthrough/08_curvature_anisotropy.md.
 
 A low index doesn't rule out two perpendicular crack families (a grid):
 the index can't tell that apart from random directions. Check the rose

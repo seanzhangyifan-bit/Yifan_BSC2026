@@ -15,7 +15,6 @@ from src.crackgraph.skeleton import skeletonize_and_prune
 from src.crackgraph.summary_plots import (
     render_curvature_histogram,
     render_orientation_rose,
-    render_overview_figure,
 )
 from src.crackgraph.synthetic import generate_curved_t_junction, generate_oriented_segment_field
 
@@ -80,64 +79,3 @@ def test_curvature_histogram_handles_no_edges(tmp_path):
     render_curvature_histogram(curvature_result, out_path)
 
     assert out_path.exists()
-
-
-def _synthetic_rgb(gray):
-    return np.stack([gray, gray, gray], axis=-1).astype("uint8")
-
-
-def test_overview_figure_renders_four_quadrants_plus_whole_image(tmp_path):
-    gray_a = generate_oriented_segment_field(bearings_deg=[0.0], n_segments=40, rng_seed=1)
-    gray_b = generate_curved_t_junction()
-    curv_a, aniso_a = _run_curvature_and_anisotropy(gray_a)
-    curv_b, aniso_b = _run_curvature_and_anisotropy(gray_b)
-
-    sections = [
-        ("section r0c0", aniso_a, curv_a),
-        ("section r0c1", aniso_b, curv_b),
-        ("section r1c0", aniso_a, curv_a),
-        ("section r1c1", aniso_b, curv_b),
-    ]
-    whole_image_result = ("whole image", aniso_a, curv_a)
-    out_path = tmp_path / "overview.png"
-
-    render_overview_figure(sections, _synthetic_rgb(gray_a), whole_image_result, out_path)
-
-    assert out_path.exists()
-    img = Image.open(out_path)
-    assert img.size[0] > MIN_PLOT_DIM_PX
-    assert img.size[1] > MIN_PLOT_DIM_PX
-
-
-def test_overview_figure_handles_quadrant_with_no_data(tmp_path):
-    gray = generate_oriented_segment_field(bearings_deg=[0.0], n_segments=40, rng_seed=1)
-    curv, aniso = _run_curvature_and_anisotropy(gray)
-
-    empty_curv, empty_aniso = _run_curvature_and_anisotropy(gray)
-    empty_curv.edges = []
-    empty_aniso.histogram_weighted_counts = empty_aniso.histogram_weighted_counts * 0.0
-    empty_aniso.n_samples = 0
-
-    sections = [
-        ("section r0c0", empty_aniso, empty_curv),
-        ("section r0c1", aniso, curv),
-        ("section r1c0", aniso, curv),
-        ("section r1c1", aniso, curv),
-    ]
-    whole_image_result = ("whole image", aniso, curv)
-    out_path = tmp_path / "overview_partial_no_data.png"
-
-    render_overview_figure(sections, _synthetic_rgb(gray), whole_image_result, out_path)
-
-    assert out_path.exists()
-
-
-def test_overview_figure_requires_exactly_four_sections(tmp_path):
-    gray = generate_oriented_segment_field(bearings_deg=[0.0], n_segments=40, rng_seed=1)
-    curv, aniso = _run_curvature_and_anisotropy(gray)
-    whole_image_result = ("whole image", aniso, curv)
-
-    with pytest.raises(AssertionError):
-        render_overview_figure(
-            [("section r0c0", aniso, curv)], _synthetic_rgb(gray), whole_image_result, tmp_path / "bad.png"
-        )

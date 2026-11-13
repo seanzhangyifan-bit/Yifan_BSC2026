@@ -335,7 +335,7 @@ def generate_straight_line(
     """Grayscale image of a single straight arm with no junction at all.
 
     Used as the "nothing to compete with" ground-truth fixture for
-    edge_metrics.py: with only one skeleton path in the whole image, the
+    the per-segment area methods (archived 2026-11-13 with edge_metrics.py): with only one skeleton path in the whole image, the
     watershed area partition has exactly one seed, so area_px2 must equal
     mask_clean.sum() exactly, and the ribbon-integral estimate has no
     neighboring junction blob to double-count -- the case where the area
@@ -371,7 +371,7 @@ def generate_double_t_junction(
     """Grayscale image with TWO T-junctions close together on the same bar
     line, separated by `gap_px`.
 
-    Used by edge_metrics.py's tests as the canonical "no defensible core
+    Used by the archived edge_metrics.py tests as the canonical "no defensible core
     area" fixture: the bar segment between the two junctions is short
     enough that both junctions' blob-disks (edge_metrics.py's
     AREA_JUNCTION_BLOB_RADIUS_PLACEHOLDER, widened by local medial_radius)

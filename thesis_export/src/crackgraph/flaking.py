@@ -22,7 +22,7 @@ import numpy as np
 from skimage.measure import label, regionprops
 from skimage.morphology import binary_dilation, disk
 
-from .graph import GraphResult, extract_graph, path_pixel_indices
+from .graph import GraphResult, path_pixel_indices
 
 # How many multiples of this image's own reference crack width a pixel's
 # local width must exceed to be flagged as a candidate-flake pixel. Chosen
@@ -221,19 +221,3 @@ def flake_touching_path_indices(
             flagged.add(int(path_index))
 
     return flagged
-
-
-def remove_flake_touching_edges(skeleton, graph_result: GraphResult, excluded_mask: np.ndarray):
-    """Remove flake-touching edges from the skeleton itself and rebuild the graph.
-
-    For tools that analyse the graph (junctions, curvature, anisotropy) rather
-    than only summing stats over it: "omitted from the connectivity graph" then
-    has to mean the edges are gone. Their neighbours merge where a junction
-    loses a branch. Returns (skeleton, graph_result, omitted path indices of the
-    input graph). Unchanged if nothing touches a flake.
-    """
-    omitted = flake_touching_path_indices(skeleton, graph_result, excluded_mask)
-    if not omitted:
-        return skeleton, graph_result, omitted
-    pruned = skeleton.prune_paths(np.array(sorted(omitted)))
-    return pruned, extract_graph(pruned), omitted

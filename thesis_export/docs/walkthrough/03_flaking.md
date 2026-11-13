@@ -110,12 +110,9 @@ own fake mesh is exactly the skeleton inside the excluded area.
 Flagged segments are left out of the length and width stats
 *and* the connectivity graph. 
 
-### `remove_flake_touching_edges(...)`, line 226
-
-For tools that analyse the graph itself (curvature, anisotropy, per-segment metrics) rather than only
-summing stats over it: removes the flagged segments from the skeleton and rebuilds the graph.
-Where a three way junction loses a branch, its two remaining segments merge into one. `analyze_image.py`
-and the overview figure use this.
+Every measurement leaves these segments out the same way: crack stats, tortuosity, anisotropy
+and the per-segment table (pages 7–9). The graph itself isn't rebuilt, so a junction that loses
+a branch to a flake keeps its other segments as they were.
 
 ---
 
@@ -124,4 +121,4 @@ and the overview figure use this.
 - **Every setting was checked on one image** (T2-A_membran_v2). No hyperparameters were swept over multiple values.
 - **Tests**: `tests/test_grid_synthetic.py` runs a synthetic grid with stamped-on "flakes"
   (`generate_grid_with_flakes`). `tests/test_flaking_omission.py` covers
-  `flake_touching_path_indices` and `remove_flake_touching_edges`.
+  `flake_touching_path_indices`.

@@ -141,26 +141,22 @@ def measure_crack_stats(engine: EngineResult, region: Region, settings: Analysis
         row["median_edge_length_um"] = median_px * um
 
     if "connectivity" in groups and region.is_whole_image(engine.shape):
-        G = crack_network_graph(assigned_summary)
+        # Whole image only, so every kept segment is in.
+        kept_summary = summary.loc[kept]
+        G = crack_network_graph(kept_summary)
         n_components = nx.number_connected_components(G)
-        assigned_length_px = float(assigned_summary["branch_distance"].sum())
+        kept_length_px = float(kept_summary["branch_distance"].sum())
         gc_nodes = giant_component_nodes(G)
-        gc_mask = (
-            assigned_summary["node_id_src"].isin(gc_nodes) & assigned_summary["node_id_dst"].isin(gc_nodes)
-        )
-        gc_lengths = assigned_summary.loc[gc_mask, "branch_distance"]
-        if n_components > 0 and assigned_length_px > 0 and gc_nodes:
-            gc_fraction = float(gc_lengths.sum()) / assigned_length_px
+        gc_mask = kept_summary["node_id_src"].isin(gc_nodes) & kept_summary["node_id_dst"].isin(gc_nodes)
+        gc_lengths = kept_summary.loc[gc_mask, "branch_distance"]
+        if n_components > 0 and kept_length_px > 0 and gc_nodes:
+            gc_fraction = float(gc_lengths.sum()) / kept_length_px
         else:
             gc_fraction = float("nan")
         median_gc_px = _median_or_nan(gc_lengths)
         # Span from every pixel of the giant component's segments, not just
         # its nodes: a single closed loop has one node.
-        gc_points = []
-        for p in assigned_summary.index[gc_mask]:
-            rr, cc = engine.path_pixels(int(p))
-            inside = region.contains(rr, cc)
-            gc_points.append(np.column_stack([rr[inside], cc[inside]]))
+        gc_points = [np.column_stack(engine.path_pixels(int(p))) for p in kept_summary.index[gc_mask]]
         gc_points = np.concatenate(gc_points) if gc_points else np.zeros((0, 2))
         span_px = giant_component_span_px(gc_points.astype(float))
         row["n_components"] = n_components
