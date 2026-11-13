@@ -1,7 +1,7 @@
 # Unified analysis: status
 
 Running status for merging the crack-stats export, `analyze_image.py` and the spatial
-overview into one tool. Branch: `unified-analysis`. Started 2026-11-13.
+overview into one tool. Started 2026-11-13 on branch `unified-analysis`; merged into master the same day.
 
 ## Goal
 
