@@ -25,10 +25,6 @@ from src.crackgraph.measures.tortuosity import curvature_in_region, measure_tort
 from src.crackgraph.regions import Region
 from src.crackgraph.settings import AnalysisSettings
 
-SCALE_BAR_CHECKED = "no blue bar (visually confirmed)"
-SCALE_BAR_NOT_CHECKED = "not checked"
-
-
 def analysis_stages(settings: AnalysisSettings) -> list[str]:
     """Progress labels analyze_image reports, in order, for these settings,
     so a caller can size a progress bar before the run starts."""
@@ -64,7 +60,6 @@ def analyze_image(
     settings: AnalysisSettings,
     *,
     on_stage: Callable[[str], None] | None = None,
-    scale_bar_check: str = SCALE_BAR_NOT_CHECKED,
 ) -> ImageAnalysis:
     report = on_stage or (lambda _stage: None)
     t_start = time.perf_counter()
@@ -100,7 +95,6 @@ def analyze_image(
             "region_area_pct": 100.0 * region.area_px / (height * width),
             "image_width_px": width,
             "image_height_px": height,
-            "scale_bar_check": scale_bar_check,
         }
         if "crack_stats" in settings.measurements:
             row.update(measure_crack_stats(engine, region, settings))

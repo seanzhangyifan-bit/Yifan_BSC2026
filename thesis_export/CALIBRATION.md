@@ -1,5 +1,8 @@
 # Calibration status of tunable constants
 
+A heuristic: the colours summarise, by judgement, how each value was chosen. They are not a
+measure of accuracy.
+
 - 🟢 **derived**: matches a measured physical scale.
 - 🟡 **empirical**: chosen by a synthetic sweep, not calibrated on real images.
 - 🔴 **assumed**: no sweep or derivation yet.

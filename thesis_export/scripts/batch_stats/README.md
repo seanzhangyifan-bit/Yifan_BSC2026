@@ -6,7 +6,6 @@ thesis tables needed on top. Column reference: `../../docs/batch_stats/crack_sta
 
 - **`export_crack_stats_batch_bcd.py`**: crack stats on the whole image for three fixed thesis
   batches (B, C, D; 19 images), with runtime columns and a `batch` column. Run
-  `python3 -m scripts.batch_stats.export_crack_stats_batch_bcd --data-dir <your image folder>`;
-  pass `--scale-bars-checked` only if you have looked at every image for a burned-in scale bar.
+  `python3 -m scripts.batch_stats.export_crack_stats_batch_bcd --data-dir <your image folder>`.
 - **`add_definitions_sheet.py`**: appends a plain-language definitions sheet to a finished
   workbook.

@@ -20,7 +20,7 @@ segments, settings) and <source folder>/<image>_*.png figures.
 import argparse
 from pathlib import Path
 
-from src.crackgraph.analysis import SCALE_BAR_CHECKED, SCALE_BAR_NOT_CHECKED, analyze_image
+from src.crackgraph.analysis import analyze_image
 from src.crackgraph.export import FIGURES, write_figures, write_workbook
 from src.crackgraph.regions import REGION_MODES, RegionSpec
 from src.crackgraph.settings import CRACK_STATS_GROUPS, DEFAULT_UM_PER_PX, MEASUREMENTS, AnalysisSettings
@@ -78,8 +78,6 @@ def parse_args(argv=None):
     g.add_argument("--groups", type=lambda s: tuple(s.split(",")), default=CRACK_STATS_GROUPS,
                    help=f"Crack-stats column groups, comma-separated (default all: {','.join(CRACK_STATS_GROUPS)}).")
     g.add_argument("--runtime", action="store_true", help="Add runtime columns.")
-    g.add_argument("--scale-bars-checked", action="store_true",
-                   help="Record scale_bar_check as visually confirmed. Only if you checked every image.")
 
     g = p.add_argument_group("figures")
     g.add_argument("--figures", nargs="*", choices=FIGURES, default=["overlay"])
@@ -104,7 +102,6 @@ def main(argv=None):
     settings = settings_from_args(args)
     images = find_images(args.images)
     out_dir = Path(args.out_dir)
-    scale_bar_check = SCALE_BAR_CHECKED if args.scale_bars_checked else SCALE_BAR_NOT_CHECKED
 
     print(f"Regions: {settings.regions.describe()}; measuring: {', '.join(settings.measurements)}")
     print(f"Calibration: {settings.um_per_px:.4f} µm/px -> spur cut-off {settings.spur_px:g} px, "
@@ -112,7 +109,7 @@ def main(argv=None):
     analyses = []
     for i, image in enumerate(images, 1):
         print(f"[{i}/{len(images)}] {image}")
-        analysis = analyze_image(image, settings, scale_bar_check=scale_bar_check)
+        analysis = analyze_image(image, settings)
         for path in write_figures(analysis, out_dir, tuple(args.figures), args.map_column):
             print(f"    figure: {path}")
         analyses.append(analysis)

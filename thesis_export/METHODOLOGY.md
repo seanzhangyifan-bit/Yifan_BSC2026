@@ -63,8 +63,9 @@ All in `settings.py`, set from the GUI (`app.py`) or the command line (`src/anal
 - **Replicates**: `v1`/`v2` are separate captures of one condition. Include every replicate. For
   per-condition statistics, group by `image_filename` without the `_mm######.jpg` suffix and
   average only where there are ≥ 2 replicates.
-- **Scale bars**: `mm000000`/`mm000001` names don't reliably tell which file has a burned-in
-  scale bar. Check each image by eye (bottom-right corner). The tool doesn't look at names.
+- **Scale bars**: input images must not carry a burned-in scale bar; it would count as crack.
+  `mm000000`/`mm000001` names don't reliably tell which file has one. Check each image by eye
+  (bottom-right corner).
 
 ## Validation gallery
 

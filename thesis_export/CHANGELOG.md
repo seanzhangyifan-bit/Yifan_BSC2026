@@ -9,6 +9,13 @@ Details of any entry: `git log`.
 
 ## 2026-11-13
 
+### Removed: `scale_bar_check` column
+**Results unchanged** (one identification column gone).
+- It only recorded a manual check (`--scale-bars-checked`); the tool never detected scale bars.
+- `--scale-bars-checked` removed from `src/analyze.py` and the batch script. The schema doc now
+  says input images must not carry a scale bar; columns 6–26 are renumbered 5–25.
+- Evidence tags and calibration colours are now described as heuristics.
+
 ### Removed: anisotropy index
 **Results changed**: the `anisotropy_index` and `dominant_bearing_deg` columns are gone.
 - Reason: one index can't tell an orthogonal grid from random directions, which was confusing.

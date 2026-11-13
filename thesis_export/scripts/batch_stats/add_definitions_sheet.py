@@ -6,7 +6,7 @@ width, edge length, connectivity, flaking, pruning-count), condensed from
 schema doc) -- reusing that already-vetted text rather than re-deriving
 definitions from scratch. Deliberately skips pure identifier/provenance
 columns (`image_filename`, `source_folder`, `image_width_px`/`image_height_px`,
-`scale_bar_check`, `batch`) and the `runtime_*` timing columns -- this sheet
+`batch`) and the `runtime_*` timing columns -- this sheet
 is about what the crack-pattern measurements *mean*, not about row
 identity or how long a row took to compute.
 

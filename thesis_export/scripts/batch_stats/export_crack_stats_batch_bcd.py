@@ -17,12 +17,11 @@ Batch D -- T2/T3/T4, membrane, low-gap-height variant (6 files): T2-M_H90_v1/v2,
 
 Usage:
     python3 -m scripts.batch_stats.export_crack_stats_batch_bcd [--data-dir data/raw]
-        [--out outputs/crack_stats_batch_bcd.xlsx] [--scale-bars-checked]
+        [--out outputs/crack_stats_batch_bcd.xlsx]
 
 File paths below are relative to --data-dir (default data/raw inside this
-folder; for example --data-dir ../data/raw). Pass --scale-bars-checked only
-if you have looked at every image and confirmed none carries a burned-in
-scale bar.
+folder; for example --data-dir ../data/raw). Input images must not carry a
+burned-in scale bar (see the crack-stats schema doc).
 """
 
 import argparse
@@ -30,7 +29,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from src.crackgraph.analysis import SCALE_BAR_CHECKED, SCALE_BAR_NOT_CHECKED, analyze_image
+from src.crackgraph.analysis import analyze_image
 from src.crackgraph.settings import AnalysisSettings
 
 BATCH_B_T5_GAP_HEIGHT_PTFE = [
@@ -67,13 +66,10 @@ def main():
     p.add_argument("--out", type=str, default="outputs/crack_stats_batch_bcd.xlsx")
     p.add_argument("--data-dir", type=str, default="data/raw",
                    help="Folder holding the micrographs (default: data/raw inside this folder).")
-    p.add_argument("--scale-bars-checked", action="store_true",
-                   help="Record scale_bar_check as visually confirmed. Only if you checked every image.")
     args = p.parse_args()
 
     repo_root = Path(__file__).resolve().parent.parent.parent
     data_dir = (repo_root / args.data_dir).resolve()
-    scale_bar_check = SCALE_BAR_CHECKED if args.scale_bars_checked else SCALE_BAR_NOT_CHECKED
     settings = AnalysisSettings(include_runtime=True)
 
     groups = [
@@ -93,7 +89,7 @@ def main():
     rows = []
     for i, (label, image_path) in enumerate(all_paths, 1):
         print(f"[{i}/{len(all_paths)}] batch {label}: {image_path.relative_to(data_dir)}")
-        row = analyze_image(image_path, settings, scale_bar_check=scale_bar_check).rows[0]
+        row = analyze_image(image_path, settings).rows[0]
         row["batch"] = label
         rows.append(row)
 

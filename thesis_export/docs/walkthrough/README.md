@@ -59,9 +59,10 @@ Pages 1–7: the crack stats. Page 8: shape measurements. Pages 9–11: running 
 - **`path_index`**: skan's number for one segment. Most per-segment results are keyed by it.
 - **Degree**: segments meeting at a point. 1 = loose end, 3 = three-way junction, 4+ = crossing.
 - **`...Result` classes**: plain containers (`@dataclass`) for one step's output.
-- **Evidence labels**: `[measured]` read from the image; `[interpreted]` depends on a modelling
-  choice; `[speculated]` a hypothesis; `[cited]` from the literature.
-- **🔴 / 🟡 / 🟢**: how well a setting is justified (`CALIBRATION.md`).
+- **Evidence labels** (a heuristic, assigned by judgement): `[measured]` read from the image;
+  `[interpreted]` depends on a modelling choice; `[speculated]` a hypothesis; `[cited]` from the
+  literature.
+- **🔴 / 🟡 / 🟢** (a heuristic): how well a setting is justified (`CALIBRATION.md`).
 
 Terms: [`GLOSSARY.md`](../../GLOSSARY.md).
 

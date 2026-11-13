@@ -31,7 +31,6 @@ python3 -m src.analyze IMAGES_OR_FOLDERS [options]
 | `--measure` | Any of `crack_stats` (default), `tortuosity`, `anisotropy`, `segments`. |
 | `--groups` | Crack-stats column groups, comma-separated. Default all. |
 | `--runtime` | Add runtime columns. |
-| `--scale-bars-checked` | You checked every image for a burned-in scale bar. |
 | `--figures` | Any of `overlay` (default), `panels`, `map`. |
 | `--map-column` | Column for `map`. Default `crack_area_pct`. |
 

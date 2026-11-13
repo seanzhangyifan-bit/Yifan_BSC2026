@@ -39,9 +39,6 @@ image ──► engine (once) ──► regions ──► measurements ──►
 | 118–128 | Whole-image connectivity, when the regions don't include the whole image. |
 | 133–136 | Runtime columns, if asked for (per image, repeated on each region row). |
 
-`scale_bar_check` is written as given: "visually confirmed" only if the caller says every image
-was checked.
-
 ---
 
 ## `measures/segments.py`
