@@ -39,7 +39,7 @@ skeletonize() preserves topology, so a loop needs a hole in the mask. On
 centre crops of all 41 images, only 8% of the edges this metric counts lie
 next to a dark speck (a real small loop); the rest are short segments
 between closely spaced junctions. The metric itself is unchanged. See
-docs/design_notes.md, skeleton.py section.
+docs/walkthrough/02_skeleton.md.
 """
 
 import argparse

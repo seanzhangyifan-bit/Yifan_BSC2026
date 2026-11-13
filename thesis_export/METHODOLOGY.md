@@ -96,10 +96,8 @@ they're not duplicated here:
   segment, giant component, tortuosity, anisotropy).
 - `CALIBRATION.md` — status table (🟢 derived / 🟡 empirical uncalibrated / 🔴 assumed) for
   every tunable constant, with file:line pointers.
-- `docs/calibration_notes.md` — the full rationale for each constant, relocated verbatim
-  from what used to be multi-line inline comments.
-- `docs/design_notes.md` — the full design rationale for `skeleton.py` and `flaking.py`,
-  relocated verbatim from what used to be their opening docstrings.
+- `docs/walkthrough/` — a page-by-page code walkthrough, including the rationale for each
+  tunable constant and the design of `skeleton.py` and `flaking.py`.
 - `docs/batch_stats/crack_stats_schema.md` — column-by-column reference for `outputs/crack_stats.xlsx`
   (the standalone batch export, see "Standalone crack-stats export" above), including the
   thesis-notation column mapping.

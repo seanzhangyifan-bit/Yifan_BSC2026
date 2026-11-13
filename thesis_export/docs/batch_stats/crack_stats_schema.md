@@ -26,86 +26,6 @@ image file (`.jpg`, `.jpeg`, `.png`, `.tif`, `.tiff`, `.bmp`) under `--data-dir`
 subfolder; the GUI gives a row to every file you upload. Choosing *which* images belong in a
 table is your job: put only those in the folder, or upload only those.
 
-### Choosing images from the thesis image set
-
-Raw filenames follow the pattern:
-
-```
-{sample}_{variant}_{lu|mm|ro}{000000|000001}.jpg
-```
-
-Every image was captured up to three times per sample/variant (`lu`, `mm`, `ro` — different
-capture passes) at two indices. For the `mm` (full-resolution stitched mosaic) tag, the two
-indices usually differ in content, not just in name: `mm000000` usually carries a burned-in blue
-"100.00 µm" scale-bar annotation over a sparser field of view; `mm000001` is usually the clean
-full-frame capture.
-
-**Use the `mm000001` capture, but check it by eye — the naming is a strong pattern, not a
-guarantee.** When the earlier thesis tables were built, every `*_mm000001.jpg` file was viewed
-directly (bottom-right corner crop). Two exceptions turned up:
-
-- **`T5-M_H190_v2_mm000001.jpg`** has a burned-in blue scale bar despite the `000001` index —
-  leave it out.
-- **`23RH_PTFE_v1`**'s `000000`/`000001` pair is itself an undersized, non-standard capture
-  (4429×3322 px vs. the ~7300×7600 px every other row has). This sample has four `mm`-indexed
-  captures on the source; `000002`/`000003` are the standard-sized pair, and `000002` carries the
-  scale bar while `000003` doesn't — so use **`23RH_PTFE_v1_mm000003.jpg`** for this sample
-  (see §7b for the width/height detail).
-
-For any new images, check every file by eye — the pattern is known to fail in more than one way.
-
-**Earlier scope**: the thesis tables so far used 39 images across 7 `data/raw/` subfolders (§3), spanning the T5
-Rakelspalt-gap series, the humidity-loading (NR212) series on both substrates, and the Aquivion
-T2 / Characterization2 T3/T4 sample families. One filename detail worth flagging rather than
-silently normalizing: some files carry an `_IL70_` infix (e.g.
-`T1-N_PTFE_v2_IL70_mm000001.jpg`) — reads as a formulation/sample label (e.g. ionomer content),
-not a capture-mode suffix; doesn't change which calibration factor applies (§6), passed through
-in `image_filename` as-is for the reader to interpret.
-
-**Why some samples have 2-3 rows and most have 1**: `v1`/`v2`/`v3` are separate physical
-replicate captures of the same experimental condition — not a document-revision number and not
-near-duplicate frames. Include every replicate that passes the checks above, rather than
-picking one "canonical" replicate per condition. If you want per-condition statistics (mean ± SD), group rows by
-`image_filename` with its trailing `_mm######.jpg` index stripped (e.g. `T5-M_H95_v1_mm000001.jpg`
-and `T5-M_H95_v2_mm000001.jpg` both belong to group `T5-M_H95`), average only where ≥2 rows exist,
-and report single-replicate groups as-is with no fabricated uncertainty. This is the same
-grouping key (`_sample_id()`) the sibling `image_visualization` project's own `crack_levels_table`
-figures already use — this workbook is built for that project to consume via its own
-`figlib/crack_data.py`, and never hand-edited there; corrections happen in this repo and get
-re-copied over.
-
-One verification method worth flagging as rejected: an automated pixel-color-sampling check
-(testing for blue-channel excess, to auto-detect the scale-bar overlay) reported *zero* scale
-bars across an entire file class, including a file already confirmed by eye to have one — the
-heuristic was simply wrong. Check by directly viewing each image; don't trust a pixel-statistic
-scale-bar check without spot-checking it against a known positive first.
-
-## 3. Directory layout
-
-`image_filename` is the file's basename only (e.g. `T5-M_H190_v1_mm000001.jpg`). In this repo,
-and in any copy of `data/raw/` with the same structure, each file lives one level down under a
-condition/experiment subfolder:
-
-```
-data/raw/
-  T5/                          (Rakelspalt-gap condition series, Membran substrate: H190, H95)
-  humidity_loading/            (NR212 reference membrane, filenames encode RH: 0RH/23RH/75RH)
-  humidity_loading_ptfe/       (PTFE substrate, same RH encoding)
-  aquivion_t2_membran/         (T1-N/T2-A samples, Membran substrate)
-  aquivion_t2_ptfe/            (T1-N/T2-A samples, PTFE substrate)
-  characterization2_membran/   (T3/T4 samples, Membran substrate)
-  characterization2_ptfe/      (T3/T4/T5 samples, PTFE substrate)
-```
-
-The last four folders follow the same substrate-split convention already used for
-`humidity_loading` vs. `humidity_loading_ptfe` — same experiment family, different substrate
-goes in a different folder, rather than merging substrates into one folder and relying on the
-filename alone to distinguish them.
-
-`image_filename` alone is unique across this 39-row set; if merging against a larger set where
-that stops being true, join on `(source_folder, image_filename)` instead — both are columns,
-see §4.
-
 ## 4. Column reference
 
 | # | Column | Definition | Unit | Tag |
@@ -155,7 +75,7 @@ see §4.
   Corrected 2026-11-11: these were attributed to thinning leaving spurious loops. A check on
   centre crops of all 41 images found only 8% of them next to a dark speck (a real loop); the
   rest are short segments between closely spaced junctions, some split crossings, some real
-  geometry. See `docs/design_notes.md`, skeleton.py section.
+  geometry. See `docs/walkthrough/02_skeleton.md`.
 - **`n_components` / `giant_component_fraction`** only see pieces that survived this pipeline's
   own mask cleaning and spur-pruning (isolated fragments and dead-end spurs shorter than a fixed
   pixel threshold are removed before this analysis ever runs) — "components at least
@@ -217,7 +137,7 @@ is no "excluded but topology kept" treatment, because these are not real edges.
 Before 2026-11-11 this column was `n_corner_artifacts_pruned` and counted branches removed by a
 different rule (width rising steadily along the branch, correlation > 0.99). The two counts are
 not comparable, and exports made before that date have lower `ledge` on dense wide-crack images
-(see `CHANGELOG.md`). Full rationale: `docs/design_notes.md`, skeleton.py section.
+(see `CHANGELOG.md`). Full rationale: `docs/walkthrough/02_skeleton.md`.
 
 ## 5. Evidence-level legend
 

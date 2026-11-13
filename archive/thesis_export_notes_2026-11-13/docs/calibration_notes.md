@@ -69,9 +69,3 @@ slivers cut off at the crop edge), removing their loops; `ledge` +0.9 to +6.9% o
 
 The old 50 px value was carried over from an informal prototype script and never derived.
 
-## Removed: CORR_THRESHOLD and MIN_LEN_FOR_CORR_PX
-
-Removed 2026-11-11 with the correlation-based corner test they belonged to (0.99, 🟡, a 4-point
-hand sweep on one image; and 4 px, 🔴). The host-stub rule that replaced the test uses
-`SPUR_PX_PLACEHOLDER` and adds no constant of its own. Why the test was replaced:
-`docs/design_notes.md`, skeleton.py section.

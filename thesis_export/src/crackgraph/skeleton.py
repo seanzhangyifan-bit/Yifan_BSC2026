@@ -17,16 +17,16 @@ from scipy.ndimage import distance_transform_edt
 from scipy.spatial import cKDTree
 from skimage.morphology import remove_small_holes, remove_small_objects, skeletonize
 
-# Tunable settings. Full rationale for each: docs/calibration_notes.md.
+# Tunable settings. Full rationale for each: docs/walkthrough/02_skeleton.md.
 
 # SPUR_PX_PLACEHOLDER: dead ends/isolated branches shorter than this (px) are pruned. 15 px = 9.1 um
-# (mm images only) ~ largest agglomerates and film thickness. 🟢, see docs/calibration_notes.md.
+# (mm images only) ~ largest agglomerates and film thickness. 🟢.
 SPUR_PX_PLACEHOLDER = 15
 
 # DARK_SPECK_AREA_PX: dark specks inside a crack smaller than this
 # (px) are removed before thinning, so the skeleton doesn't loop around them.
 # 130 px = 48 um^2, the area of a d90 ~ 7.8 um agglomerate (inks T2-T4).
-# 🟢, see docs/calibration_notes.md. mm images only.
+# 🟢, mm images only.
 DARK_SPECK_AREA_PX = 130
 
 

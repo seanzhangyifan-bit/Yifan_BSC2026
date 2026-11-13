@@ -125,5 +125,3 @@ and the overview figure use this.
 - **Tests**: `tests/test_grid_synthetic.py` runs a synthetic grid with stamped-on "flakes"
   (`generate_grid_with_flakes`). `tests/test_flaking_omission.py` covers
   `flake_touching_path_indices` and `remove_flake_touching_edges`.
-- Full rationale, including the "reshape the boundary to look natural" idea that was rejected:
-  [`docs/design_notes.md`](../design_notes.md).

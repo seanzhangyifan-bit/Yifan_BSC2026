@@ -251,7 +251,7 @@ def main():
     )
     print(
         f"Spur length threshold:   {skeleton_result.spur_px_threshold} px    "
-        "[derived -- 15 px = 9.1 um on mm images, see docs/calibration_notes.md]"
+        "[derived -- 15 px = 9.1 um on mm images, see docs/walkthrough/02_skeleton.md]"
     )
     example_spurs = [round(x, 1) for x in skeleton_result.pruned_spur_lengths[:5]]
     print(f"Spurs pruned: {skeleton_result.n_spurs_pruned}, example lengths: {example_spurs}   [measured]")

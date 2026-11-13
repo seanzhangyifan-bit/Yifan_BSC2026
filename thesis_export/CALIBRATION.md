@@ -11,9 +11,9 @@ for real µm-per-px/film-thickness calibration that doesn't exist yet
 * 🔴 **assumed** — no sweep or derivation backing it yet
 
 **Net: 1 🟡, 2 🔴, 2 🟢.** Most of this project's tunables are asserted, not measured —
-that's a real, reportable state of the pipeline right now, not a documentation gap. See
-[`docs/calibration_notes.md`](docs/calibration_notes.md) for each constant's full
-rationale (relocated verbatim from its old inline comment).
+that's a real, reportable state of the pipeline right now, not a documentation gap. The
+code walkthrough (`docs/walkthrough/`) explains each constant's
+rationale on the page for its module.
 
 |Constant|File:Line|Value|Status|Reason|
 |-|-|-|-|-|

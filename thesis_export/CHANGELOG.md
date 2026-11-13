@@ -9,6 +9,19 @@ pipeline reports, so you can tell which earlier outputs are still valid.
 Commit IDs link each entry to its full details in `git log`. Findings are numbered as in
 [`docs/reviews/2026-11-11-full-code-review.md`](docs/reviews/2026-11-11-full-code-review.md).
 
+## 2026-11-13
+
+### Removed: `docs/design_notes.md` and `docs/calibration_notes.md`
+
+**No change to results.** Documentation only. The code walkthrough (`docs/walkthrough/`)
+already explains the same rationale, so the two notes files were moved to the repository's
+`archive/thesis_export_notes_2026-11-13/`. References in code comments, `CALIBRATION.md`,
+`METHODOLOGY.md`, the crack-stats schema and the validation README now point to the
+walkthrough pages. Older changelog entries and the 2026-11-11 review still name the old files.
+- `docs/batch_stats/crack_stats_schema.md`: removed the "Choosing images from the thesis image
+  set" section (filename pattern, scale-bar exceptions, replicate grouping). Since the
+  2026-11-11 change, the exporter doesn't select images by file name.
+
 ## 2026-11-11
 
 ### Removed: T/Y junction classification, corner cross-check and precedence analysis

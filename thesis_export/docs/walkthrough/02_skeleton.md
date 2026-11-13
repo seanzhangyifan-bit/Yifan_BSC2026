@@ -51,14 +51,13 @@ A short summary of the above: thinning, then the three kinds of branch the pruni
 **Known limitation** (not in the docstring): the pruning below never removes **small loops**
 around dark specks inside wide cracks (thinning can't create a loop without a hole in the mask,
 so these come from specks too big to be removed), or **short edges** between junctions that sit
-close together. The full reasoning (measurements, rejected methods, references) lives in
-[`docs/design_notes.md`](../design_notes.md).
+close together. 
 
 ## Settings, lines 20–30
 
 | Line | Setting | Value | Meaning |
 |---|---|---|---|
-| 24 | `SPUR_PX_PLACEHOLDER` | 15 px = 9.1 µm | Dead ends and loose pieces shorter than this are removed, and dead ends need at least this much length outside their host crack. 🟢 15 px, or 9.1 µm when applying the measured conversion factor of 0.6098 µm/px, roughly corresponds to the largest measured agglomerate size observed over the course of this thesis (Zhang 2026). At length scales shorter than the measured agglomerate sizes, a crack may not be confidently  distinguished from agglomerate roughness. See `docs/calibration_notes.md`. |
+| 24 | `SPUR_PX_PLACEHOLDER` | 15 px = 9.1 µm | Dead ends and loose pieces shorter than this are removed, and dead ends need at least this much length outside their host crack. 🟢 15 px, or 9.1 µm when applying the measured conversion factor of 0.6098 µm/px, roughly corresponds to the largest measured agglomerate size observed over the course of this thesis (Zhang 2026). At length scales shorter than the measured agglomerate sizes, a crack may not be confidently  distinguished from agglomerate roughness. |
 | 30 | `DARK_SPECK_AREA_PX` | 130 px = 48 µm² | Dark specks inside a crack smaller than this are removed first, so the skeleton doesn't loop around them. 🟢 130 px, or roughly 48 µm² when applying the measured conversion factor of 0.6098 µm/px, roughly corresponds to the area of a d90 ≈ 7.8 µm agglomerate (inks T2–T4, see Note 1). Specks smaller than agglomerates are more likely to be specks of dust or loose particles, and thus should not be considered as part of the catalyst layer. |
 
 Both are in pixels for `mm` images (0.6098 µm/px); other magnifications would need converting.
@@ -184,7 +183,7 @@ flaking exclusion that the batch export applies, so they won't match the export 
 
 - **Only types 0 and 1 are ever removed.** Junction-to-junction branches (type 2) and loops
   (type 3) are never touched. `scripts/validation/skeleton_loop_sweep.py` finds 0–55% of edges
-  per image are junction-to-junction edges shorter than the crack width. See `docs/design_notes.md`.
+  per image are junction-to-junction edges shorter than the crack width. 
 - **Everything is in pixels.** Converting to µm happens in the exporter.
 - **Tests**: `tests/test_skeleton.py` (7 tests):
   - a stub from a wide crack's centre line into a small bump on its wall is removed (and kept

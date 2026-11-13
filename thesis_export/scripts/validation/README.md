@@ -29,7 +29,7 @@ status of every tunable constant this tier justifies.
 - `skeleton_loop_sweep.py`: audits every image in the real dataset for short
   junction-to-junction edges (0-55% of edges, image-dependent). Originally framed as a
   doubled-line loop artifact; most turn out to be short segments between close junctions
-  (see `docs/design_notes.md`).
+  (see `docs/walkthrough/02_skeleton.md`).
 - `segmentation_sensitivity_sweep.py`: checks how binarization threshold choice moves downstream
   stats.
 - `render_area_method_viewer.py`: interactive comparison of four cross-checked ways to compute

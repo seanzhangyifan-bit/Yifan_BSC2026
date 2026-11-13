@@ -13,7 +13,7 @@ not a fracture, and hides whatever crack pattern was underneath.
   (flake_touching_path_indices).
 
 Constants are 🔴 assumed unless noted. Full rationale:
-docs/design_notes.md, section "flaking.py".
+docs/walkthrough/03_flaking.md.
 """
 
 from dataclasses import dataclass, field
