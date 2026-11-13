@@ -150,7 +150,7 @@ def main() -> None:
     rows = run_sweep(gray)
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(json.dumps({"image": args.image, "crop_px": list(gray.shape), "rows": rows}, indent=2))
+    out_path.write_text(json.dumps({"image": args.image, "crop_px": list(gray.shape), "rows": rows}, indent=2), encoding="utf-8")
     print(f"Wrote {out_path}")
     for row in rows:
         print(

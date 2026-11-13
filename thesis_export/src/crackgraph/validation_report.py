@@ -101,5 +101,5 @@ companion to that suite, not a replacement for it. {n_passed}/{n_total} cases pa
 """
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(html)
+    out_path.write_text(html, encoding="utf-8")
     return out_path

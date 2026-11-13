@@ -401,7 +401,7 @@ def main():
         _save_combined(panels, out_dir, image_path, crop_mode, n_rows=2, n_cols=4)
 
     readme_lines.append("| `combined.png` | All panels above, side by side |")
-    (out_dir / "README.md").write_text("\n".join(readme_lines) + "\n")
+    (out_dir / "README.md").write_text("\n".join(readme_lines) + "\n", encoding="utf-8")
 
     print(f"Wrote {len(panels) + 1} figures + README to {out_dir}")
 
