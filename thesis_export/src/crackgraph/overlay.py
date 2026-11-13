@@ -109,6 +109,7 @@ def render_crack_stats_overlay(
     *,
     max_overlay_dim: int = 2500,
     grid_cell_px: int | None = None,
+    regions: list | None = None,
 ) -> float:
     """Save a crack-stats-scoped overlay PNG: the final pruned skeleton,
     the flaking-exclusion region tinted, and edges touching it (from
@@ -205,6 +206,21 @@ def render_crack_stats_overlay(
         for r in range(n_rows):
             mid_y = (y_bounds[r] + y_bounds[r + 1]) / 2 * scale
             ax.annotate(_spreadsheet_col_label(r), xy=(10, mid_y), xycoords="data", **label_style)
+
+    # Outline of each analysed region (regions.Region), labelled with its
+    # cell number, so table rows can be found on the image.
+    for region in regions or []:
+        x0, y0 = region.col_start * scale, region.row_start * scale
+        ax.add_patch(plt.Rectangle(
+            (x0, y0), (region.col_stop - region.col_start) * scale,
+            (region.row_stop - region.row_start) * scale,
+            fill=False, edgecolor="yellow", linewidth=1.0, zorder=9,
+        ))
+        ax.annotate(
+            region.label.split(" (")[0], xy=(x0 + 8, y0 + 8), xycoords="data",
+            fontsize=7, color="yellow", ha="left", va="top", zorder=10,
+            bbox=dict(boxstyle="round,pad=0.1", fc="black", ec="yellow", lw=0.5, alpha=0.75),
+        )
 
     if display_excluded.any() or omitted_path_indices:
         ax.legend(

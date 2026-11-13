@@ -1,406 +1,176 @@
-"""Local, browser-based GUI covering three of this project's five deliverables (see
-README.md's "five deliverables" table): the per-image pipeline, the batch crack-stats
-export, and the spatial overview figure. Deliverables #4 (validation gallery) and #5
-(experimental) are intentionally command-line only -- #4 is evidence *about* the pipeline,
-not something you'd run against your own image, and #5 is explicitly unvalidated.
+"""Browser GUI for the crack analysis. Runs locally; nothing is uploaded.
 
 Run: python3 -m streamlit run app.py
-(if the bare `streamlit run app.py` command says "command not found", see README.md's
-Setup section -- it's a PATH issue, not a broken install)
 
-Runs entirely on this machine -- Streamlit serves locally at http://localhost:8501, nothing is
-uploaded anywhere. This is a thin front-end onto existing entry points (src/analyze_image.py,
-scripts/batch_stats/export_crack_stats.py, scripts/spatial_overview/overview_figure.py), not a
-new analysis method -- see METHODOLOGY.md for the scientific reasoning and README.md's "five
-deliverables" table for validation status.
-
-run_single_image_analysis and run_spatial_overview contain the pipeline-side logic and take no
-Streamlit objects as arguments -- they're callable and testable on their own, independent of the
-browser UI (their `on_line` callback, if passed, is a plain callable, not a Streamlit object).
-The crack-stats side calls compute_row() directly (see
-scripts/batch_stats/export_crack_stats.py), which has the same property. Everything below main()
-is thin Streamlit glue.
+The page is laid out the way the analysis works:
+    calibration -> regions -> measurements -> figures -> run
+Every control sets one field of an AnalysisSettings (src/crackgraph/settings.py),
+and the run calls the same analyze_image() as the command line
+(src/analyze.py). The settings used are saved in the workbook's
+"settings" sheet.
 """
 
-import io
-import subprocess
-import sys
 import tempfile
 import time
 from pathlib import Path
-from typing import Callable
 
-import pandas as pd
 import streamlit as st
 
-from scripts.batch_stats.export_crack_stats import COMPUTE_ROW_STAGES, compute_row
+from src.crackgraph.analysis import analysis_stages, analyze_image
+from src.crackgraph.export import results_tables, write_figures, write_workbook
+from src.crackgraph.regions import RegionSpec
+from src.crackgraph.settings import CRACK_STATS_GROUPS, DEFAULT_UM_PER_PX, AnalysisSettings
 
-REPO_ROOT = Path(__file__).resolve().parent
-
-# Ordered, fixed set of section-header lines src/analyze_image.py always prints, one per
-# stage, whether or not that stage was requested -- a skipped stage still prints its own
-# header, immediately followed by a one-line "(skipped, ...)" instead of full stats (see
-# analyze_image.py). Keeping this list independent of which measurements were checked lets
-# the progress bar advance deterministically for any checkbox combination, without having
-# to predict which headers a given run will produce.
-STAGE_MARKERS: list[tuple[str, str]] = [
-    ("-- Stage 1: Binarize --", "Binarizing"),
-    ("-- Flaking/delamination exclusion", "Checking for flaking"),
-    ("-- Stage 2: Skeletonize + prune --", "Skeletonizing"),
-    ("-- Stage 3: Graph extraction (skan) --", "Extracting graph"),
-    ("-- Edge curvature & tortuosity", "Curvature & tortuosity"),
-    ("-- Network anisotropy", "Anisotropy"),
-    ("-- Edge geometry: length/width/area", "Edge geometry"),
-    ("-- Output --", "Writing output"),
-]
-
-# Same idea as STAGE_MARKERS, but for scripts/spatial_overview/overview_figure.py, which only
-# prints two runtime lines (see its main()) rather than one header per stage. The second
-# marker isn't a line prefix (it starts with a tile count that varies), so matching uses
-# substring containment rather than startswith -- see _make_stage_progress_callback.
-# Shown on every per-image pipeline result, so corner-crop numbers are never read as
-# whole-image numbers next to the (always whole-image) crack stats.
-PIPELINE_REGION_NOTE_CORNER = (
-    "Region analyzed: top-left corner crop only, about 1.5% of the image area. "
-    "Numbers here are a corner sample, not whole-image totals."
-)
-PIPELINE_REGION_NOTE_FULL = "Region analyzed: whole image."
-
-OVERVIEW_STAGE_MARKERS: list[tuple[str, str]] = [
-    ("Whole-image pipeline runtime:", "Whole-image pass"),
-    (" sections (", "Per-quadrant sections"),
-]
+GROUP_LABELS = {
+    "area": "Crack area",
+    "width": "Crack width",
+    "segment_length": "Segment length",
+    "connectivity": "Connectivity (whole image only)",
+    "flaking": "Flaking exclusion",
+    "pruning": "Pruning counts",
+}
 
 
-def _format_duration(seconds: float) -> str:
-    """Rounds down to whole seconds/minutes -- this is a rough progress estimate, not a
-    measurement, so sub-second precision would only be false confidence."""
-    seconds = max(0, int(seconds))
-    if seconds < 60:
-        return f"{seconds}s"
-    minutes, secs = divmod(seconds, 60)
-    return f"{minutes}m {secs}s"
-
-
-def _run_streaming(cmd: list[str], on_line: Callable[[str], None] | None) -> subprocess.CompletedProcess:
-    """Runs cmd, calling on_line(line) as each line of output arrives, instead of blocking
-    silently until the whole process exits (what subprocess.run(capture_output=True) does).
-    stdout and stderr are merged -- the caller only needs one thing to read failures out of."""
-    proc = subprocess.Popen(
-        cmd, cwd=REPO_ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1
+def settings_form() -> tuple[AnalysisSettings, tuple[str, ...], str] | None:
+    """Draw the settings controls; return (settings, figures, map column),
+    or None if the choices don't make a valid run."""
+    st.subheader("1. Calibration")
+    um_per_px = st.number_input(
+        "µm per pixel", min_value=0.0001, value=DEFAULT_UM_PER_PX, format="%.4f",
+        help="Default: the thesis microscope calibration. The spur cut-off (9.1 µm) and the "
+             "dark-speck limit (48 µm²) are converted to pixels with this value.",
     )
-    lines = []
-    assert proc.stdout is not None
-    for line in proc.stdout:
-        lines.append(line)
-        if on_line is not None:
-            on_line(line)
-    proc.wait()
-    return subprocess.CompletedProcess(cmd, proc.returncode, stdout="".join(lines), stderr="")
 
+    st.subheader("2. Which part of the image")
+    mode = st.radio(
+        "Regions", ["whole", "centre", "grid"], horizontal=True,
+        format_func={"whole": "Whole image", "centre": "Centre", "grid": "Grid"}.get,
+    )
+    centre_frac, n_rows, n_cols, cells = 0.5, 2, 2, None
+    if mode == "centre":
+        centre_frac = st.slider("Share of width and height", 0.1, 1.0, 0.5, 0.05)
+    elif mode == "grid":
+        c1, c2 = st.columns(2)
+        n_rows = c1.number_input("Rows", 1, 20, 3)
+        n_cols = c2.number_input("Columns", 1, 20, 3)
+        all_cells = list(range(1, n_rows * n_cols + 1))
+        chosen = st.multiselect(
+            "Cells to analyse (numbered row by row from the top left)", all_cells, default=all_cells,
+        )
+        if not chosen:
+            st.info("Pick at least one cell.")
+            return None
+        cells = None if len(chosen) == len(all_cells) else tuple(sorted(chosen))
 
-def run_single_image_analysis(
-    image_path: Path,
-    out_dir: Path,
-    *,
-    full_image: bool = False,
-    skip_curvature: bool = False,
-    skip_anisotropy: bool = False,
-    on_line: Callable[[str], None] | None = None,
-) -> dict:
-    """Runs src.analyze_image as a subprocess -- deliberately not imported directly, since
-    analyze_image.py is a monolithic CLI script with no function separable from its own argument
-    parsing and printing today. Shelling out keeps this GUI at zero risk to that well-tested
-    pipeline code. Returns the console report text plus the path to the overlay PNG
-    analyze_image.py wrote ({stem}_{corner|full}_overlay.png, under
-    out_dir/<image's own parent folder name>/)."""
-    cmd = [sys.executable, "-m", "src.analyze_image", str(image_path), "--out-dir", str(out_dir)]
-    if full_image:
-        cmd.append("--full-image")
-    if skip_curvature:
-        cmd.append("--skip-curvature")
-    if skip_anisotropy:
-        cmd.append("--skip-anisotropy")
-    result = _run_streaming(cmd, on_line)
+    st.subheader("3. What to measure")
+    measurements = []
+    if st.checkbox("Crack stats", value=True):
+        measurements.append("crack_stats")
+        groups = st.multiselect(
+            "Column groups", CRACK_STATS_GROUPS, default=list(CRACK_STATS_GROUPS),
+            format_func=GROUP_LABELS.get,
+        )
+    else:
+        groups = list(CRACK_STATS_GROUPS)
+    if st.checkbox("Tortuosity & curvature"):
+        measurements.append("tortuosity")
+    if st.checkbox("Anisotropy (preferred crack direction)"):
+        measurements.append("anisotropy")
+    if st.checkbox("Per-segment table", help="One row per crack segment: length, width, area."):
+        measurements.append("segments")
+    include_runtime = st.checkbox("Runtime columns")
+    if not measurements:
+        st.info("Select at least one measurement.")
+        return None
 
-    stem = image_path.stem
-    tag = "full" if full_image else "corner"
-    subfolder = out_dir / image_path.parent.name
-    overlay_png = subfolder / f"{stem}_{tag}_overlay.png"
+    st.subheader("4. Figures")
+    figures = st.multiselect(
+        "Figures", ["overlay", "panels", "map"], default=["overlay"],
+        format_func={
+            "overlay": "Skeleton overlay with regions",
+            "panels": "Rose + tortuosity per region",
+            "map": "Colour map of one column (grid/centre only)",
+        }.get,
+    )
+    map_column = "crack_area_pct"
+    if "map" in figures:
+        map_column = st.text_input("Column for the colour map", "crack_area_pct")
 
-    return {
-        "returncode": result.returncode,
-        "stdout": result.stdout,
-        "overlay_png": overlay_png if overlay_png.exists() else None,
-    }
-
-
-def run_spatial_overview(
-    image_path: Path, out_dir: Path, *, on_line: Callable[[str], None] | None = None
-) -> dict:
-    """Runs scripts.spatial_overview.overview_figure as a subprocess, same reasoning as
-    run_single_image_analysis (shell out, zero risk to the script itself). Always uses the
-    script's own 2x2 default grid -- METHODOLOGY.md notes render_overview_figure asserts
-    exactly 4 sections, so this deliberately doesn't expose --n-rows/--n-cols. The script also
-    updates outputs/report.html/report_data.json under out_dir as a side effect -- meaningless
-    here since out_dir is a per-run temp directory the GUI throws away, so this doesn't surface
-    that path to the caller."""
-    cmd = [
-        sys.executable,
-        "-m",
-        "scripts.spatial_overview.overview_figure",
-        str(image_path),
-        "--out-dir",
-        str(out_dir),
-    ]
-    result = _run_streaming(cmd, on_line)
-    overview_png = out_dir / image_path.parent.name / f"{image_path.stem}_overview.png"
-    return {
-        "returncode": result.returncode,
-        "stdout": result.stdout,
-        "overview_png": overview_png if overview_png.exists() else None,
-    }
-
-
-def _make_stage_progress_callback(
-    markers: list[tuple[str, str]], bump: Callable[[str], None], image_label: str
-) -> Callable[[str], None]:
-    """Watches a subprocess's output lines for the given (marker, label) pairs, in order, and
-    calls bump() once per stage reached -- gives real, per-stage progress instead of one
-    spinner for the whole run. Substring containment, not startswith, since not every marker
-    (e.g. OVERVIEW_STAGE_MARKERS' section-count line) is a fixed line prefix."""
-    seen = 0
-
-    def on_line(line: str) -> None:
-        nonlocal seen
-        if seen >= len(markers):
-            return
-        marker, label = markers[seen]
-        if marker in line:
-            seen += 1
-            bump(f"{image_label} — {label}")
-
-    return on_line
+    settings = AnalysisSettings(
+        um_per_px=um_per_px,
+        regions=RegionSpec(mode=mode, centre_frac=centre_frac, n_rows=n_rows, n_cols=n_cols, cells=cells),
+        measurements=tuple(measurements),
+        crack_stats_groups=tuple(groups),
+        include_runtime=include_runtime,
+    )
+    return settings, tuple(figures), map_column
 
 
 def main() -> None:
     st.set_page_config(page_title="Crack pattern analysis", layout="wide")
     st.title("Crack pattern analysis")
-    st.caption(
-        "Local tool -- runs entirely on this machine, nothing is uploaded anywhere. "
-        "See METHODOLOGY.md for the scientific reasoning behind the analysis."
+    st.caption("Runs on this machine only. Method: docs/walkthrough/ and METHODOLOGY.md.")
+
+    uploaded = st.file_uploader(
+        "Micrographs", type=["jpg", "jpeg", "png", "tif", "tiff", "bmp"], accept_multiple_files=True,
     )
-
-    uploaded_files = st.file_uploader(
-        "Upload one or more micrographs",
-        type=["jpg", "jpeg", "png", "tif", "tiff"],
-        accept_multiple_files=True,
-        key="upload",
-    )
-
-    st.subheader("What to run")
-    col1, col2 = st.columns(2)
-    with col1:
-        run_crack_stats = st.checkbox(
-            "Crack stats (density, width, connectivity)",
-            value=True,
-            key="cb_crack_stats",
-            help="Density, width, and connectivity numbers for each image, exported to a spreadsheet.",
-        )
-        run_curvature = st.checkbox(
-            "Curvature & tortuosity",
-            value=True,
-            key="cb_curvature",
-            help=(
-                "How much each crack segment bends, and how much longer its actual path is "
-                "than a straight line between its ends."
-            ),
-        )
-        run_anisotropy = st.checkbox(
-            "Anisotropy",
-            value=True,
-            key="cb_anisotropy",
-            help="Whether cracks in this image tend to point in one dominant direction, or are randomly oriented.",
-        )
-    with col2:
-        run_overview = st.checkbox(
-            "Spatial overview (quadrant comparison)",
-            value=False,
-            key="cb_overview",
-            help=(
-                "Compares crack patterns across the image's four quadrants in one figure -- "
-                "a quick first look at spatial variation, not a validated result."
-            ),
-        )
-    run_pipeline = run_curvature or run_anisotropy
-
-    with st.expander("Advanced options"):
-        full_image = st.checkbox(
-            "Analyze full image (default: top-left corner crop)",
-            help=(
-                "Applies to curvature and anisotropy. The default corner crop covers about "
-                "1.5% of the image. Crack stats always use the whole image."
-            ),
-        )
-
-    nothing_selected = not (run_crack_stats or run_pipeline or run_overview)
-    if nothing_selected:
-        st.info("Select at least one analysis to run.")
-    if not uploaded_files:
+    form = settings_form()
+    if form is None or not uploaded:
+        return
+    settings, figures, map_column = form
+    if not st.button("Run analysis"):
         return
 
-    if not st.button("Run analysis", key="run", disabled=nothing_selected):
-        return
+    stages = analysis_stages(settings)
+    total = len(stages) * len(uploaded)
+    done = [0]
+    start = time.monotonic()
+    bar = st.progress(0.0, text="Starting...")
 
     with tempfile.TemporaryDirectory() as tmp:
-        tmp_path = Path(tmp)
-        image_paths = []
-        for uploaded in uploaded_files:
-            p = tmp_path / uploaded.name
-            p.write_bytes(uploaded.getvalue())
-            image_paths.append(p)
-        out_dir = tmp_path / "outputs"
-        n_images = len(image_paths)
+        tmp = Path(tmp)
+        analyses, errors = [], []
+        for i, f in enumerate(uploaded):
+            path = tmp / "upload" / f.name
+            path.parent.mkdir(exist_ok=True)
+            path.write_bytes(f.getvalue())
+            label = f"{f.name} ({i + 1}/{len(uploaded)})"
 
-        total_steps = (
-            (len(STAGE_MARKERS) if run_pipeline else 0)
-            + (len(COMPUTE_ROW_STAGES) if run_crack_stats else 0)
-            + (len(OVERVIEW_STAGE_MARKERS) if run_overview else 0)
-        ) * n_images
-        steps_done = [0]
-        start_time = time.monotonic()
-        bar = st.progress(0.0, text="Starting...")
+            def on_stage(stage, label=label):
+                done[0] += 1
+                elapsed = time.monotonic() - start
+                bar.progress(min(done[0] / total, 1.0), text=f"{label}: {stage} · {elapsed:.0f} s")
 
-        def bump(text: str) -> None:
-            steps_done[0] += 1
-            frac = steps_done[0] / total_steps
-            elapsed = time.monotonic() - start_time
-            # Straight-line extrapolation from progress so far -- a rough estimate, not a
-            # measurement, and a noisy one until a few steps have actually completed (early
-            # stages like binarizing aren't representative of slower ones like the edge
-            # geometry), so it's withheld for the first couple of steps rather than
-            # shown with false confidence.
-            eta_note = ""
-            if steps_done[0] >= 3:
-                eta = elapsed / frac - elapsed
-                eta_note = f" · {_format_duration(elapsed)} elapsed, ~{_format_duration(eta)} left (rough estimate)"
-            bar.progress(min(frac, 1.0), text=f"{text}{eta_note}")
-
-        crack_stats_rows = []
-        crack_stats_errors = []
-        pipeline_errors = []
-        overview_errors = []
-
-        for i, image_path in enumerate(image_paths):
-            image_label = f"{image_path.name} ({i + 1}/{n_images})"
-
-            if run_pipeline:
-                on_line = _make_stage_progress_callback(STAGE_MARKERS, bump, image_label)
-                try:
-                    result = run_single_image_analysis(
-                        image_path,
-                        out_dir,
-                        full_image=full_image,
-                        skip_curvature=not run_curvature,
-                        skip_anisotropy=not run_anisotropy,
-                        on_line=on_line,
-                    )
-                except Exception as exc:  # noqa: BLE001
-                    pipeline_errors.append((image_path.name, str(exc)))
-                    result = None
-
-                if result is not None:
-                    with st.expander(f"Pipeline: {image_path.name}", expanded=n_images == 1):
-                        st.caption(PIPELINE_REGION_NOTE_FULL if full_image else PIPELINE_REGION_NOTE_CORNER)
-                        if result["returncode"] != 0:
-                            st.error("Analysis failed:")
-                            st.code(result["stdout"] or "(no output captured)")
-                        else:
-                            if result["overlay_png"] is not None:
-                                st.image(str(result["overlay_png"]), caption="Skeleton overlay")
-                            report_text = result["stdout"] or "(no output captured)"
-                            with st.expander("Console report (full text)", expanded=False):
-                                st.code(report_text)
-                            st.download_button(
-                                "Download console report (.txt)",
-                                data=report_text,
-                                file_name=f"{image_path.stem}_report.txt",
-                                mime="text/plain",
-                                key=f"dl_report_{i}",
-                            )
-
-            if run_overview:
-                on_line = _make_stage_progress_callback(OVERVIEW_STAGE_MARKERS, bump, image_label)
-                try:
-                    overview_result = run_spatial_overview(image_path, out_dir, on_line=on_line)
-                except Exception as exc:  # noqa: BLE001
-                    overview_errors.append((image_path.name, str(exc)))
-                    overview_result = None
-
-                if overview_result is not None:
-                    with st.expander(f"Spatial overview: {image_path.name}", expanded=n_images == 1):
-                        if overview_result["returncode"] != 0:
-                            st.error("Spatial overview failed:")
-                            st.code(overview_result["stdout"] or "(no output captured)")
-                        elif overview_result["overview_png"] is not None:
-                            st.image(
-                                str(overview_result["overview_png"]),
-                                caption="Spatial overview (whole image + per-quadrant rose/tortuosity)",
-                            )
-
-            if run_crack_stats:
-                try:
-                    crack_stats_rows.append(
-                        compute_row(
-                            image_path,
-                            on_stage=lambda stage, label=image_label: bump(f"{label} — {stage}"),
-                        )
-                    )
-                except Exception as exc:  # noqa: BLE001
-                    crack_stats_errors.append((image_path.name, str(exc)))
-
+            try:
+                analysis = analyze_image(path, settings, on_stage=on_stage)
+            except Exception as exc:  # noqa: BLE001 -- report and carry on with the other images
+                errors.append((f.name, str(exc)))
+                continue
+            analyses.append(analysis)
+            with st.expander(f.name, expanded=len(uploaded) == 1):
+                for png in write_figures(analysis, tmp / "figures", figures, map_column):
+                    st.image(str(png), caption=png.stem)
         bar.progress(1.0, text="Done.")
 
-        if pipeline_errors:
-            st.warning(f"Pipeline failed to run for {len(pipeline_errors)} image(s):")
-            for name, msg in pipeline_errors:
-                st.text(f"  {name}: {msg}")
+        for name, msg in errors:
+            st.error(f"{name}: {msg}")
+        if not analyses:
+            return
 
-        if overview_errors:
-            st.warning(f"Spatial overview failed to run for {len(overview_errors)} image(s):")
-            for name, msg in overview_errors:
-                st.text(f"  {name}: {msg}")
+        if abs(settings.um_per_px - DEFAULT_UM_PER_PX) < 1e-12:
+            st.caption("µm columns use the thesis microscope calibration; change µm per pixel for other images.")
+        for name, df in results_tables(analyses).items():
+            st.subheader(name.replace("_", " ").capitalize())
+            if name == "image_connectivity":
+                st.caption("Connectivity is measured on the whole image only, not per region.")
+            st.dataframe(df)
 
-        if run_crack_stats:
-            if crack_stats_errors:
-                st.warning(f"Crack stats failed for {len(crack_stats_errors)} of {n_images} image(s):")
-                for name, msg in crack_stats_errors:
-                    st.text(f"  {name}: {msg}")
-            if crack_stats_rows:
-                st.subheader("Crack stats")
-                st.caption("Computed on the whole image.")
-                if run_pipeline and not full_image:
-                    st.info(
-                        "The curvature and anisotropy results above cover only the top-left "
-                        "corner crop (about 1.5% of each image), while these crack stats cover the whole "
-                        "image. Don't compare the two as if they describe the same area."
-                    )
-                df = pd.DataFrame(crack_stats_rows)
-                st.warning(
-                    "The µm/mm² columns (avg_width_um, crack_area_mm2, median_width_um, etc.) "
-                    "assume this project's own microscope calibration (100/164 µm/px) and are "
-                    "almost certainly wrong for a different image source. The _px columns are "
-                    "unaffected by calibration and are always meaningful."
-                )
-                st.dataframe(df)
-                buf = io.BytesIO()
-                df.to_excel(buf, index=False, engine="openpyxl")
-                st.download_button(
-                    "Download as .xlsx",
-                    data=buf.getvalue(),
-                    file_name="batch_crack_stats.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                )
+        xlsx = tmp / "results.xlsx"
+        write_workbook(analyses, settings, xlsx)
+        st.download_button(
+            "Download results (.xlsx)", data=xlsx.read_bytes(), file_name="crack_analysis.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
 
 
 if __name__ == "__main__":

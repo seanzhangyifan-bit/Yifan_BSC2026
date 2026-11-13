@@ -1,13 +1,8 @@
 # Methodology
 
-The scientific and architectural reasoning behind this pipeline — read this before the other
-docs make full sense.
+Codebase originally developed as part of a BSc thesis (Zhang 2026, KIT Thin Film Technology group) on PEMFC catalyst layer ink formulation and coating, centered on comparing short-side-chain (SSC) vs long-side-chain (LSC) PFSA ionomers and their effect on catalyst layer structure and cracking.
 
-## What this project is
-
-A BSc thesis (KIT, Thin Film Technology group) on PEMFC catalyst layer ink formulation and coating, centred on comparing short-side-chain (SSC) vs long-side-chain (LSC) PFSA ionomers and their effect on catalyst layer structure, cracking, and performance. Scope: light-duty-vehicle CCMs, low Pt loading (0.2–0.4 mg/cm²), direct coating on PTFE at four Rakelspalt (doctor-blade gap) settings.
-
-The code in this repo is one component of that thesis: **a tool to turn catalyst-layer crack micrographs into numbers that let crack patterns be compared across conditions** (ionomer type, Rakelspalt, substrate, humidity). It is not a general crack-detection package.
+The code in this repo is one component of that thesis: **a tool to turn catalyst-layer crack micrographs into numbers that let crack patterns be compared across conditions** (ionomer type, Rakelspalt, substrate, humidity).
 
 ## What the results are
 
@@ -31,12 +26,6 @@ All stages draw on off-the-shelf image-processing libraries (scikit-image, skan)
 - `Skan` (skeleton-analysis.org) for skeleton→branch-graph — does most of stage 2–3; distinguishes junctions/endpoints, flags cycles.
 - `sknw` when per-edge pixel polylines in a NetworkX graph are wanted.
 - `networkx` for the connectivity graph in the batch export (connected components, giant component).
-
-## Data layout
-
-- The private raw micrograph collection this pipeline was developed against lives in `data/raw/` (not bundled in this export — see the root README's "What's not included"), organized in subfolders by experiment/condition -- currently `T5/` and `humidity_loading/`, each holding one `.jpg` per micrograph (e.g. `data/raw/T5/T5-M_H190_v1_ro000001.jpg`).
-- Analysis is currently run on a fixed top-left corner crop only, not the full image (see `src/crackgraph/region.py`'s `default_corner_crop` and `src/analyze_image.py`'s `--full-image` flag, which is deferred -- see README): crop size is 1/8 of image width (`corner_frac=0.125`), inset from the true top-left corner by a margin of 2% of image width (`edge_margin_frac=0.02`) on both axes. These are the pipeline's working CLI defaults; pass `--corner-frac`/`--edge-margin-frac` to override for a one-off run rather than changing the default. That crop is about 1.5% of the image area, so numbers from it are a corner sample: the console report, the xlsx `region_description` column and the GUI all state the region and its area share, and they must not be read alongside the whole-image batch crack stats as if both described the same area.
-- `analyze_image.py` (and `scripts/spatial_overview/overview_figure.py`, below) nest their output under `outputs/<coating>/`, where `<coating>` is the image's source subfolder name (`T5`, `humidity_loading`) -- so outputs from different coatings/sample batches don't pile up flat in one directory.
 
 ## Multi-section overview figure & HTML report
 

@@ -105,11 +105,12 @@ def skeletonize_and_prune(
     source_image: np.ndarray | None = None,
     min_object_px: int = 4,
     spur_px: float = SPUR_PX_PLACEHOLDER,
+    dark_speck_area_px: int = DARK_SPECK_AREA_PX,
     prune_host_stubs: bool = True,
     max_iters: int = 10,
 ) -> SkeletonResult:
     mask_clean = remove_small_objects(mask, min_size=min_object_px)
-    mask_clean = remove_small_holes(mask_clean, area_threshold=DARK_SPECK_AREA_PX)
+    mask_clean = remove_small_holes(mask_clean, area_threshold=dark_speck_area_px)
     skel_image = skeletonize(mask_clean)
     n_pixels_pre = int(skel_image.sum())
 

@@ -94,6 +94,8 @@ class OrientationSample:
     s_mid: float  # [measured] arc-length position along the edge
     bearing_deg: float  # [measured] axial, folded to [0, 180)
     weight_px: float  # [measured] local arc-length weight
+    row: float = float("nan")  # image position of the sample, for assigning it to a region
+    col: float = float("nan")
 
 
 @dataclass
@@ -185,6 +187,8 @@ def compute_orientation_samples(
                     s_mid=arc_len / 2.0,
                     bearing_deg=bearing,
                     weight_px=arc_len,
+                    row=float(coords[len(coords) // 2, 0]),
+                    col=float(coords[len(coords) // 2, 1]),
                 )
             )
             continue
@@ -209,6 +213,8 @@ def compute_orientation_samples(
                     s_mid=float(s[k]),
                     bearing_deg=bearing,
                     weight_px=weight,
+                    row=float(coords[k, 0]),
+                    col=float(coords[k, 1]),
                 )
             )
 
@@ -226,6 +232,17 @@ def compute_anisotropy(
     from all edges' orientation samples (see compute_orientation_samples).
     """
     samples = compute_orientation_samples(skel, graph_result, window_px=window_px)
+    return anisotropy_from_samples(samples, window_px=window_px, n_hist_bins=n_hist_bins)
+
+
+def anisotropy_from_samples(
+    samples: list[OrientationSample],
+    *,
+    window_px: float = ORIENT_WINDOW_PX_PLACEHOLDER,
+    n_hist_bins: int = ROSE_HISTOGRAM_N_BINS,
+) -> AnisotropyResult:
+    """Anisotropy index, dominant bearing and rose histogram from a set of
+    orientation samples -- all of an image's, or only one region's."""
     bin_edges = np.linspace(0.0, 180.0, n_hist_bins + 1)
 
     if not samples:
