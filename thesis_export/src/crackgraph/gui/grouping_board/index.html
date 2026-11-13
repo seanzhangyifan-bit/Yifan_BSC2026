@@ -1,0 +1,165 @@
+<!doctype html>
+<!--
+Grouping board: a Streamlit custom component (v1 protocol, no build step, no
+network). Python sends: images [{name, thumb}], rows, cols, row_label,
+col_label, assignment {name: [row, col] | null}, rev. The board sends back
+{rev, seq, assignment} after every move. See ../board.py.
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+:root{--bg:#fff;--fg:#262730;--muted:#6b6f7b;--line:#d6d8de;--accent:#ff4b4b;--cellbg:#f7f8fa;--over:#ffecec;--font:sans-serif}
+*{box-sizing:border-box}
+body{margin:0;background:transparent;color:var(--fg);font-family:var(--font);font-size:13px}
+.wrap{display:flex;flex-direction:column;gap:8px;padding:2px}
+.status{min-height:1.3em;color:var(--muted);font-size:12px}
+.scroll{overflow-x:auto}
+.board{display:grid;gap:6px}
+.hd{display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--muted);padding:2px 4px;text-align:center}
+.rh{justify-content:flex-end;font-weight:600;color:var(--fg)}
+.cell,.tray{border:1.5px dashed var(--line);border-radius:6px;min-height:92px;padding:5px;display:flex;flex-wrap:wrap;gap:5px;align-content:flex-start;background:var(--cellbg);cursor:pointer}
+.cell.over,.tray.over{border-color:var(--accent);background:var(--over)}
+.traylabel{font-size:12px;color:var(--muted)}
+.thumb{all:unset;box-sizing:border-box;width:84px;display:flex;flex-direction:column;gap:2px;border:1px solid var(--line);border-radius:4px;padding:2px;background:var(--bg);cursor:grab}
+.thumb img{width:100%;height:60px;object-fit:cover;border-radius:2px;display:block;pointer-events:none}
+.thumb span{font-family:monospace;font-size:9px;line-height:1.15;color:var(--muted);word-break:break-all}
+.thumb.sel{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
+.thumb.dragging{opacity:.4}
+.thumb:focus-visible,.cell:focus-visible,.tray:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.btn{font:inherit;font-size:12px;padding:3px 10px;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--fg);cursor:pointer}
+.empty{color:var(--muted);font-size:12px;padding:8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="status" id="status" aria-live="polite"></div>
+  <div class="scroll"><div class="board" id="board"></div></div>
+  <div class="traylabel">Unsorted: left out of the comparison <button class="btn" id="desel" type="button">Clear selection</button></div>
+  <div class="tray" id="tray" data-key="null" tabindex="0" aria-label="Unsorted"></div>
+</div>
+<script>
+(function(){
+  function send(type, extra){ window.parent.postMessage(Object.assign({isStreamlitMessage:true, type:type}, extra), "*"); }
+  function setHeight(){ send("streamlit:setFrameHeight", {height: document.documentElement.scrollHeight + 4}); }
+
+  var args = null, place = {}, sel = new Set(), seq = 0, thumbs = {}, cells = {}, lastRev = null, lastLayout = "";
+  var board = document.getElementById("board"), tray = document.getElementById("tray"), status = document.getElementById("status");
+  cells["null"] = tray;
+
+  function keyOf(cell){ return cell ? JSON.stringify(cell) : "null"; }
+  function cellName(key){ if (key === "null") return "Unsorted"; var c = JSON.parse(key);
+    return (args.rows.length > 1 ? args.row_label + " " + c[0] + ", " : "") + args.col_label + " " + c[1]; }
+
+  function applyTheme(t){ if (!t) return; var r = document.documentElement.style;
+    if (t.backgroundColor) r.setProperty("--bg", t.backgroundColor);
+    if (t.secondaryBackgroundColor) r.setProperty("--cellbg", t.secondaryBackgroundColor);
+    if (t.textColor) r.setProperty("--fg", t.textColor);
+    if (t.primaryColor) r.setProperty("--accent", t.primaryColor);
+    if (t.font) r.setProperty("--font", t.font);
+    var dark = t.base === "dark"; r.setProperty("--line", dark ? "#4a4d57" : "#d6d8de");
+    r.setProperty("--muted", dark ? "#a3a8b4" : "#6b6f7b"); r.setProperty("--over", dark ? "#3a2a2e" : "#ffecec"); }
+
+  function buildBoard(){
+    board.replaceChildren(); Object.keys(cells).forEach(function(k){ if (k !== "null") delete cells[k]; });
+    var nc = args.cols.length;
+    board.style.gridTemplateColumns = (args.rows.length > 1 ? "90px " : "") + "repeat(" + nc + ", minmax(140px, 1fr))";
+    board.style.minWidth = ((args.rows.length > 1 ? 90 : 0) + nc * 146) + "px";
+    function hd(txt, cls){ var e = document.createElement("div"); e.className = "hd " + (cls || ""); e.textContent = txt; board.appendChild(e); }
+    if (args.rows.length > 1) hd("");
+    args.cols.forEach(function(c){ hd(args.col_label + ": " + c); });
+    args.rows.forEach(function(r){
+      if (args.rows.length > 1) hd(r, "rh");
+      args.cols.forEach(function(c){ var e = document.createElement("div"); e.className = "cell"; e.dataset.key = keyOf([r, c]); e.tabIndex = 0;
+        e.setAttribute("aria-label", cellName(e.dataset.key)); board.appendChild(e); cells[e.dataset.key] = e; wireDrop(e); });
+    });
+  }
+
+  function buildThumbs(){
+    thumbs = {};
+    args.images.forEach(function(im){
+      // A div, not a <button>: Firefox does not start drags on buttons.
+      var b = document.createElement("div"); b.className = "thumb"; b.draggable = true; b.dataset.name = im.name;
+      b.tabIndex = 0; b.setAttribute("role", "button"); b.title = im.name; b.setAttribute("aria-label", im.name);
+      var img = document.createElement("img"); img.src = im.thumb; img.alt = "";
+      var s = document.createElement("span"); s.textContent = im.name;
+      b.appendChild(img); b.appendChild(s); thumbs[im.name] = b;
+    });
+  }
+
+  function render(){
+    Object.values(cells).forEach(function(c){ c.replaceChildren(); });
+    args.images.forEach(function(im){ var t = thumbs[im.name]; t.classList.toggle("sel", sel.has(im.name));
+      var k = place[im.name] || "null"; (cells[k] || tray).appendChild(t); });
+    if (!args.images.length) { var e = document.createElement("div"); e.className = "empty"; e.textContent = "No images yet."; tray.appendChild(e); }
+    setHeight();
+  }
+
+  function emit(){
+    var a = {}; args.images.forEach(function(im){ var k = place[im.name]; a[im.name] = (k && k !== "null") ? JSON.parse(k) : null; });
+    seq += 1; send("streamlit:setComponentValue", {value: {rev: args.rev, seq: seq, assignment: a}, dataType: "json"});
+  }
+
+  function move(names, key){
+    names.forEach(function(n){ place[n] = key; }); sel.clear(); render(); emit();
+    status.textContent = "Moved " + names.length + " image" + (names.length > 1 ? "s" : "") + " to " + cellName(key) + ".";
+  }
+
+  // Click to select, click a cell to move the selection.
+  document.addEventListener("click", function(e){
+    var t = e.target.closest(".thumb");
+    if (t) { var n = t.dataset.name; sel.has(n) ? sel.delete(n) : sel.add(n); render();
+      status.textContent = sel.size ? sel.size + " selected. Click a cell (or Unsorted) to move them." : ""; return; }
+    if (e.target.id === "desel") { sel.clear(); render(); status.textContent = ""; return; }
+    var c = e.target.closest(".cell, .tray"); if (c && sel.size) move(Array.from(sel), c.dataset.key);
+  });
+
+  // Keyboard: Enter/Space on a thumbnail selects it; on a cell or the tray, moves the selection there.
+  document.addEventListener("keydown", function(e){
+    if (e.key !== "Enter" && e.key !== " ") return;
+    var t = e.target.closest && e.target.closest(".thumb, .cell, .tray"); if (!t) return;
+    e.preventDefault(); var name = t.dataset.name; t.click();
+    if (name && thumbs[name]) thumbs[name].focus();
+  });
+
+  // Drag and drop (mouse).
+  var dragNames = [];
+  document.addEventListener("dragstart", function(e){
+    var t = e.target.closest && e.target.closest(".thumb"); if (!t) return;
+    var n = t.dataset.name; dragNames = sel.has(n) ? Array.from(sel) : [n];
+    dragNames.forEach(function(x){ thumbs[x].classList.add("dragging"); });
+    try { e.dataTransfer.setData("text/plain", dragNames.join("\n")); e.dataTransfer.effectAllowed = "move"; } catch (_) {}
+  });
+  document.addEventListener("dragend", function(){
+    Object.values(thumbs).forEach(function(t){ t.classList.remove("dragging"); });
+    Object.values(cells).forEach(function(c){ c.classList.remove("over"); });
+  });
+  function wireDrop(c){
+    c.addEventListener("dragover", function(e){ e.preventDefault(); c.classList.add("over"); });
+    c.addEventListener("dragleave", function(){ c.classList.remove("over"); });
+    c.addEventListener("drop", function(e){ e.preventDefault(); c.classList.remove("over"); if (dragNames.length) move(dragNames, c.dataset.key); dragNames = []; });
+  }
+  wireDrop(tray);
+
+  window.addEventListener("message", function(e){
+    var d = e.data; if (!d || d.type !== "streamlit:render") return;
+    var prev = args; args = d.args; applyTheme(d.theme);
+    var layout = JSON.stringify([args.rows, args.cols, args.row_label, args.col_label]);
+    var names = JSON.stringify(args.images.map(function(i){ return i.name; }));
+    var imagesChanged = !prev || names !== JSON.stringify(prev.images.map(function(i){ return i.name; }));
+    if (imagesChanged) buildThumbs();
+    if (layout !== lastLayout) { buildBoard(); lastLayout = layout; }
+    // Python changed the assignment (pre-sort, clear, new board): adopt it.
+    if (args.rev !== lastRev) {
+      place = {}; sel.clear();
+      Object.keys(args.assignment || {}).forEach(function(n){ place[n] = keyOf(args.assignment[n]); });
+      lastRev = args.rev; seq = 0;
+    }
+    render();
+  });
+  if (window.ResizeObserver) new ResizeObserver(setHeight).observe(document.body);
+  send("streamlit:componentReady", {apiVersion: 1});
+})();
+</script>
+</body>
+</html>

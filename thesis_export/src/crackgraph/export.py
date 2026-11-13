@@ -6,6 +6,7 @@ Workbook sheets:
   asked for and the regions aren't the whole image.
 - segments: the per-segment table, only if requested.
 - settings: every setting the run used, so the numbers can be reproduced.
+- labels: image -> group, only when the GUI's grouping board was used.
 """
 
 from pathlib import Path
@@ -30,12 +31,19 @@ def results_tables(analyses: list[ImageAnalysis]) -> dict[str, pd.DataFrame]:
     return tables
 
 
-def write_workbook(analyses: list[ImageAnalysis], settings: AnalysisSettings, out_path: Path) -> None:
+def write_workbook(
+    analyses: list[ImageAnalysis], settings: AnalysisSettings, out_path: Path,
+    labels: pd.DataFrame | None = None,
+) -> None:
+    """labels: optional image_filename -> group table from the GUI's grouping
+    board (src/crackgraph/grouping.py), written as a "labels" sheet."""
     out_path.parent.mkdir(parents=True, exist_ok=True)
     record = settings_record(settings)
     with pd.ExcelWriter(out_path, engine="openpyxl") as writer:
         for name, df in results_tables(analyses).items():
             df.to_excel(writer, sheet_name=name, index=False)
+        if labels is not None and not labels.empty:
+            labels.to_excel(writer, sheet_name="labels", index=False)
         pd.DataFrame({"setting": list(record), "value": [str(v) for v in record.values()]}).to_excel(
             writer, sheet_name="settings", index=False,
         )

@@ -32,6 +32,11 @@ Opens at `http://localhost:8501`; runs locally, nothing is uploaded. Upload micr
 settings, click **Run analysis**, download the workbook. (Use the `python3 -m` form if
 `streamlit run app.py` says "command not found".)
 
+To compare images, use **Compare images** below the results. Name what you varied, then drag
+the image thumbnails onto a board: columns and rows are your conditions, and images in one cell
+are replicates. A plot of any result per group appears below the board. The groups are saved as
+a `labels` sheet in the workbook.
+
 **Command line**, same settings:
 
 ```
