@@ -53,7 +53,7 @@ app.py                       GUI
 - [x] Phase 1 committed (`1cf0971`).
 - [x] Old entry points archived to `archive/thesis_export_old_entry_points_2026-11-13/` with their
   tests and walkthrough pages; the old exporter's output on the synthetic flaked grid frozen in
-  `tests/data/old_exporter_flaked_grid.json` for the parity test.
+  `tests/fixtures/old_exporter_flaked_grid.json` for the parity test.
 - [x] `export_crack_stats_batch_bcd.py` and the two validation sweeps repointed; `corner_crop`
   moved into `regions.py` (same crop as before).
 - [x] Docs: README, METHODOLOGY, CALIBRATION, GLOSSARY, the crack-stats schema (§1, §2, new §4d),

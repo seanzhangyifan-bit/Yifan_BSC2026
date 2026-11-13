@@ -4,7 +4,7 @@ The main guarantee: with default settings and the whole image, the crack
 stats equal the old exporter's exactly, so the thesis numbers don't move.
 The old exporter (scripts/batch_stats/export_crack_stats.py, archived
 2026-11-13) was run once on the synthetic flaked grid; its output is frozen
-in tests/data/old_exporter_flaked_grid.json. Also: grid cells add up to the whole image,
+in tests/fixtures/old_exporter_flaked_grid.json. Also: grid cells add up to the whole image,
 connectivity stays whole-image only, and µm/px converts the two physical
 thresholds as stated.
 """
@@ -31,7 +31,7 @@ def flaked_image(tmp_path_factory):
     return path
 
 
-OLD_EXPORTER = Path(__file__).parent / "data" / "old_exporter_flaked_grid.json"
+OLD_EXPORTER = Path(__file__).parent / "fixtures" / "old_exporter_flaked_grid.json"
 
 
 def _same(a, b):

@@ -1,0 +1,29 @@
+{
+ "_source": "scripts/batch_stats/export_crack_stats.py compute_row at commit 1cf0971, on generate_grid_with_flakes() saved as RGB PNG",
+ "row": {
+  "image_width_px": 340,
+  "image_height_px": 340,
+  "scale_bar_check": "not checked",
+  "crack_area_pct": 6.583044982698962,
+  "crack_area_pct_excl_flakes": 6.7101074851645786,
+  "crack_area_mm2": 0.0028294170136823316,
+  "avg_width_px": 5.503613457559375,
+  "avg_width_um": 3.3558618643654725,
+  "median_width_px": 6.0,
+  "median_width_um": 3.6585365853658534,
+  "avg_edge_length_px": 69.1363961030679,
+  "avg_edge_length_um": 42.15633908723652,
+  "median_edge_length_px": 69.41421356237309,
+  "median_edge_length_um": 42.32573997705676,
+  "n_components": 1,
+  "giant_component_fraction": 1.0,
+  "median_edge_length_gc_px": 69.41421356237309,
+  "median_edge_length_gc_um": 42.32573997705676,
+  "giant_component_span_px": 311.27640450249356,
+  "giant_component_span_um": 189.80268567225218,
+  "flaking_excluded_area_pct": 1.893598615916955,
+  "flaking_n_candidates": 1,
+  "flaking_n_edges_omitted": 4,
+  "n_host_stubs_pruned": 0
+ }
+}

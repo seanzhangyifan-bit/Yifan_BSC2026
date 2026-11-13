@@ -102,7 +102,7 @@ answers, or checks a fixed bug stays fixed. Run them from `thesis_export/` with 
 | `test_synthetic*.py` | 1 + 21 + 11 | The generators, and the 9-case benchmark through the pipeline |
 | `test_validation_*.py` | 3 + 6 | The validation gallery |
 
-`tests/data/old_exporter_flaked_grid.json` holds the old crack-stats exporter's output on the
+`tests/fixtures/old_exporter_flaked_grid.json` holds the old crack-stats exporter's output on the
 synthetic flaked grid, frozen when it was archived (2026-11-13).
 
 The entry-point smoke tests (review finding 16) check that each entry point runs, not its
