@@ -1,14 +1,14 @@
 # Crack-pattern analysis (thesis export)
 
-The analysis code submitted with the BSc thesis (Zhang 2026, KIT Thin Film Technology group;
-PEMFC catalyst-layer coating). Self-contained: everything needed to run it is in this folder.
+The analysis code prepared during the BSc thesis (Zhang 2026, KIT Thin Film Technology group;
+PEMFC catalyst-layer coating), as well as subsequent modifications. Self-contained: everything needed to run it is in this folder.
 
 - [`METHODOLOGY.md`](METHODOLOGY.md): what is measured and why. Read first.
 - [`docs/walkthrough/`](docs/walkthrough/README.md): file-by-file tour of the code.
-- [`docs/batch_stats/crack_stats_schema.md`](docs/batch_stats/crack_stats_schema.md): every column.
+- [`docs/batch_stats/crack_stats_schema.md`](docs/batch_stats/crack_stats_schema.md): describes every column in the produced excel.
 - [`CALIBRATION.md`](CALIBRATION.md): how well each tunable constant is justified.
 - [`GLOSSARY.md`](GLOSSARY.md): term definitions.
-- [`CHANGELOG.md`](CHANGELOG.md): every change, and whether it affects results.
+- [`CHANGELOG.md`](CHANGELOG.md): logging changes made to the code 
 
 ## Setup
 
