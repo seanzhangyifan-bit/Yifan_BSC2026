@@ -34,6 +34,11 @@ workbook. The progress bar shows the current step, the elapsed time and an estim
 left. A 7300 x 7600 px image takes about 30 s with every measurement on. (Use the `python3 -m` form if
 `streamlit run app.py` says "command not found".)
 
+To compare images, use **Compare images** below the results. Name what you varied, then drag
+the image thumbnails onto a board: columns and rows are your conditions, and images in one cell
+are replicates. A plot of any result per group appears below the board. The groups are saved as
+a `labels` sheet in the workbook.
+
 **Command line**, same settings:
 
 ```

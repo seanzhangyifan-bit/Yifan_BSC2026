@@ -2,7 +2,8 @@
 
 **Files**:
 - `src/analyze.py` (126 lines): command line.
-- `app.py` (177 lines): GUI.
+- `app.py` (328 lines): GUI.
+- `src/crackgraph/grouping.py`, `src/crackgraph/gui/`: the GUI's Compare images board.
 - `scripts/batch_stats/`: helpers for the thesis spreadsheets.
 
 Both front ends build an `AnalysisSettings` (page 5) and call `analyze_image` (page 9). Same
@@ -70,9 +71,40 @@ speed of the stages already finished.
 
 It returns `None`, with a hint, if no cell or no measurement is ticked.
 
-`main` (line 109): on **Run analysis**, saves the uploads to a temporary folder and runs each
-image. The progress bar moves per engine step (`on_stage`, line 139). A failing image is reported
-at the end without stopping the others. Shows figures, tables and a workbook download.
+`main` (line 304): on **Run analysis**, calls `run_analysis` (line 119), which saves the uploads
+to a temporary folder and runs each image. The progress bar moves per engine step (`on_stage`,
+line 136). A failing image is reported at the end without stopping the others.
+
+The run's results are kept in `st.session_state`, so they stay on the page while you use the
+controls below them. Changing settings has no effect until you click **Run analysis** again.
+`show_results` (line 157) shows figures and tables; `download_section` (line 290) offers the
+workbook.
+
+### Compare images (`compare_section`, line 185)
+
+Sorts the analysed images into groups, without a hand-written table and whatever your folders
+or file names look like.
+
+1. Name what you varied (columns) and, optionally, a second factor (rows), and list their values.
+2. Sort the images onto the board: drag them, or click several and then click a cell. Keyboard:
+   Enter selects a thumbnail, and Enter on a cell moves the selection there. Images in one cell
+   are replicates. Images left in **Unsorted** are left out.
+3. **Pre-sort by file name** (optional) places an image only when exactly one column value (and
+   one row value) appears as a whole part of its name. `gap150` doesn't match `50`. Anything else
+   stays in Unsorted for you to place.
+
+Below the board: the labels table and a replicates plot of any numeric result, for one region at
+a time. Each dot is one image. A mean bar is drawn only for groups of 2 or more, and n = 1 is shown
+in red. The labels are saved as a `labels` sheet in the downloaded workbook.
+
+Code:
+- `src/crackgraph/grouping.py`: pre-sort, labels table, replicates plot. No Streamlit; tested
+  in `tests/test_grouping.py`.
+- `src/crackgraph/gui/board.py` and `gui/grouping_board/index.html`: the board, a Streamlit
+  custom component in one HTML file with no build step and no network access. Python owns the
+  assignment and bumps a revision number whenever it changes it (pre-sort, clear, new rows or
+  columns). Moves from the browser carry that number, so a stale one is ignored.
+- Labels are what you assigned. The tool doesn't check them against the images.
 
 ---
 
@@ -93,4 +125,5 @@ at the end without stopping the others. Shows figures, tables and a workbook dow
   - `analyze_image.py` (top-left corner) → a corner cell, e.g. `--grid 8x8 --cells 1`
   - spatial overview → `--regions grid --grid 2x2 --figures panels`
 - **Tests** (`tests/test_entry_points.py`): the command line end to end, a bad cell refused, the
-  GUI starts without errors.
+  GUI starts without errors, and Compare images pre-sorts and labels a seeded run. The board's
+  drag and drop runs in the browser, and no automated test covers it.

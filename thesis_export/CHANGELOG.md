@@ -21,6 +21,17 @@ Details of any entry: `git log`.
 
 ## 2026-11-13
 
+### Added: Compare images in the GUI
+**Results unchanged** (no measurement touched; the workbook gains an optional `labels` sheet).
+- A drag-and-drop board after a run: name the factors you varied, sort images into cells
+  (replicates share a cell), optionally pre-sort by file name. Works with any folder or naming
+  scheme.
+- Below it: a labels table and a replicates plot (dot per image; mean bar only when n ≥ 2;
+  n = 1 marked in red).
+- Run results now stay in the session, so they survive interaction with the page.
+- New: `src/crackgraph/grouping.py`, `src/crackgraph/gui/`, `tests/test_grouping.py`, one more
+  test in `tests/test_entry_points.py`. Docs: walkthrough page 10.
+
 ### Removed: `scale_bar_check` column
 **Results unchanged** (one identification column gone).
 - It only recorded a manual check (`--scale-bars-checked`); the tool never detected scale bars.
