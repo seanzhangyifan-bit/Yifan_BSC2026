@@ -27,7 +27,7 @@ import streamlit as st
 
 from src.crackgraph.analysis import STAGE_WEIGHTS, analysis_stages, analyze_image
 from src.crackgraph.export import results_tables, write_figures, write_workbook
-from src.crackgraph.grouping import labels_table, plot_replicates, presort_by_name
+from src.crackgraph.grouping import ERROR_KINDS, labels_table, plot_replicates, presort_by_name
 from src.crackgraph.gui.board import grouping_board, thumbnail_data_uri
 from src.crackgraph.regions import RegionSpec
 from src.crackgraph.settings import CRACK_STATS_GROUPS, DEFAULT_UM_PER_PX, AnalysisSettings
@@ -267,7 +267,8 @@ def compare_section(run: dict) -> pd.DataFrame | None:
         return None
     st.caption(
         "Name what you varied, then sort the images onto the board: drag them, or click several and "
-        "then click a cell. Images in one cell are replicates. Images left in Unsorted are left out."
+        "then click a cell. Images in one cell are replicates. Images left in Unsorted are left out. "
+        "Click **Update table and plot** on the board when you're done sorting."
     )
     c1, c2 = st.columns(2)
     col_label = c1.text_input("Columns: what you varied", "condition", key="cmp_col_label").strip()
@@ -346,20 +347,50 @@ def compare_section(run: dict) -> pd.DataFrame | None:
             st.info("No numeric results to plot.")
             return shown
         default = numeric.index("crack_area_pct") if "crack_area_pct" in numeric else 0
-        metric = st.selectbox("Result to plot", numeric, index=default, key="cmp_metric")
+        p1, p2 = st.columns(2)
+        metric = p1.selectbox("Result to plot", numeric, index=default, key="cmp_metric")
+        y_label = p2.text_input("Y-axis label", metric, key=f"cmp_ylabel_{metric}")
         region_names = list(dict.fromkeys(regions["region"]))
         region = region_names[0]
         if len(region_names) > 1:
             region = st.selectbox("Region", region_names, key="cmp_region")
+        style = st.radio("Show", ["points", "errorbar"], horizontal=True, key="cmp_style",
+                         format_func={"points": "Every image + mean", "errorbar": "Mean ± error bar"}.get)
+        error, show_points = "sd", True
+        if style == "errorbar":
+            e1, e2 = st.columns(2)
+            error = e1.radio("Error bar", list(ERROR_KINDS), horizontal=True, key="cmp_error",
+                             format_func=lambda k: f"{k.upper()} ({ERROR_KINDS[k]})")
+            show_points = e2.checkbox("Also show each image (faint)", True, key="cmp_show_points")
+        with st.expander("Y-axis range"):
+            y_from_zero = st.checkbox("Start at 0 (when all values are positive)", True, key="cmp_zero")
+            r1, r2 = st.columns(2)
+            y_min = r1.number_input("Minimum", value=None, placeholder="auto", format="%g", key="cmp_ymin")
+            y_max = r2.number_input("Maximum", value=None, placeholder="auto", format="%g", key="cmp_ymax")
         data = regions[regions["region"] == region].merge(labels, on="image_filename")
         fig, ax = plt.subplots(figsize=(6, 3.6))
-        plot_replicates(ax, data, metric, col_label, row_key, cols, rows)
+        plot_replicates(ax, data, metric, col_label, row_key, cols, rows, style=style, error=error,
+                        show_points=show_points, y_label=y_label, y_from_zero=y_from_zero,
+                        ylim=(y_min, y_max))
         fig.tight_layout()
         st.pyplot(fig)
         plt.close(fig)
-        st.caption("Each dot is one image. Bars are group means, drawn only where a group has 2 or more "
-                   "images. n = 1 is shown in red: there is no replicate spread to compare against.")
+        if style == "points":
+            note = "Each dot is one image. Bars are group means, drawn only where a group has 2 or more images."
+        else:
+            note = (f"Dots are group means; error bars are the {ERROR_KINDS[error]} (n − 1 in the SD). "
+                    "A group with one image shows that image alone, without a bar.")
+        st.caption(note + " n is shown above each group, in red when n = 1: there is no replicate spread "
+                   "to compare against.")
     return shown
+
+
+@st.fragment
+def compare_and_download(run: dict) -> None:
+    """A fragment: changes in here (board, plot options) redraw only this part
+    of the page, not the figures and tables above it."""
+    labels = compare_section(run) if run["analyses"] else None
+    download_section(run, labels)
 
 
 def download_section(run: dict, labels: pd.DataFrame | None) -> None:
@@ -399,8 +430,7 @@ def main() -> None:
     st.divider()
     st.caption("Results of the last run. Changed settings take effect when you run again.")
     show_results(run)
-    labels = compare_section(run) if run["analyses"] else None
-    download_section(run, labels)
+    compare_and_download(run)
 
 
 if __name__ == "__main__":

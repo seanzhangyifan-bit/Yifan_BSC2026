@@ -82,3 +82,21 @@ def test_plot_skips_nan_values():
     fig, ax = _plot(table)
     assert [t.get_text() for t in ax.texts] == ["n=1"]
     plt.close(fig)
+
+
+def test_plot_errorbar_style_uses_sample_sd_and_axis_options():
+    table = pd.DataFrame({"image_filename": list("abc"), "ink": ["A", "A", "A"], "gap": ["50", "50", "100"],
+                          "w": [1.0, 3.0, 2.0]})
+    fig, ax = plt.subplots()
+    plot_replicates(ax, table, "w", "gap", "ink", ["50", "100"], ["A"], style="errorbar", y_label="Width (µm)")
+    bar = next(c for c in ax.collections if c.__class__.__name__ == "LineCollection")
+    np.testing.assert_allclose(sorted(bar.get_segments()[0][:, 1]), [2 - np.sqrt(2), 2 + np.sqrt(2)])
+    assert ax.get_ylabel() == "Width (µm)"
+    assert ax.get_ylim()[0] == 0.0  # all values positive: starts at zero
+    assert all(t.xy[1] == 1 for t in ax.texts)  # n labels sit above the plot area
+    plt.close(fig)
+
+    fig, ax = plt.subplots()
+    plot_replicates(ax, table, "w", "gap", "ink", ["50", "100"], ["A"], y_from_zero=False, ylim=(None, 10))
+    assert ax.get_ylim()[0] > 0 and ax.get_ylim()[1] == 10
+    plt.close(fig)

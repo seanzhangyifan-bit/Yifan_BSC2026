@@ -13,6 +13,7 @@ never checks them against the images.
 import re
 
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 
 Assignment = dict[str, "tuple[str, str] | None"]
@@ -73,20 +74,42 @@ def labels_table(
     return pd.DataFrame(records, columns=["image_filename", row_factor, col_factor, "replicate"])
 
 
+ERROR_KINDS = {"sd": "standard deviation", "sem": "standard error of the mean"}
+
+
 def plot_replicates(
     ax, table: pd.DataFrame, metric: str, x: str, colour: str,
     x_order: list[str], colour_order: list[str], colours: list[str] | None = None,
+    *,
+    style: str = "points",
+    error: str = "sd",
+    show_points: bool = True,
+    y_label: str | None = None,
+    y_from_zero: bool = True,
+    ylim: tuple[float | None, float | None] = (None, None),
 ) -> None:
-    """Dot per image, grouped along x by `x` and coloured by `colour`.
+    """Replicates of `metric`, grouped along x by `x` and coloured by `colour`.
 
-    A mean bar is drawn only for groups with at least 2 images; n is printed
-    under every group, in red when n = 1 (no replicate spread to compare
-    against). NaN metric values are skipped and not counted.
+    style="points": a dot per image and a mean bar for groups with 2 or more
+    images. style="errorbar": the group mean with an error bar (`error`: "sd"
+    or "sem", sample statistics, ddof=1), plus faint dots per image if
+    show_points. A group with one image gets a dot and no bar: there is no
+    spread to show.
+
+    n is printed above the plot area for every group (red when n = 1), so it
+    never covers data. y_from_zero starts the axis at 0 when every value is
+    non-negative; ylim entries that are not None override either end.
+    NaN metric values are skipped and not counted.
     """
+    if style not in ("points", "errorbar"):
+        raise ValueError(f"style must be 'points' or 'errorbar', got {style!r}")
+    if error not in ERROR_KINDS:
+        raise ValueError(f"error must be one of {list(ERROR_KINDS)}, got {error!r}")
     colours = colours or plt.rcParams["axes.prop_cycle"].by_key()["color"]
     n_c = max(len(colour_order), 1)
     width = 0.7
     step = width / n_c
+    lows, highs = [], []
     for j, c in enumerate(colour_order):
         col = colours[j % len(colours)]
         labelled = False
@@ -99,17 +122,37 @@ def plot_replicates(
             offsets = [0.0] if len(vals) == 1 else [
                 -spread / 2 + spread * k / (len(vals) - 1) for k in range(len(vals))
             ]
-            ax.scatter([centre + o for o in offsets], vals, s=22, color=col, zorder=3,
-                       label=None if labelled else c)
+            label = None if labelled else c
             labelled = True
-            if len(vals) >= 2:
-                ax.hlines(vals.mean(), centre - step * 0.4, centre + step * 0.4, color=col, lw=2, zorder=2)
-            ax.annotate(f"n={len(vals)}", (centre, 0), xycoords=("data", "axes fraction"),
+            lows.append(vals.min())
+            highs.append(vals.max())
+            if style == "points" or len(vals) < 2:
+                ax.scatter([centre + o for o in offsets], vals, s=22, color=col, zorder=3, label=label)
+                if len(vals) >= 2:
+                    ax.hlines(vals.mean(), centre - step * 0.4, centre + step * 0.4, color=col, lw=2, zorder=2)
+            else:
+                err = vals.std(ddof=1)
+                if error == "sem":
+                    err /= np.sqrt(len(vals))
+                if show_points:
+                    ax.scatter([centre + o for o in offsets], vals, s=14, color=col, alpha=0.35, zorder=2,
+                               linewidths=0)
+                ax.errorbar(centre, vals.mean(), yerr=err, fmt="o", color=col, ms=6, capsize=5, lw=1.5,
+                            zorder=3, label=label)
+                lows.append(vals.mean() - err)
+                highs.append(vals.mean() + err)
+            ax.annotate(f"n={len(vals)}", (centre, 1), xycoords=("data", "axes fraction"),
                         xytext=(0, 3), textcoords="offset points", ha="center", va="bottom",
                         fontsize=7, color="#b23b3b" if len(vals) < 2 else "0.4")
     ax.set_xticks(range(len(x_order)), x_order)
     ax.set_xlim(-0.6, len(x_order) - 0.4)
     ax.set_xlabel(x)
-    ax.set_ylabel(metric)
+    ax.set_ylabel(y_label or metric)
+    if lows:
+        lo, hi = min(lows), max(highs)
+        pad = 0.08 * ((hi - lo) or abs(hi) or 1.0)
+        bottom = 0.0 if y_from_zero and lo >= 0 else lo - pad
+        top = hi + pad
+        ax.set_ylim(ylim[0] if ylim[0] is not None else bottom, ylim[1] if ylim[1] is not None else top)
     if len(colour_order) > 1 and ax.get_legend_handles_labels()[1]:
         ax.legend(title=colour, fontsize=8, title_fontsize=8, frameon=False)

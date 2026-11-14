@@ -18,6 +18,12 @@ Details of any entry: `git log`.
   moves during long steps, and it shows an estimate of the time left.
 - GUI upload box: clearer heading and drag-and-drop instructions.
 - Rose/tortuosity panels: titles no longer overlap the angle labels or the figure title.
+- Compare images: the board sends its changes only when you click **Update table and plot**,
+  and the section redraws on its own (a Streamlit fragment), so the page no longer greys out
+  after every drag. The board frame no longer leaves blank space below it.
+- Replicates plot: "Mean ± error bar" style (SD or SEM, sample statistics), editable y-axis
+  label, y-axis from 0 by default with optional min/max, and n labels moved above the plot
+  area so they never cover points.
 
 ## 2026-11-13
 
