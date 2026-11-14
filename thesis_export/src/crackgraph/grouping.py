@@ -77,34 +77,64 @@ def labels_table(
 ERROR_KINDS = {"sd": "standard deviation", "sem": "standard error of the mean"}
 
 
+ERROR_OVER = {
+    "images": "image means (one value per image)",
+    "points": "every point",
+}
+
+
+def _offsets(groups: list[int], spread: float) -> list[float]:
+    """x offsets for the points of one group. `groups` gives the number of
+    points per image; each image's points form their own small cluster, so
+    replicates stay apart when an image contributes several grid cells."""
+    m = len(groups)
+    out = []
+    for k, count in enumerate(groups):
+        centre = 0.0 if m == 1 else -spread / 2 + spread * (k + 0.5) / m
+        width = spread * (0.8 if m == 1 else 0.7 / m)
+        out += [centre] if count == 1 else [centre - width / 2 + width * i / (count - 1) for i in range(count)]
+    return out
+
+
 def plot_replicates(
     ax, table: pd.DataFrame, metric: str, x: str, colour: str,
     x_order: list[str], colour_order: list[str], colours: list[str] | None = None,
     *,
     style: str = "points",
     error: str = "sd",
+    error_over: str = "images",
     show_points: bool = True,
     y_label: str | None = None,
     y_from_zero: bool = True,
     ylim: tuple[float | None, float | None] = (None, None),
+    image_col: str = "image_filename",
 ) -> None:
     """Replicates of `metric`, grouped along x by `x` and coloured by `colour`.
 
-    style="points": a dot per image and a mean bar for groups with 2 or more
-    images. style="errorbar": the group mean with an error bar (`error`: "sd"
-    or "sem", sample statistics, ddof=1), plus faint dots per image if
-    show_points. A group with one image gets a dot and no bar: there is no
-    spread to show.
+    `table` may hold one row per image, or several (e.g. one per grid cell):
+    every row is drawn as a point, clustered by image.
 
-    n is printed above the plot area for every group (red when n = 1), so it
-    never covers data. y_from_zero starts the axis at 0 when every value is
-    non-negative; ylim entries that are not None override either end.
-    NaN metric values are skipped and not counted.
+    style="points": every point, and a mean bar for groups with 2 or more
+    values. style="errorbar": the group mean with an error bar (`error`: "sd"
+    or "sem", sample statistics, ddof=1), plus faint points if show_points.
+
+    error_over decides what one value is, for the mean and the error bar:
+    "images" first averages each image's points (n = images), "points" uses
+    every point (n = points). Grid cells of one image are not independent
+    replicates, so "points" mixes spatial spread within an image with the
+    spread between replicates. A group with fewer than 2 values gets no bar.
+
+    n is printed above the plot area for every group (red when the bar has
+    fewer than 2 values to work from), so it never covers data. y_from_zero
+    starts the axis at 0 when every value is non-negative; ylim entries that
+    are not None override either end. NaN metric values are skipped.
     """
     if style not in ("points", "errorbar"):
         raise ValueError(f"style must be 'points' or 'errorbar', got {style!r}")
     if error not in ERROR_KINDS:
         raise ValueError(f"error must be one of {list(ERROR_KINDS)}, got {error!r}")
+    if error_over not in ERROR_OVER:
+        raise ValueError(f"error_over must be one of {list(ERROR_OVER)}, got {error_over!r}")
     colours = colours or plt.rcParams["axes.prop_cycle"].by_key()["color"]
     n_c = max(len(colour_order), 1)
     width = 0.7
@@ -114,36 +144,44 @@ def plot_replicates(
         col = colours[j % len(colours)]
         labelled = False
         for i, xv in enumerate(x_order):
-            vals = table.loc[(table[x] == xv) & (table[colour] == c), metric].dropna().to_numpy(float)
-            if len(vals) == 0:
+            sub = table.loc[(table[x] == xv) & (table[colour] == c), [image_col, metric]].dropna()
+            if sub.empty:
                 continue
+            images = list(dict.fromkeys(sub[image_col]))
+            per_image = [sub.loc[sub[image_col] == im, metric].to_numpy(float) for im in images]
+            vals = np.concatenate(per_image)
+            stat_vals = np.array([v.mean() for v in per_image]) if error_over == "images" else vals
+            multi = any(len(v) > 1 for v in per_image)
+
             centre = i - width / 2 + step * (j + 0.5)
-            spread = min(step * 0.6, 0.18)
-            offsets = [0.0] if len(vals) == 1 else [
-                -spread / 2 + spread * k / (len(vals) - 1) for k in range(len(vals))
-            ]
+            spread = min(step * 0.7, 0.3) if multi else min(step * 0.6, 0.18)
+            xs = [centre + o for o in _offsets([len(v) for v in per_image], spread)]
             label = None if labelled else c
             labelled = True
             lows.append(vals.min())
             highs.append(vals.max())
-            if style == "points" or len(vals) < 2:
-                ax.scatter([centre + o for o in offsets], vals, s=22, color=col, zorder=3, label=label)
-                if len(vals) >= 2:
-                    ax.hlines(vals.mean(), centre - step * 0.4, centre + step * 0.4, color=col, lw=2, zorder=2)
+            mean = stat_vals.mean()
+            if style == "points" or len(stat_vals) < 2:
+                ax.scatter(xs, vals, s=14 if multi else 22, color=col, zorder=3, label=label,
+                           alpha=0.8 if multi else 1.0, linewidths=0)
+                if len(stat_vals) >= 2:
+                    ax.hlines(mean, centre - step * 0.4, centre + step * 0.4, color=col, lw=2, zorder=4)
             else:
-                err = vals.std(ddof=1)
+                err = stat_vals.std(ddof=1)
                 if error == "sem":
-                    err /= np.sqrt(len(vals))
+                    err /= np.sqrt(len(stat_vals))
                 if show_points:
-                    ax.scatter([centre + o for o in offsets], vals, s=14, color=col, alpha=0.35, zorder=2,
-                               linewidths=0)
-                ax.errorbar(centre, vals.mean(), yerr=err, fmt="o", color=col, ms=6, capsize=5, lw=1.5,
-                            zorder=3, label=label)
-                lows.append(vals.mean() - err)
-                highs.append(vals.mean() + err)
-            ax.annotate(f"n={len(vals)}", (centre, 1), xycoords=("data", "axes fraction"),
+                    ax.scatter(xs, vals, s=12, color=col, alpha=0.3, zorder=2, linewidths=0)
+                ax.errorbar(centre, mean, yerr=err, fmt="o", color=col, ms=6, capsize=5, lw=1.5,
+                            zorder=4, label=label)
+                lows.append(mean - err)
+                highs.append(mean + err)
+            n_text = f"n={len(stat_vals)}"
+            if multi:
+                n_text = f"{len(images)} img\n{len(vals)} pts"
+            ax.annotate(n_text, (centre, 1), xycoords=("data", "axes fraction"),
                         xytext=(0, 3), textcoords="offset points", ha="center", va="bottom",
-                        fontsize=7, color="#b23b3b" if len(vals) < 2 else "0.4")
+                        fontsize=7, color="#b23b3b" if len(stat_vals) < 2 else "0.4")
     ax.set_xticks(range(len(x_order)), x_order)
     ax.set_xlim(-0.6, len(x_order) - 0.4)
     ax.set_xlabel(x)

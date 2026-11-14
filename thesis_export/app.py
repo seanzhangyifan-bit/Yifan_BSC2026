@@ -27,7 +27,7 @@ import streamlit as st
 
 from src.crackgraph.analysis import STAGE_WEIGHTS, analysis_stages, analyze_image
 from src.crackgraph.export import results_tables, write_figures, write_workbook
-from src.crackgraph.grouping import ERROR_KINDS, labels_table, plot_replicates, presort_by_name
+from src.crackgraph.grouping import ERROR_KINDS, ERROR_OVER, labels_table, plot_replicates, presort_by_name
 from src.crackgraph.gui.board import grouping_board, thumbnail_data_uri
 from src.crackgraph.regions import RegionSpec
 from src.crackgraph.settings import CRACK_STATS_GROUPS, DEFAULT_UM_PER_PX, AnalysisSettings
@@ -352,11 +352,22 @@ def compare_section(run: dict) -> pd.DataFrame | None:
         y_label = p2.text_input("Y-axis label", metric, key=f"cmp_ylabel_{metric}")
         region_names = list(dict.fromkeys(regions["region"]))
         region = region_names[0]
+        all_cells = "All cells: one point per cell"
         if len(region_names) > 1:
-            region = st.selectbox("Region", region_names, key="cmp_region")
+            region = st.selectbox("Region", [all_cells, *region_names], key="cmp_region",
+                                  help="All cells puts every grid cell of every image on the plot.")
         style = st.radio("Show", ["points", "errorbar"], horizontal=True, key="cmp_style",
                          format_func={"points": "Every image + mean", "errorbar": "Mean ± error bar"}.get)
-        error, show_points = "sd", True
+        error, show_points, error_over = "sd", True, "images"
+        if region == all_cells:
+            error_over = st.radio(
+                "Mean and spread over", list(ERROR_OVER), horizontal=True, key="cmp_error_over",
+                format_func=ERROR_OVER.get,
+                help="Cells of one image are not independent replicates. 'Image means' averages each "
+                     "image's cells first, so n = number of images. 'Every point' treats each cell as "
+                     "a value, so the spread mixes variation within an image with variation between "
+                     "replicates.",
+            )
         if style == "errorbar":
             e1, e2 = st.columns(2)
             error = e1.radio("Error bar", list(ERROR_KINDS), horizontal=True, key="cmp_error",
@@ -367,10 +378,12 @@ def compare_section(run: dict) -> pd.DataFrame | None:
             r1, r2 = st.columns(2)
             y_min = r1.number_input("Minimum", value=None, placeholder="auto", format="%g", key="cmp_ymin")
             y_max = r2.number_input("Maximum", value=None, placeholder="auto", format="%g", key="cmp_ymax")
-        data = regions[regions["region"] == region].merge(labels, on="image_filename")
+        chosen = regions if region == all_cells else regions[regions["region"] == region]
+        data = chosen.merge(labels, on="image_filename")
         fig, ax = plt.subplots(figsize=(6, 3.6))
         plot_replicates(ax, data, metric, col_label, row_key, cols, rows, style=style, error=error,
-                        show_points=show_points, y_label=y_label, y_from_zero=y_from_zero,
+                        show_points=show_points, error_over=error_over, y_label=y_label,
+                        y_from_zero=y_from_zero,
                         ylim=(y_min, y_max))
         fig.tight_layout()
         st.pyplot(fig)
@@ -380,8 +393,11 @@ def compare_section(run: dict) -> pd.DataFrame | None:
         else:
             note = (f"Dots are group means; error bars are the {ERROR_KINDS[error]} (n − 1 in the SD). "
                     "A group with one image shows that image alone, without a bar.")
-        st.caption(note + " n is shown above each group, in red when n = 1: there is no replicate spread "
-                   "to compare against.")
+        if region == all_cells:
+            note += (" Each image's cells are drawn as one cluster. Mean and spread are over "
+                     f"{ERROR_OVER[error_over]}.")
+        st.caption(note + " n is shown above each group (images and points when there are several cells "
+                   "per image), in red when there are fewer than 2 values for the spread.")
     return shown
 
 

@@ -100,3 +100,28 @@ def test_plot_errorbar_style_uses_sample_sd_and_axis_options():
     plot_replicates(ax, table, "w", "gap", "ink", ["50", "100"], ["A"], y_from_zero=False, ylim=(None, 10))
     assert ax.get_ylim()[0] > 0 and ax.get_ylim()[1] == 10
     plt.close(fig)
+
+
+def test_plot_several_cells_per_image_uses_image_means_by_default():
+    """Two images x 3 cells: every cell is a point; the error bar is over the
+    2 image means unless error_over="points"."""
+    table = pd.DataFrame({
+        "image_filename": ["a"] * 3 + ["b"] * 3, "ink": ["A"] * 6, "gap": ["50"] * 6,
+        "w": [1.0, 2.0, 3.0, 5.0, 6.0, 7.0],
+    })
+    fig, ax = plt.subplots()
+    plot_replicates(ax, table, "w", "gap", "ink", ["50"], ["A"], style="errorbar")
+    points = ax.collections[0]
+    assert len(points.get_offsets()) == 6
+    bar = next(c for c in ax.collections if c.__class__.__name__ == "LineCollection")
+    sd_of_means = np.std([2.0, 6.0], ddof=1)
+    np.testing.assert_allclose(sorted(bar.get_segments()[0][:, 1]), [4 - sd_of_means, 4 + sd_of_means])
+    assert ax.texts[0].get_text() == "2 img\n6 pts"
+    plt.close(fig)
+
+    fig, ax = plt.subplots()
+    plot_replicates(ax, table, "w", "gap", "ink", ["50"], ["A"], style="errorbar", error_over="points")
+    bar = next(c for c in ax.collections if c.__class__.__name__ == "LineCollection")
+    sd = np.std(table["w"], ddof=1)
+    np.testing.assert_allclose(sorted(bar.get_segments()[0][:, 1]), [4 - sd, 4 + sd])
+    plt.close(fig)

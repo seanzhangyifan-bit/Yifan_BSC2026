@@ -24,6 +24,9 @@ Details of any entry: `git log`.
 - Replicates plot: "Mean ± error bar" style (SD or SEM, sample statistics), editable y-axis
   label, y-axis from 0 by default with optional min/max, and n labels moved above the plot
   area so they never cover points.
+- Replicates plot, grid runs: Region "All cells" puts every grid cell of every image on the
+  plot, clustered by image. Mean and spread are over image means by default (n = images);
+  "every point" is offered but mixes within-image spatial spread with replicate spread.
 
 ## 2026-11-13
 
