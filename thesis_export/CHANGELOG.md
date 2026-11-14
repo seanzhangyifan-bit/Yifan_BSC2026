@@ -7,6 +7,18 @@ Newest first. Each entry is tagged:
 
 Details of any entry: `git log`.
 
+## 2026-11-14
+
+### Added: debug view; GUI progress and layout fixes
+**Results unchanged** (figures and GUI only).
+- New `debug` figure (`src/crackgraph/debug_figure.py`; GUI checkbox, `--figures debug`):
+  pruned branches by reason, dark specks removed, bright spots filled, flaking and the
+  binarized boundary, on the whole image and four full-resolution close-ups.
+- GUI progress bar: the analysis runs in a worker thread, so the elapsed time ticks, the bar
+  moves during long steps, and it shows an estimate of the time left.
+- GUI upload box: clearer heading and drag-and-drop instructions.
+- Rose/tortuosity panels: titles no longer overlap the angle labels or the figure title.
+
 ## 2026-11-13
 
 ### Removed: `scale_bar_check` column

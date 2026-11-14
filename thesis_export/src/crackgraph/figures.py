@@ -70,8 +70,11 @@ def render_region_panels(analysis: ImageAnalysis, out_path: Path) -> bool:
         return False
     n_rows, n_cols, positions = _panel_layout(analysis)
     per_panel = int(has_rose) + int(has_tort)
-    fig = plt.figure(figsize=(2.2 * n_cols, 2.2 * n_rows * per_panel), dpi=PLOT_DPI)
-    grid = fig.add_gridspec(n_rows * per_panel, n_cols, hspace=0.7, wspace=0.4)
+    # Constrained layout makes room for every title and angle label, so
+    # nothing overlaps or gets clipped, whatever the number of panels.
+    fig = plt.figure(figsize=(max(2.6 * n_cols, 3.2), 2.6 * n_rows * per_panel + 0.6), dpi=PLOT_DPI,
+                     layout="constrained")
+    grid = fig.add_gridspec(n_rows * per_panel, n_cols)
     bins = _shared_tortuosity_bins(analysis) if has_tort else None
     for region, (r, c) in zip(analysis.regions, positions):
         k = r * per_panel
@@ -79,14 +82,14 @@ def render_region_panels(analysis: ImageAnalysis, out_path: Path) -> bool:
         if has_rose:
             ax = fig.add_subplot(grid[k, c], projection="polar")
             _plot_orientation_rose_on_ax(ax, analysis.anisotropy[region.label], fontsize=6, compact=True)
-            ax.set_title(f"{name}\n{ax.get_title()}", fontsize=6)
+            ax.set_title(f"{name}\n{ax.get_title()}", fontsize=6, pad=10)
             k += 1
         if has_tort:
             ax = fig.add_subplot(grid[k, c])
             _plot_tortuosity_hist_on_ax(ax, analysis.curvature[region.label], fontsize=6, compact=True, bins=bins)
             if not has_rose:
                 ax.set_title(f"{name}: tortuosity", fontsize=6)
-    fig.suptitle(f"{analysis.image_path.name}: per-region orientation and tortuosity", fontsize=8)
+    fig.suptitle(f"{analysis.image_path.name}\norientation and tortuosity per region", fontsize=8)
     fig.savefig(out_path, dpi=PLOT_DPI, bbox_inches="tight")
     plt.close(fig)
     return True

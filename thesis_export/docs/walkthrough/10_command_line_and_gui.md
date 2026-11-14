@@ -31,7 +31,7 @@ python3 -m src.analyze IMAGES_OR_FOLDERS [options]
 | `--measure` | Any of `crack_stats` (default), `tortuosity`, `anisotropy`, `segments`. |
 | `--groups` | Crack-stats column groups, comma-separated. Default all. |
 | `--runtime` | Add runtime columns. |
-| `--figures` | Any of `overlay` (default), `panels`, `map`. |
+| `--figures` | Any of `overlay` (default), `panels`, `map`, `debug`. |
 | `--map-column` | Column for `map`. Default `crack_area_pct`. |
 
 `settings_from_args` (line 90) builds the settings; `main` (line 102) runs each image, writes its
@@ -60,7 +60,13 @@ Opens at http://localhost:8501; runs locally. `settings_form` (line 34) follows 
 2. Region: whole, centre (size slider), or grid (rows, columns, cells to tick).
 3. Measurements: crack stats with column groups, tortuosity, anisotropy, per-segment table,
    runtime.
-4. Figures: overlay, panels, map (and its column).
+4. Figures: overlay, panels, map (and its column), and a **Debug view** checkbox
+   (`src/crackgraph/debug_figure.py`).
+
+`main` runs each image in a worker thread (`run_with_progress`) so the page thread can redraw
+the progress bar twice a second. `Progress` moves the bar by `STAGE_WEIGHTS`
+(`src/crackgraph/analysis.py`, typical stage times) and estimates the time left from the
+speed of the stages already finished.
 
 It returns `None`, with a hint, if no cell or no measurement is ticked.
 

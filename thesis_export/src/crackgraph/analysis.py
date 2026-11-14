@@ -25,6 +25,20 @@ from src.crackgraph.measures.tortuosity import curvature_in_region, measure_tort
 from src.crackgraph.regions import Region
 from src.crackgraph.settings import AnalysisSettings
 
+# Rough share of run time per stage, measured on a 7300 x 7600 px
+# micrograph (T5-M_H190_v1). Only used to move the GUI progress bar at
+# a realistic pace; the time-left estimate rescales them to the real run.
+STAGE_WEIGHTS = {
+    "Binarizing": 1.6,
+    "Skeletonizing": 15.0,
+    "Checking for flaking": 0.7,
+    "Extracting graph": 0.1,
+    "Curvature & tortuosity": 5.8,
+    "Anisotropy": 5.5,
+    "Measuring regions": 0.6,
+}
+
+
 def analysis_stages(settings: AnalysisSettings) -> list[str]:
     """Progress labels analyze_image reports, in order, for these settings,
     so a caller can size a progress bar before the run starts."""

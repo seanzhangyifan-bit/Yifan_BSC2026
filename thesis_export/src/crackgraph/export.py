@@ -13,10 +13,11 @@ from pathlib import Path
 import pandas as pd
 
 from .analysis import ImageAnalysis
+from .debug_figure import render_debug_figure
 from .figures import render_overlay_with_regions, render_region_map, render_region_panels
 from .settings import AnalysisSettings, settings_record
 
-FIGURES = ("overlay", "panels", "map")
+FIGURES = ("overlay", "panels", "map", "debug")
 
 
 def results_tables(analyses: list[ImageAnalysis]) -> dict[str, pd.DataFrame]:
@@ -62,4 +63,8 @@ def write_figures(
         path = folder / f"{stem}_map_{map_column}.png"
         if render_region_map(analysis, map_column, path):
             written.append(path)
+    if "debug" in figures:
+        path = folder / f"{stem}_debug.png"
+        render_debug_figure(analysis, path)
+        written.append(path)
     return written

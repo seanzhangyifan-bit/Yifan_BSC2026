@@ -28,8 +28,10 @@ pip install -r requirements.txt      # analysis libraries, pytest, streamlit
 python3 -m streamlit run app.py
 ```
 
-Opens at `http://localhost:8501`; runs locally, nothing is uploaded. Upload micrographs, choose
-settings, click **Run analysis**, download the workbook. (Use the `python3 -m` form if
+Opens at `http://localhost:8501`; runs locally, nothing is uploaded. Drag micrographs onto the
+upload box (or click **Browse files**), choose settings, click **Run analysis**, download the
+workbook. The progress bar shows the current step, the elapsed time and an estimate of the time
+left. A 7300 x 7600 px image takes about 30 s with every measurement on. (Use the `python3 -m` form if
 `streamlit run app.py` says "command not found".)
 
 **Command line**, same settings:
@@ -52,7 +54,15 @@ python3 -m src.analyze image.jpg --regions grid --grid 3x3 --cells 1,4,7 \
 | Calibration | µm per pixel. Default 0.6098 (the thesis microscope); set your own for other images. |
 | Regions | Whole image, centre, or chosen cells of any grid. The image is analysed once; regions select part of that result, so cells add up to the whole image. |
 | Measurements | **Crack stats**: area, width, segment length, flaking, pruning, connectivity (whole image only). **Tortuosity and curvature**: how bent segments are. **Anisotropy**: rose plot of crack directions. **Per-segment table**: length, width, area. |
-| Figures | Skeleton overlay with regions; rose plot and tortuosity histogram per region; colour map of one column over the grid. |
+| Figures | Skeleton overlay with regions; rose plot and tortuosity histogram per region; colour map of one column over the grid; debug view (see below). |
+
+**Debug view** (GUI checkbox, or `--figures debug`): shows what the algorithm removed or left
+out, to check how it performs on your images. The left half is the whole image; the right half
+has four full-resolution close-ups, placed where the most pruning, the most specks and any
+flaking are, plus the image centre. Colours: kept skeleton (lime), pruned spurs (orange),
+fragments (yellow) and host stubs (sky blue), dark specks removed (blue), bright spots filled
+(white circles), flaking (red tint) and edges left out because they touch it (magenta), and
+the binarized crack boundary (grey, close-ups only). It changes no numbers.
 
 Each run writes `results.xlsx`: one row per image and region, the settings used, and, when they
 apply, whole-image connectivity and the per-segment table.

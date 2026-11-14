@@ -12,11 +12,12 @@ and the run calls the same analyze_image() as the command line
 
 import tempfile
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import streamlit as st
 
-from src.crackgraph.analysis import analysis_stages, analyze_image
+from src.crackgraph.analysis import STAGE_WEIGHTS, analysis_stages, analyze_image
 from src.crackgraph.export import results_tables, write_figures, write_workbook
 from src.crackgraph.regions import RegionSpec
 from src.crackgraph.settings import CRACK_STATS_GROUPS, DEFAULT_UM_PER_PX, AnalysisSettings
@@ -84,17 +85,24 @@ def settings_form() -> tuple[AnalysisSettings, tuple[str, ...], str] | None:
         return None
 
     st.subheader("4. Figures")
-    figures = st.multiselect(
+    figures = list(st.multiselect(
         "Figures", ["overlay", "panels", "map"], default=["overlay"],
         format_func={
             "overlay": "Skeleton overlay with regions",
             "panels": "Rose + tortuosity per region",
             "map": "Colour map of one column (grid/centre only)",
         }.get,
-    )
+    ))
     map_column = "crack_area_pct"
     if "map" in figures:
         map_column = st.text_input("Column for the colour map", "crack_area_pct")
+    if st.checkbox(
+        "Debug view",
+        help="Shows what the algorithm removed or left out: pruned skeleton branches, dark specks "
+             "removed, bright spots filled, flaking, and the binarized crack boundary. Whole image "
+             "plus four full-resolution close-ups. For checking the method, not for reporting.",
+    ):
+        figures.append("debug")
 
     settings = AnalysisSettings(
         um_per_px=um_per_px,
@@ -106,14 +114,88 @@ def settings_form() -> tuple[AnalysisSettings, tuple[str, ...], str] | None:
     return settings, tuple(figures), map_column
 
 
+# Rough drawing time per figure, same units as STAGE_WEIGHTS (seconds on the reference image).
+FIGURE_WEIGHT = {"overlay": 1.9, "panels": 3.0, "map": 0.3, "debug": 2.6}
+
+
+class Progress:
+    """Progress bar that keeps moving while a stage runs.
+
+    The analysis runs in a worker thread and calls finished() after each
+    stage; the page thread calls tick() twice a second to redraw. Inside a
+    stage the bar creeps toward that stage's expected end (never past 95 %
+    of it), so a long stage doesn't look frozen. The time-left estimate
+    uses the real speed of the stages finished so far."""
+
+    def __init__(self, bar, plan: list[tuple[str, list[tuple[str, float]]]]):
+        self.bar = bar
+        self.plan = plan  # [(image label, [(stage, weight), ...]), ...]
+        self.total = sum(w for _, stages in plan for _, w in stages)
+        self.start = time.monotonic()
+        self.done_weight = 0.0
+        self.image = 0
+        self.stage = 0
+        self.stage_start = self.start
+
+    def finished(self, _stage_name: str | None = None) -> None:
+        """Called from the worker thread when the current stage ends."""
+        self.done_weight += self.plan[self.image][1][self.stage][1]
+        self.stage += 1
+        if self.stage >= len(self.plan[self.image][1]) and self.image + 1 < len(self.plan):
+            self.image, self.stage = self.image + 1, 0
+        self.stage_start = time.monotonic()
+
+    def skip_to_image(self, index: int) -> None:
+        """After a failed image: count it as done and move to the next one."""
+        self.done_weight = sum(w for _, stages in self.plan[:index] for _, w in stages)
+        self.image, self.stage = min(index, len(self.plan) - 1), 0
+        self.stage_start = time.monotonic()
+
+    def tick(self) -> None:
+        now = time.monotonic()
+        elapsed = now - self.start
+        label, stages = self.plan[self.image]
+        if self.stage >= len(stages):
+            return
+        name, weight = stages[self.stage]
+        if self.done_weight > 0:
+            sec_per_unit = (self.stage_start - self.start) / self.done_weight
+            within = min(0.95, (now - self.stage_start) / max(weight * sec_per_unit, 1e-6))
+            remaining = (self.total - self.done_weight - within * weight) * sec_per_unit
+            left = f"about {_fmt(remaining)} left"
+        else:
+            within, left = 0.0, "estimating time left..."
+        frac = (self.done_weight + within * weight) / self.total
+        self.bar.progress(min(frac, 1.0), text=f"{label}: {name}...  ·  {_fmt(elapsed)} elapsed  ·  {left}")
+
+
+def _fmt(seconds: float) -> str:
+    seconds = max(0, round(seconds))
+    return f"{seconds // 60} min {seconds % 60:02d} s" if seconds >= 60 else f"{seconds} s"
+
+
+def run_with_progress(progress: Progress, fn, *args, **kwargs):
+    """Run fn in a worker thread, redrawing the progress bar until it ends."""
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(fn, *args, **kwargs)
+        while not future.done():
+            progress.tick()
+            time.sleep(0.5)
+        return future.result()
+
+
 def main() -> None:
     st.set_page_config(page_title="Crack pattern analysis", layout="wide")
     st.title("Crack pattern analysis")
     st.caption("Runs on this machine only. Method: docs/walkthrough/ and METHODOLOGY.md.")
 
+    st.subheader("Micrographs")
     uploaded = st.file_uploader(
-        "Micrographs", type=["jpg", "jpeg", "png", "tif", "tiff", "bmp"], accept_multiple_files=True,
+        "Drag image files onto the box below, or click **Browse files**. Several at once is fine.",
+        type=["jpg", "jpeg", "png", "tif", "tiff", "bmp"], accept_multiple_files=True,
     )
+    if not uploaded:
+        st.info("Add at least one micrograph to start.")
     form = settings_form()
     if form is None or not uploaded:
         return
@@ -121,11 +203,12 @@ def main() -> None:
     if not st.button("Run analysis"):
         return
 
-    stages = analysis_stages(settings)
-    total = len(stages) * len(uploaded)
-    done = [0]
-    start = time.monotonic()
-    bar = st.progress(0.0, text="Starting...")
+    stages = [(s, STAGE_WEIGHTS.get(s, 1.0)) for s in analysis_stages(settings)]
+    fig_weight = sum(FIGURE_WEIGHT.get(f, 1.0) for f in figures)
+    if figures:
+        stages.append(("Drawing figures", fig_weight))
+    plan = [(f"{f.name} ({i + 1}/{len(uploaded)})", stages) for i, f in enumerate(uploaded)]
+    progress = Progress(st.progress(0.0, text="Starting..."), plan)
 
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
@@ -134,23 +217,21 @@ def main() -> None:
             path = tmp / "upload" / f.name
             path.parent.mkdir(exist_ok=True)
             path.write_bytes(f.getvalue())
-            label = f"{f.name} ({i + 1}/{len(uploaded)})"
-
-            def on_stage(stage, label=label):
-                done[0] += 1
-                elapsed = time.monotonic() - start
-                bar.progress(min(done[0] / total, 1.0), text=f"{label}: {stage} · {elapsed:.0f} s")
-
             try:
-                analysis = analyze_image(path, settings, on_stage=on_stage)
+                analysis = run_with_progress(progress, analyze_image, path, settings, on_stage=progress.finished)
+                pngs = []
+                if figures:
+                    pngs = run_with_progress(progress, write_figures, analysis, tmp / "figures", figures, map_column)
+                    progress.finished()
             except Exception as exc:  # noqa: BLE001 -- report and carry on with the other images
                 errors.append((f.name, str(exc)))
+                progress.skip_to_image(i + 1)
                 continue
             analyses.append(analysis)
             with st.expander(f.name, expanded=len(uploaded) == 1):
-                for png in write_figures(analysis, tmp / "figures", figures, map_column):
+                for png in pngs:
                     st.image(str(png), caption=png.stem)
-        bar.progress(1.0, text="Done.")
+        progress.bar.progress(1.0, text=f"Done in {_fmt(time.monotonic() - progress.start)}.")
 
         for name, msg in errors:
             st.error(f"{name}: {msg}")
